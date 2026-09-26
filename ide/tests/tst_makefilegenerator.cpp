@@ -21,6 +21,7 @@ private slots:
     void sharedLibraryHasNoStartupAndStubFirst();
     void minimalBasicWithNdk32();
     void minimalBasicWithNdk32AmigaDialect();
+    void basicAmigaDialectTargetsAceAsShipped();
     void minimalCWithNdk32AmigaDialect();
     void asmProjectWithMinstartAndMui38AmigaDialect();
 
@@ -151,6 +152,42 @@ void TstMakefileGenerator::minimalBasicWithNdk32AmigaDialect()
     const QString golden = readGolden(QStringLiteral("minimal_basic_ndk32.amiga.makefile"));
 
     QCOMPARE(actual, golden);
+}
+
+// The Amiga runs ACE as shipped: no yap -g, no ace -0, ACE's own assigns.
+// 68020 is its default; 68000 comes from an "OPTION 2-" put in front of the
+// preprocessed text, and a module still gets its -m when no other option is
+// left. The same project on the host keeps the patched ACE's flags.
+void TstMakefileGenerator::basicAmigaDialectTargetsAceAsShipped()
+{
+    Project project = Project::createMinimalBasic(QStringLiteral("modbas"));
+    project.sources << SourceFile{ QStringLiteral("src/helper.b") };
+    project.compiler.cpu = QStringLiteral("68020");
+    project.compiler.optLevel = 0;
+    QVERIFY(project.save(m_dir.path() + QStringLiteral("/modbas.aproj")));
+
+    ToolchainConfig toolchain(QStringLiteral("/fake/toolchain"));
+    QString amiga = normalize(
+        MakefileGenerator::generateForDialect(toolchain, project, AIDE_MAKE_DIALECT_AMIGADOS), m_dir.path());
+    QVERIFY(amiga.contains(QStringLiteral("ACE  = ACE:bin/ace\n")));
+    QVERIFY(amiga.contains(QStringLiteral("ACEFLAGS = -2\n")));
+    QVERIFY(amiga.contains(QStringLiteral("$(ACE) $(ACEFLAGS)m \"$(OBJDIR)/src/helper.b\"")));
+    QVERIFY(amiga.contains(QStringLiteral("STARTUP = $(ACE_LIB)startup.lib\n")));
+    QVERIFY(!amiga.contains(QStringLiteral("-g")));
+    QVERIFY(!amiga.contains(QStringLiteral("OPTION 2-")));
+
+    project.compiler.cpu = QStringLiteral("68000");
+    amiga = normalize(
+        MakefileGenerator::generateForDialect(toolchain, project, AIDE_MAKE_DIALECT_AMIGADOS), m_dir.path());
+    QVERIFY(amiga.contains(QStringLiteral("ACEFLAGS = \n")));
+    QVERIFY(amiga.contains(QStringLiteral("$(ACE) -m \"$(OBJDIR)/src/helper.b\"")));
+    QVERIFY(amiga.contains(QStringLiteral("$(ACE) $(ACEFLAGS) \"$(OBJDIR)/src/main.b\"")));
+    QCOMPARE(amiga.count(QStringLiteral("\"OPTION 2-\"")), 2);
+
+    const QString host = normalize(MakefileGenerator::generate(toolchain, project), m_dir.path());
+    QVERIFY(host.contains(QStringLiteral("ACEFLAGS := -0\n")));
+    QVERIFY(host.contains(QStringLiteral("YAPFLAGS := -g ")));
+    QVERIFY(!host.contains(QStringLiteral("OPTION 2-")));
 }
 
 void TstMakefileGenerator::asmProjectWithMinstartAndMui38()

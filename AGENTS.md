@@ -81,6 +81,12 @@ the series with `git am`. Change ACE there, commit, and export with
 fork or submodule upstream. Moving to a new upstream release:
 `compilers/acebasic/UPDATING.md`.
 
+**The host runs the patched ACE, the Amiga ACE as shipped.** The Makefile
+dialect decides, never the `.aproj`: the host dialect uses `yap -g`,
+`ace -0` and `$(VBCC)/sdk/ACE`; the AmigaDOS dialect uses `ACE:bin`,
+`ACElib:`, no `-g`, and for 68000 an `OPTION 2-` joined in front of the
+preprocessed text. `tst_makefilegenerator` pins both.
+
 **`LONG` is exactly 32 bits on the host and `long` under vbcc.** After any
 change to ACE's `src/ace/c/`, run **both**:
 

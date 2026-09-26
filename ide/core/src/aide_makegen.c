@@ -223,9 +223,13 @@ char *aide_makegen_generate_dialect(const AideToolchainConfig *toolchain, const 
     const char *exeSuffix = aide_toolchain_exe_suffix();
     const int amiga = (dialect == AIDE_MAKE_DIALECT_AMIGADOS);
     const int basic = (project->language == AIDE_LANG_BASIC);
-    /* ACE has no command-line way to say "68000" other than -0; its
-     * default is 68020 (see the ACE repo's parsevar.c cpu020_opt). */
+    /* ACE's default is 68020 (parsevar.c cpu020_opt). The host runs our
+     * patched ACE, which takes -0 for 68000; the Amiga runs ACE as
+     * shipped, which only knows "OPTION 2-" in the source -- see the
+     * BASIC compile rule below. */
     const int cpu68000 = (strcmp(project->compiler.cpu, "68000") == 0);
+    /* Set with ACEFLAGS; an empty one changes how modules are compiled. */
+    int aceFlagsEmpty = 0;
     /* A static library is concatenated; a shared .library is linked, but
      * without a startup object -- exec enters it through its romtag. */
     const int library = (project->output.kind == AIDE_OUTPUT_LIBRARY);
@@ -329,16 +333,18 @@ char *aide_makegen_generate_dialect(const AideToolchainConfig *toolchain, const 
          * "the bin/vc in vbcc:'s *parent*", not "vbcc:bin/vc" -- see
          * aide_str_append_path()'s own doc comment for the same rule. */
         if (basic) {
-            aide_str_append(&s, "ACE  = $(VBCC)bin/ace$(E)\n");
-            aide_str_append(&s, "YAP  = $(VBCC)bin/yap$(E)\n");
+            /* ACE as shipped, where its own installer and bin/bas put
+             * it: ACE:bin, ACElib:, ACEinclude:. Only the host runs the
+             * patched build from compilers/acebasic/. */
+            aide_str_append(&s, "ACE  = ACE:bin/ace\n");
+            aide_str_append(&s, "YAP  = ACE:bin/yap\n");
         } else {
             aide_str_append(&s, "VC   = $(VBCC)bin/vc$(E)\n");
         }
         aide_str_append(&s, "VASM = $(VBCC)bin/vasmm68k_mot$(E)\n");
         aide_str_append(&s, "VLINK= $(VBCC)bin/vlink$(E)\n");
         if (basic) {
-            aide_str_append(&s, "ACE_SDK = $(VBCC)sdk/ACE\n");
-            aide_str_append(&s, "ACE_LIB = $(ACE_SDK)/lib\n");
+            aide_str_append(&s, "ACE_LIB = ACElib:\n");
         } else {
             aide_str_append(&s, "VBCC_LIB = $(VBCC)targets/m68k-amigaos/lib\n");
         }
@@ -380,29 +386,47 @@ char *aide_makegen_generate_dialect(const AideToolchainConfig *toolchain, const 
     aide_str_append(&s, "\n");
 
     if (basic) {
-        /* yap: -g so ace's diagnostics name the original source rather
-         * than the preprocessed text in OBJDIR (ACE repo, yap.c). The ACE
-         * BASIC headers live in the SDK, alongside whatever the project
-         * itself configured. */
+        /* yap: on the host -g, so ace's diagnostics name the original
+         * source rather than the preprocessed text in OBJDIR (patched
+         * yap.c), and the ACE BASIC headers from the SDK. The Amiga's yap
+         * has no -g and finds <...> includes in ACEinclude: by itself. */
         aide_str_append(&s, "YAPFLAGS"); aide_str_append(&s, assignOp);
-        aide_str_append(&s, "-g $(DEFINES) $(INCLUDES) ");
-        aide_str_append(&s, amiga ? "\"-I$(ACE_SDK)/include\"" : "-I$(ACE_SDK)/include");
+        if (amiga)
+            aide_str_append(&s, "$(DEFINES) $(INCLUDES)");
+        else
+            aide_str_append(&s, "-g $(DEFINES) $(INCLUDES) -I$(ACE_SDK)/include");
         aide_str_append_char(&s, '\n');
 
         /* ace accepts at most one option argument and reads it as a
          * bundle of single letters (ACE repo, parse.c check_options and
          * its argc == 3 limit), so everything goes into one token:
          * "-2O", not "-2 -O". Extra flags contribute their letters. */
-        aide_str_append(&s, "ACEFLAGS"); aide_str_append(&s, assignOp);
-        aide_str_append(&s, cpu68000 ? "-0" : "-2");
-        if (project->compiler.optLevel > 0)
-            aide_str_append_char(&s, 'O');
-        for (i = 0; i < project->compiler.extraCFlags.count; ++i) {
-            const char *f = project->compiler.extraCFlags.items[i];
-            while (*f == '-') ++f;
-            aide_str_append(&s, f);
+        {
+            AideStr letters;
+            aide_str_init(&letters);
+            /* The Amiga's ace has no -0; 68000 there means leaving out
+             * the 2 and prepending "OPTION 2-" (compile rule below). */
+            if (cpu68000)
+                aide_str_append(&letters, amiga ? "" : "0");
+            else
+                aide_str_append_char(&letters, '2');
+            if (project->compiler.optLevel > 0)
+                aide_str_append_char(&letters, 'O');
+            for (i = 0; i < project->compiler.extraCFlags.count; ++i) {
+                const char *f = project->compiler.extraCFlags.items[i];
+                while (*f == '-') ++f;
+                aide_str_append(&letters, f);
+            }
+            aceFlagsEmpty = (letters.len == 0);
+
+            aide_str_append(&s, "ACEFLAGS"); aide_str_append(&s, assignOp);
+            if (!aceFlagsEmpty) {
+                aide_str_append_char(&s, '-');
+                aide_str_append(&s, letters.data);
+            }
+            aide_str_append_char(&s, '\n');
+            aide_str_free(&letters);
         }
-        aide_str_append_char(&s, '\n');
     } else {
     aide_str_append(&s, "CFLAGS "); aide_str_append(&s, assignOp);
     aide_str_append(&s, amiga ? "\"+build/vc.cfg\" -c99 -cpu=" : "+$(abspath build/vc.cfg) -c99 -cpu=");
@@ -461,29 +485,30 @@ char *aide_makegen_generate_dialect(const AideToolchainConfig *toolchain, const 
          * They are hunk-object concatenations, not -l archives, so they go
          * on the link line by path -- the same set and order bin/bas
          * uses. The 68000 build has its own startup.lib/db.lib and needs
-         * vc.lib on top for the software float routines. */
-        const char *libdir = amiga ? "$(ACE_LIB)" : "$(ACE_LIB)";
+         * vc.lib on top for the software float routines. On the Amiga
+         * ACE_LIB is the ACElib: assign, which takes no '/' after it. */
+        const char *libdir = amiga ? "$(ACE_LIB)" : "$(ACE_LIB)/";
         AideStr l;
 
         aide_str_init(&l);
         aide_str_append(&l, libdir);
-        aide_str_append(&l, cpu68000 ? "/68000/startup.lib" : "/startup.lib");
+        aide_str_append(&l, cpu68000 ? "68000/startup.lib" : "startup.lib");
         startup = aide_str_take(&l);
 
         aide_str_init(&l);
         aide_str_append(&l, libdir);
-        aide_str_append(&l, cpu68000 ? "/68000/db.lib" : "/db.lib");
+        aide_str_append(&l, cpu68000 ? "68000/db.lib" : "db.lib");
         aide_strlist_push_owned(&ldlibFlags, aide_str_take(&l));
 
         aide_str_init(&l);
         aide_str_append(&l, libdir);
-        aide_str_append(&l, "/amiga.lib");
+        aide_str_append(&l, "amiga.lib");
         aide_strlist_push_owned(&ldlibFlags, aide_str_take(&l));
 
         if (cpu68000) {
             aide_str_init(&l);
             aide_str_append(&l, libdir);
-            aide_str_append(&l, "/vc.lib");
+            aide_str_append(&l, "vc.lib");
             aide_strlist_push_owned(&ldlibFlags, aide_str_take(&l));
         }
 
@@ -667,10 +692,26 @@ char *aide_makegen_generate_dialect(const AideToolchainConfig *toolchain, const 
             aide_str_append(&s, absSrc);
             aide_str_append(&s, "\" \"");
             aide_str_append(&s, ppBase);
-            aide_str_append(&s, ".b\"\n");
+            if (amiga && cpu68000) {
+                /* ACE as shipped only switches to 68000 code through the
+                 * OPTION metacommand, so it goes in front of the
+                 * preprocessed text; the source itself stays untouched. */
+                aide_str_append(&s, ".yap\"\n");
+                aide_str_append(&s, "\tEcho >\""); aide_str_append(&s, ppBase);
+                aide_str_append(&s, ".opt\" \"OPTION 2-\"\n");
+                aide_str_append(&s, "\tJoin \""); aide_str_append(&s, ppBase);
+                aide_str_append(&s, ".opt\" \""); aide_str_append(&s, ppBase);
+                aide_str_append(&s, ".yap\" AS \""); aide_str_append(&s, ppBase);
+                aide_str_append(&s, ".b\"\n");
+            } else {
+                aide_str_append(&s, ".b\"\n");
+            }
 
+            /* ace takes one option bundle; with none, a module still
+             * needs its m. */
             aide_str_append(&s, isBasicMain ? "\t$(ACE) $(ACEFLAGS) \""
-                                           : "\t$(ACE) $(ACEFLAGS)m \"");
+                              : aceFlagsEmpty ? "\t$(ACE) -m \""
+                                              : "\t$(ACE) $(ACEFLAGS)m \"");
             aide_str_append(&s, ppBase);
             aide_str_append(&s, ".b\"\n");
 

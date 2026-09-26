@@ -418,7 +418,7 @@ python3 emulator/acd_emu.py --serial
 | regex.library | siehe §5 (ungeprüft) | Header nach `SDK:regex/include/`, Library nach `LIBS:` |
 | reqtools | siehe §5 | Header nach `SDK:reqtools/include/`, Library nach `LIBS:` |
 | GNU make | `https://github.com/dmcoles/gnu_make_amiga/releases/download/4.4.1-26022026/make441-26022026.lha` oder `https://aminet.net/dev/c/make-4.4.1.lha` | `make` nach `C:` oder in einen Pfad im `PATH` |
-| ACE BASIC | für BASIC-Projekte der IDE: gepatchtes `ace`/`yap` nötig, siehe Hinweis unten; das Original `https://aminet.net/dev/basic/ace-basic.lha` (3.0.1) reicht für eigene Makefiles/`bas` | z. B. `Work:ACE`, Assign `ACE:` |
+| ACE BASIC 3.0.1 (Original, **ungepatcht**) | `https://aminet.net/dev/basic/ace-basic.lha` | z. B. `Work:ACE`, mit den Assigns `ACE:`, `ACElib:`, `ACEinclude:`, `ACEbmaps:` (§8.3) |
 
 Erwartetes Layout der Assigns (aus `ide/amiga/Makefile.amiga`,
 `templates/project-makefiles/Makefile.amigaos`, `ide/core/src/aide_makegen.c`):
@@ -436,36 +436,27 @@ SDK:reqtools/include
            SDK:SQLite3/{include,lib}          SDK:PosixLib/include
 ```
 
-**ACE und die IDE (Achtung, zwei Konventionen im Code):**
+**ACE auf dem Amiga ist das Original.** Die Patches aus
+`compilers/acebasic/` sind nur für den Host (macOS, Linux, Windows) da; auf
+dem Amiga wird nichts gepatcht. Die MUI-IDE erzeugt BASIC-Makefiles für ACE,
+wie es von Aminet kommt:
 
-- Die von der **IDE generierten** BASIC-Makefiles (Amiga-Dialekt) rufen
-  `vbcc:bin/ace` und `vbcc:bin/yap` auf und linken gegen
-  `vbcc:sdk/ACE/lib/{startup.lib,db.lib,amiga.lib}` bzw.
-  `vbcc:sdk/ACE/lib/68000/…`, Includes aus `vbcc:sdk/ACE/include`.
-  → ACEs `bin/ace`, `bin/yap` nach `vbcc:bin/` kopieren und `lib`, `include`,
-  `bmaps` nach `vbcc:sdk/ACE/` (ungeprüft auf echter Hardware).
-- Das **Projekt-Template** `Makefile.amigaos` und ACE selbst verwenden die
-  Assigns `ACE:`, `ACElib:`, `ACEinclude:`, `ACEbmaps:` und `ACE:bin/bas`.
+- `ACE:bin/ace` und `ACE:bin/yap`; Includes mit `<…>` sucht `yap` selbst in
+  `ACEinclude:`.
+- Gelinkt wird gegen `ACElib:startup.lib`, `ACElib:db.lib`,
+  `ACElib:amiga.lib`, bei 68000 gegen `ACElib:68000/startup.lib`,
+  `ACElib:68000/db.lib`, `ACElib:amiga.lib` und `ACElib:vc.lib`.
+- `vasmm68k_mot` und `vlink` kommen aus `vbcc:bin/`.
+- **CPU 68000:** Das Original-`ace` kennt dafür keinen Schalter, nur
+  `OPTION 2-` im Quelltext. Das Makefile stellt diese Zeile automatisch vor
+  den vorverarbeiteten Text (`Echo` und `Join`); der Quelltext und die
+  `.aproj` bleiben unverändert (ungeprüft auf echter Hardware).
+- **Fehlerzeilen:** Das Original-`yap` kennt kein `-g`. `ace` meldet Fehler
+  deshalb mit der Zeilennummer im vorverarbeiteten Text, ohne Dateinamen. Die
+  IDE zeigt sie an, kann sie aber keiner Quelldatei zuordnen.
 
-Beide Assign-Sätze unten setzen, bis das vereinheitlicht ist.
-
-**Einschränkung:** Die IDE-Makefiles rufen `yap -g` und `ace -0`/`-2` auf.
-Diese Optionen gibt es nur mit unseren Patches; das `ace`/`yap` von Aminet
-kennt sie nicht. Die gepatchten m68k-Programme entstehen auf dem Host, nach
-dem Bootstrap:
-
-```sh
-source toolchain/setenv.sh
-cd var/src/acebasic/src/make
-make -f Makefile-host amiga-check              # → ../../bin/host/amiga-check/ace
-vc +aos68k -c99 -cpu=68020 -O2 -I$VBCC/sdk/NDK_3.2/Include_H \
-   ../yap/c/yap.c -o yap -lmieee               # → yap
-```
-
-Beide nach `vbcc:bin/` auf den Amiga kopieren (ersetzen das Aminet-`ace`/`yap`
-für IDE-Projekte). `amiga-check` baut `ace` für 68000. Für `yap` gibt es noch
-kein Build-Ziel. Beide Programme sind auf echter Hardware **ungeprüft**.
-C-Projekte sind davon nicht betroffen.
+Dieselbe `.aproj` baut auf dem Host mit dem gepatchten ACE; welches Verhalten
+gilt, entscheidet allein das von der IDE erzeugte Makefile.
 
 ### 8.3 S:User-Startup
 

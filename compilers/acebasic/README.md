@@ -99,13 +99,15 @@ make -f Makefile-host amiga-check
 
 Für ein neues Upstream-Release siehe [`UPDATING.md`](UPDATING.md).
 
-## Bekannte Probleme
+## Nur für den Host
 
-- **Nativer Amiga-Einsatz mit der IDE:** Die von der IDE erzeugten
-  BASIC-Makefiles rufen `yap -g` und `ace -0`/`-2` auf. Beides gibt es nur
-  mit diesen Patches. Das `ace`/`yap` aus dem Upstream-Archiv bzw. von Aminet
-  kennt diese Optionen nicht. Ein m68k-`ace` entsteht über `amiga-check`
-  (`bin/host/amiga-check/ace`). `yap.c` lässt sich von Hand mit
-  `vc +aos68k` übersetzen (siehe `INSTALL.md`, §8.2), hat aber noch kein
-  Build-Ziel. `bas.c` läuft nur auf dem Host (braucht `unistd.h`). Auf echter
-  Hardware ist beides ungeprüft.
+Die Patches betreffen nur die Host-Werkzeuge (macOS, Linux, Windows). Auf
+dem Amiga läuft ACE, wie es von Aminet kommt, und die MUI-IDE erzeugt ihre
+Makefiles dafür (ACEs eigene Assigns, `OPTION 2-` statt `-0`, kein `yap -g`;
+siehe `INSTALL.md`, §8.2). Dieselbe `.aproj` baut auf beiden Seiten; den
+Unterschied macht allein der Makefile-Dialekt in
+`ide/core/src/aide_makegen.c`.
+
+`make -f Makefile-host amiga-check` baut `ace` trotzdem für m68k: als
+Prüfung, dass die Patches den nativen Build nicht brechen, nicht für den
+Einsatz auf dem Amiga.
