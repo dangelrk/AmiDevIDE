@@ -9,7 +9,7 @@ ACE BASIC ist **nicht** Teil dieses Repositorys. Hier liegen nur unsere
 | Basis | Tag **`3.0.1`** — Archiv `https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz` |
 | SHA-256 | `8a38419e35c31cf7474385384940166c4e97f2fda36c46501e5d7d40900a556f` (steht auch in `bootstrap/sources.lock.json`) |
 | Lizenz | GPL (ACE), die Patches stehen unter derselben Lizenz |
-| Patches | `patches/0001-*.patch` … `patches/0012-*.patch`, Format `git format-patch` |
+| Patches | `patches/0001-*.patch` … `patches/0013-*.patch`, Format `git format-patch` |
 
 Das Original wird nicht verändert und nicht geforkt. Der Bootstrap lädt das
 Archiv, prüft die Prüfsumme und spielt die Patches ein.
@@ -30,6 +30,7 @@ Archiv, prüft die Prüfsumme und spielt die Patches ein.
 | 0010 | `docs/upstream-findings.md`: die fünf gefundenen Compiler-Fehler, beschrieben für Upstream |
 | 0011 | Versionsstempel (Version, Build-Nummer, Datum) in allen Binaries; Version 3.1.0 |
 | 0012 | `yap -V` antwortet vor der Argumentprüfung |
+| 0013 | Fix: Build-Nummer und Datum werden ohne Anführungszeichen übergeben und im Quelltext zu Strings gemacht, damit `amiga-check` durchläuft |
 
 Details stehen in den Commit-Texten der Patches selbst und in
 `docs/upstream-findings.md` des gepatchten Baums.
@@ -100,14 +101,11 @@ Für ein neues Upstream-Release siehe [`UPDATING.md`](UPDATING.md).
 
 ## Bekannte Probleme
 
-- **`make -f Makefile-host amiga-check` bricht in `ver.c` ab** („illegal
-  number“). Seit Patch 0011 werden `ACE_BUILD_NUMBER`/`ACE_BUILD_DATE` als
-  `-D…='"…"'` übergeben. `vc` reicht die Optionen über eine Shell an
-  `vbccm68k` weiter, die dabei die inneren Anführungszeichen entfernt. Der
-  Host-Build ist nicht betroffen.
 - **Nativer Amiga-Einsatz mit der IDE:** Die von der IDE erzeugten
   BASIC-Makefiles rufen `yap -g` und `ace -0`/`-2` auf. Beides gibt es nur
   mit diesen Patches. Das `ace`/`yap` aus dem Upstream-Archiv bzw. von Aminet
   kennt diese Optionen nicht. Ein m68k-`ace` entsteht über `amiga-check`
-  (siehe oben). `yap.c` lässt sich mit `vc +aos68k` übersetzen, `bas.c` nicht
-  (braucht `unistd.h`). Ein Build-Ziel dafür gibt es noch nicht.
+  (`bin/host/amiga-check/ace`). `yap.c` lässt sich von Hand mit
+  `vc +aos68k` übersetzen (siehe `INSTALL.md`, §8.2), hat aber noch kein
+  Build-Ziel. `bas.c` läuft nur auf dem Host (braucht `unistd.h`). Auf echter
+  Hardware ist beides ungeprüft.

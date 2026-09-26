@@ -80,7 +80,7 @@ Im portierten Baum (Toolchain aus diesem Repository verwenden):
 export VBCC=/pfad/zu/AmiDevIDE/toolchain
 cd src/make
 make -f Makefile-host clean all              # Host-Build: ace, yap, bas
-make -f Makefile-host amiga-check            # m68k-Build von ace (siehe Bekannte Probleme in README.md)
+make -f Makefile-host amiga-check            # m68k-Build von ace
 cd ../../utils/yap/tests && ./run_tests.sh   # yap gegen das BASIC-Original
 ```
 

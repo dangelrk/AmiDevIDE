@@ -123,7 +123,10 @@ def main() -> int:
     extract(archive, DEST, strip_prefix=True)
 
     run(GIT + ["init", "-q"], cwd=DEST, quiet=True)
-    run(GIT + ["add", "-A"], cwd=DEST, quiet=True)
+    # -f: upstream's own .gitignore excludes files its archive nonetheless
+    # ships (verify/scripts/otherthenamiga/aos3/), and `upstream` has to be
+    # the archive exactly or the tree reads as dirty once a patch changes it.
+    run(GIT + ["add", "-A", "-f"], cwd=DEST, quiet=True)
     run(GIT + ["commit", "-q", "-m", f"Upstream {archive.name}, unmodified"],
         cwd=DEST, quiet=True)
     run(GIT + ["tag", "upstream"], cwd=DEST, quiet=True)

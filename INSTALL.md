@@ -451,12 +451,21 @@ Beide Assign-Sätze unten setzen, bis das vereinheitlicht ist.
 
 **Einschränkung:** Die IDE-Makefiles rufen `yap -g` und `ace -0`/`-2` auf.
 Diese Optionen gibt es nur mit unseren Patches; das `ace`/`yap` von Aminet
-kennt sie nicht. Ein gepatchtes m68k-`ace` entsteht auf dem Host mit
-`make -f Makefile-host amiga-check` in `var/src/acebasic/src/make`, das derzeit
-aber in `ver.c` abbricht (siehe „Bekannte Probleme“ in
-`compilers/acebasic/README.md`). Ein m68k-`yap` hat noch kein Build-Ziel.
-BASIC-Projekte aus der IDE heraus nativ zu bauen, ist damit **noch nicht
-möglich**; C-Projekte sind davon nicht betroffen.
+kennt sie nicht. Die gepatchten m68k-Programme entstehen auf dem Host, nach
+dem Bootstrap:
+
+```sh
+source toolchain/setenv.sh
+cd var/src/acebasic/src/make
+make -f Makefile-host amiga-check              # → ../../bin/host/amiga-check/ace
+vc +aos68k -c99 -cpu=68020 -O2 -I$VBCC/sdk/NDK_3.2/Include_H \
+   ../yap/c/yap.c -o yap -lmieee               # → yap
+```
+
+Beide nach `vbcc:bin/` auf den Amiga kopieren (ersetzen das Aminet-`ace`/`yap`
+für IDE-Projekte). `amiga-check` baut `ace` für 68000. Für `yap` gibt es noch
+kein Build-Ziel. Beide Programme sind auf echter Hardware **ungeprüft**.
+C-Projekte sind davon nicht betroffen.
 
 ### 8.3 S:User-Startup
 
