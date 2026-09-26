@@ -1,0 +1,34 @@
+{
+    "configurations": [
+        {
+            "name": "Amiga-vbcc",
+            "includePath": [
+                "${workspaceFolder}/**",
+				"${workspaceFolder}/include",
+                "${env:VBCC}/targets/m68k-amigaos/include",
+                "${env:VBCC}/sdk/NDK_3.2/Include_H",
+                "${env:VBCC}/sdk/MUI_3.8/Developer/C/Include",
+                "${env:VBCC}/sdk/Roadshow/include",
+                "${env:VBCC}/sdk/Roadshow/netinclude",
+                "${env:VBCC}/sdk/AmiSSL-v5/Developer/include",
+                "${env:VBCC}/sdk/SQLite3/include",
+                "${env:VBCC}/sdk/PosixLib/include"
+            ],
+            "defines": [
+                "__AMIGA__",
+                "__M68K__",
+                "__M68000__",
+                "__VBCC__"
+            ],
+            "compilerArgs": [
+                "-U__GNUC__"
+            ],
+            "forcedInclude": [
+                "${env:VBCC}/sdk/vbcc_compat.h"
+            ],
+            "cStandard": "c99",
+            "compilerPath": ""
+        }
+    ],
+    "version": 4
+}

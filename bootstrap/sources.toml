@@ -1,0 +1,90 @@
+# External sources AmiDevIDE builds or installs from.
+#
+# Everything listed here is fetched into var/downloads/ by acd_fetch.py.  You
+# can also drop the archives in there by hand -- see docs/SOURCES.html, which
+# is generated from this file -- and the fetcher will use them as they are.
+#
+# resolver:
+#   static        url is fixed.  version, if given, is read off version_page.
+#   vbcc_tag      scrape the vbcc page for the highest vbccX_Ytag source archive
+#   vbcc_target   scrape the vbcc page for the newest dated target archive
+
+[[source]]
+id          = "vasm"
+name        = "vasm"
+description = "Portable and retargetable assembler, source release."
+resolver    = "static"
+url         = "http://sun.hasenbraten.de/vasm/release/vasm.tar.gz"
+filename    = "vasm.tar.gz"
+patterns    = ["vasm*.tar.gz"]
+homepage    = "http://sun.hasenbraten.de/vasm/"
+version_page  = "http://sun.hasenbraten.de/vasm/index.php?view=relsrc"
+version_regex = "Download the\\s+v([0-9A-Za-z.]+)"
+notes       = "This URL always serves the current release, so no scraping needed."
+
+[[source]]
+id          = "vlink"
+name        = "vlink"
+description = "Portable linker for multiple file formats, source release."
+resolver    = "static"
+url         = "http://sun.hasenbraten.de/vlink/release/vlink.tar.gz"
+filename    = "vlink.tar.gz"
+patterns    = ["vlink*.tar.gz"]
+homepage    = "http://sun.hasenbraten.de/vlink/"
+version_page  = "http://sun.hasenbraten.de/vlink/index.php?view=relsrc"
+version_regex = "Download the\\s+v([0-9A-Za-z.]+)"
+notes       = "This URL always serves the current release, so no scraping needed."
+
+[[source]]
+id          = "vbcc"
+name        = "vbcc"
+description = "The vbcc C compiler, full release source."
+resolver    = "vbcc_tag"
+page        = "http://sun.hasenbraten.de/vbcc/"
+patterns    = ["vbcc*.tar.gz", "vbcc*.zip"]
+homepage    = "http://sun.hasenbraten.de/vbcc/"
+notes       = "There is no 'latest' URL; the newest vbccX_Y[Pn].tar.gz under phoenix.owl.de/tags/ wins."
+
+[[source]]
+id          = "vbcc_target_m68k"
+name        = "vbcc target m68k-amigaos"
+description = "Prebuilt vbcc C runtime for AmigaOS 2.x/3.x M680x0 (headers + libs)."
+resolver    = "vbcc_target"
+page        = "http://sun.hasenbraten.de/vbcc/"
+filename    = "vbcc_target_m68k-amigaos.lha"
+patterns    = ["vbcc_target_m68k-amigaos.lha"]
+homepage    = "http://sun.hasenbraten.de/vbcc/"
+notes       = "The one component not built from source -- it ships as a binary runtime."
+
+[[source]]
+id          = "ndk32"
+name        = "NDK 3.2"
+description = "Amiga Native Developer Kit 3.2: includes, FD/SFD, linker libs, autodocs."
+resolver    = "static"
+url         = "https://aminet.net/dev/misc/NDK3.2.lha"
+filename    = "NDK3.2.lha"
+patterns    = ["NDK3.2*.lha", "NDK_3.2*.lha"]
+homepage    = "https://aminet.net/package/dev/misc/NDK3.2"
+notes       = "NDK 3.2 is NEWER than NDK 3.9, counter-intuitive as that reads."
+
+[[source]]
+id          = "mui38"
+name        = "MUI 3.8 developer"
+description = "MagicUserInterface 3.8 developer files: includes, FD, autodocs, examples."
+resolver    = "static"
+url         = "https://aminet.net/dev/mui/mui38dev.lha"
+filename    = "mui38dev.lha"
+patterns    = ["mui38dev*.lha"]
+homepage    = "https://aminet.net/package/dev/mui/mui38dev"
+notes       = "Archive root is MUI/, installed as sdk/MUI_3.8/."
+
+[[source]]
+id          = "acebasic"
+name        = "ACE BASIC"
+description = "ACE BASIC compiler, upstream release the AmiDevIDE patch series applies to."
+resolver    = "static"
+url         = "https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz"
+filename    = "ACEBasic-3.0.1.tar.gz"
+patterns    = ["ACEBasic-3.0.1.tar.gz"]
+homepage    = "https://github.com/mdbergmann/ACEBasic"
+notes       = "Pinned: compilers/acebasic/patches/ only apply to this exact tag. acd_ace.py checks the sha256 and applies them."

@@ -1,0 +1,138 @@
+# Makefile.rules - Generische Build-Regeln
+# Diese Datei sollte NICHT geändert werden
+
+#############################################
+# Object Files
+#############################################
+
+C_OBJECTS = $(addprefix $(OBJDIR)/, $(C_SOURCES:.c=.o))
+ASM_OBJECTS = $(addprefix $(OBJDIR)/, $(ASM_SOURCES:.s=.o))
+# ACE BASIC modules; set BASIC_SOURCES in the project Makefile
+BASIC_OBJECTS = $(addprefix $(OBJDIR)/, $(BASIC_SOURCES:.b=.o))
+ALL_OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS) $(BASIC_OBJECTS)
+
+TARGET = $(BINDIR)/$(PROJECT)
+
+#############################################
+# Default Target
+#############################################
+
+.PHONY: all
+all: $(TARGET) $(ADF)
+
+#############################################
+# Build Rules
+#############################################
+
+$(TARGET): $(ALL_OBJECTS) | $(BINDIR)
+	@echo "Linking $(TARGET)..."
+	$(CC) $(LDFLAGS) -o $@ $(ALL_OBJECTS) $(LIBS)
+	@echo "Build complete: $(TARGET)"
+
+# Compile C files
+$(OBJDIR)/%.o: %.c | $(OBJDIR)
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile C files from subdirectories
+$(OBJDIR)/%.o: src/%.c | $(OBJDIR)
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile ACE BASIC modules.
+# bas -m always writes <source>.o next to the source, so move it into OBJDIR.
+$(OBJDIR)/%.o: %.b | $(OBJDIR)
+	@echo "Compiling BASIC $<..."
+	$(BAS) -m $<
+	$(MV) $(<:.b=.o) $@
+
+# Assemble .s files
+$(OBJDIR)/%.o: %.s | $(OBJDIR)
+	@echo "Assembling $<..."
+	$(AS) $(ASFLAGS) -o $@ $<
+
+# Assemble .s files from subdirectories
+$(OBJDIR)/%.o: src/%.s | $(OBJDIR)
+	@echo "Assembling $<..."
+	$(AS) $(ASFLAGS) -o $@ $<
+
+# Assemble .asm files (alternative extension)
+$(OBJDIR)/%.o: %.asm | $(OBJDIR)
+	@echo "Assembling $<..."
+	$(AS) $(ASFLAGS) -o $@ $<
+
+#############################################
+# Directory Creation
+#############################################
+
+$(OBJDIR):
+	$(MKDIR) $(OBJDIR)
+
+$(BINDIR):
+	$(MKDIR) $(BINDIR)
+
+#############################################
+# Utility Targets
+#############################################
+
+.PHONY: clean
+clean:
+	@echo "Cleaning..."
+	-$(RM) $(ALL_OBJECTS)
+	-$(RM) $(TARGET)
+	@echo "Clean complete."
+
+.PHONY: rebuild
+rebuild: clean all
+
+.PHONY: info
+info:
+	@echo "========================================="
+	@echo "Build Configuration"
+	@echo "========================================="
+	@echo "Platform:      $(PLATFORM)"
+	@echo "Project:       $(PROJECT) v$(VERSION)"
+	@echo "CPU Target:    $(CPU)"
+	@echo "Optimization:  O$(OPT_LEVEL)"
+	@echo "Debug:         $(DEBUG)"
+	@echo ""
+	@echo "vbcc Base:     $(VBCC_BASE)"
+	@echo "Compiler:      $(CC)"
+	@echo "Assembler:     $(AS)"
+	@echo ""
+	@echo "C Sources:     $(C_SOURCES)"
+	@echo "ASM Sources:   $(ASM_SOURCES)"
+	@echo "BASIC Sources: $(BASIC_SOURCES)"
+	@echo "Objects:       $(ALL_OBJECTS)"
+	@echo "Target:        $(TARGET)"
+	@echo "========================================="
+
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  all (default) - Build the project"
+	@echo "  clean         - Remove build files"
+	@echo "  rebuild       - Clean and build"
+	@echo "  info          - Show build configuration"
+	@echo "  help          - Show this help"
+
+#############################################
+# Dependencies (optional)
+#############################################
+
+# Uncomment to enable automatic dependency generation
+# DEPS = $(C_OBJECTS:.o=.d)
+# -include $(DEPS)
+# 
+# $(OBJDIR)/%.d: %.c | $(OBJDIR)
+# 	@$(CC) $(CFLAGS) -MM -MT $(@:.d=.o) $< > $@
+
+#############################################
+# ADF creation
+#############################################
+
+$(ADF): $(TARGET)
+	$(MKDIR) $(DISTDIR)
+	cp $(ADF_TEMPLATE) $@
+	$(XDFTOOL) $@ write $(TARGET) $(PROJECT)
+

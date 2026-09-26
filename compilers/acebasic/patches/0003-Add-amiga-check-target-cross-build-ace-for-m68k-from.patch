@@ -1,0 +1,98 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 10:52:23 +0200
+Subject: [PATCH] Add amiga-check target: cross-build ace for m68k from the
+ host
+
+The AmigaOS code path (#ifndef ACE_HOST) needs a regression check after
+every compiler source change, and CLAUDE.md asks for that verification on
+the emulator.  That is not possible in this checkout: the Workbench image
+under verify/scripts/otherthenamiga/aos3 contains only S/user-startup, so
+there is no bootable system to run Makefile-ace on.
+
+vbcc/vasm/vlink are available as host binaries in $VBCC, so the same build
+Makefile-ace performs natively can be driven from the host instead.  All 30
+modules compile and link into a valid AmigaOS hunk executable, which proves
+the Amiga branches still build.  It does not prove runtime behaviour - that
+still needs FS-UAE with a real Workbench installation.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/make/Makefile-host | 43 ++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 41 insertions(+), 2 deletions(-)
+
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index 506462e..86d0b58 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -124,7 +124,7 @@ ACE_OBJECTS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(ACE_SOURCES))
+ # BUILD TARGETS
+ ################################################################################
+ 
+-.PHONY: all ace yap bas clean rebuild install info help dirs
++.PHONY: all ace yap bas clean rebuild install info help dirs amiga-check
+ 
+ all: ace
+ 	@echo "Host build complete: $(ACE_BIN)"
+@@ -142,13 +142,50 @@ $(OBJ_DIR)/%.o: $(ACE_SRC_DIR)/%.c $(ACE_SRC_DIR)/acedef.h $(ACE_SRC_DIR)/hostco
+ dirs:
+ 	$(Q)mkdir -p $(OBJ_DIR)
+ 
++################################################################################
++# AMIGA REGRESSION CHECK
++################################################################################
++# Cross-builds ace for m68k-amigaos with vbcc, exactly as Makefile-ace does
++# natively.  This is how you check that the #ifndef ACE_HOST path still
++# compiles after touching the compiler sources, without needing an Amiga or
++# a booted emulator.  It proves the build, not the runtime behaviour - for
++# that the binary still has to be run under FS-UAE.
++
++VC       = $(VBCC)/bin/vc
++NDK_INC  = $(VBCC)/sdk/NDK_3.2/Include_H
++NDK_LIB  = $(VBCC)/sdk/NDK_3.2/lib
++VBCC_INC = $(VBCC)/targets/m68k-amigaos/include
++VBCC_LIB = $(VBCC)/targets/m68k-amigaos/lib
++
++AMIGA_DIR     = $(ROOT)/bin/host/amiga-check
++AMIGA_OBJECTS = $(patsubst %.c,$(AMIGA_DIR)/%.o,$(ACE_SOURCES))
++AMIGA_BIN     = $(AMIGA_DIR)/ace
++
++# Same flags as Makefile-ace.  Note: no -DACE_HOST, so the Amiga branches win.
++AMIGA_CFLAGS  = +aos68k -c -O2 -cpu=68000 \
++                -I$(ACE_SRC_DIR) -I$(VBCC_INC) -I$(NDK_INC)
++AMIGA_LDFLAGS = +aos68k -cpu=68000 -L$(VBCC_LIB) -L$(NDK_LIB) -lmieee -lamiga
++
++.PHONY: amiga-check
++amiga-check: $(AMIGA_BIN)
++	@echo "Amiga build OK: $(AMIGA_BIN)"
++
++$(AMIGA_BIN): $(AMIGA_OBJECTS)
++	$(ECHO) "Linking ace (m68k-amigaos)..."
++	$(Q)VBCC="$(VBCC)" PATH="$(VBCC)/bin:$$PATH" $(VC) $(AMIGA_LDFLAGS) $(AMIGA_OBJECTS) -o $@
++
++$(AMIGA_DIR)/%.o: $(ACE_SRC_DIR)/%.c $(ACE_SRC_DIR)/acedef.h
++	$(Q)mkdir -p $(AMIGA_DIR)
++	$(ECHO) "Compiling $< (m68k)..."
++	$(Q)VBCC="$(VBCC)" PATH="$(VBCC)/bin:$$PATH" $(VC) $(AMIGA_CFLAGS) $< -o $@
++
+ ################################################################################
+ # UTILITY TARGETS
+ ################################################################################
+ 
+ clean:
+ 	$(ECHO) "Cleaning host build..."
+-	$(Q)rm -rf $(BUILD_DIR)
++	$(Q)rm -rf $(BUILD_DIR) $(AMIGA_DIR)
+ 	@echo "Clean complete"
+ 
+ rebuild: clean all
+@@ -167,6 +204,8 @@ help:
+ 	@echo "  all      - Build host binaries (default)"
+ 	@echo "  clean    - Remove the host build directory"
+ 	@echo "  rebuild  - clean + all"
++	@echo "  amiga-check - Cross-build ace for m68k with vbcc (regression"
++	@echo "                check for the native AmigaOS code path)"
+ 	@echo "  install  - Install into \$$(VBCC) (default $(VBCC))"
+ 	@echo "  info     - Show detected configuration"
+ 	@echo ""

@@ -1,0 +1,424 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 12:13:57 +0200
+Subject: [PATCH] Report diagnostics against the original source, not the
+ preprocessed text
+
+Groundwork for the AmigaIDE integration: an IDE needs to turn a compiler
+error into a click that lands on the right line of the file the user is
+editing.  Two things stood in the way.
+
+ace derived a filename's extension from the FIRST dot, so "my.prog.b"
+became "my.prog.b.b" and a directory containing a dot broke the .s name
+derivation too.  find_extension() now takes the last dot of the last path
+component.  This is a real bug fix on the Amiga as well, and it frees any
+Makefile generator from having to invent dot-free intermediate names.
+
+yap removes comments, folds blank lines and splices includes, so its
+output stops tracking its input 1:1 and every ace diagnostic named a line
+of the temp file - which the user never sees and cannot open.  yap -g now
+emits "#line N "FILE"" whenever the position drifts, ace consumes those
+markers in nextch(), and _error()/_warn() report the recorded position.
+bas passes -g unconditionally, so the command line benefits too.
+
+The message text is extended additively: without markers it stays
+byte-identical to before, so CubicIDE and anything else parsing bas -E
+output keeps working.  With markers it reads
+
+  ** Undefined function or array not dimensioned in line 3 of "incd/helper.b".
+
+including for errors inside an included file, which was previously
+impossible to attribute at all.
+
+Verified: 12/12 yap tests (new test_linemarkers covers -g in both the
+host and the ARexx runner), all 223 non-error cases still build and all
+28 errors/ cases are still rejected, amiga-check still builds, and
+compare-host-vs-amiga.sh still reports the same 192 identical .s files -
+the markers change diagnostics only, never the emitted assembly.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/ace/c/acedef.h                        |   1 +
+ src/ace/c/lex.c                           | 122 +++++++++++++++++++---
+ src/ace/c/lexvar.c                        |   2 +
+ src/bas/c/bas.c                           |   4 +
+ src/yap/c/yap.c                           |  50 ++++++++-
+ utils/yap/tests/run_tests.rexx            |   2 +
+ utils/yap/tests/run_tests.sh              |   5 +-
+ utils/yap/tests/test_linemarkers.b        |  10 ++
+ utils/yap/tests/test_linemarkers.expected |   9 ++
+ 9 files changed, 189 insertions(+), 16 deletions(-)
+ create mode 100644 utils/yap/tests/test_linemarkers.b
+ create mode 100644 utils/yap/tests/test_linemarkers.expected
+
+diff --git a/src/ace/c/acedef.h b/src/ace/c/acedef.h
+index c4321fa..789d861 100755
+--- a/src/ace/c/acedef.h
++++ b/src/ace/c/acedef.h
+@@ -575,6 +575,7 @@ void	cleanup();
+ void	_warn();
+ void	_error();
+ void	_abort();
++char	*find_extension();
+ void	open_files();
+ void	nextch();
+ BOOL	letter();
+diff --git a/src/ace/c/lex.c b/src/ace/c/lex.c
+index 152dee4..d7bf25e 100755
+--- a/src/ace/c/lex.c
++++ b/src/ace/c/lex.c
+@@ -119,6 +119,24 @@ void cleanup(void)
+  exit(exitvalue);
+ }
+ 
++/* " in line N." or, once a yap -g marker has named a file,
++** " in line N of \"FILE\"." -- additive, so output without markers is
++** byte-identical to what it always was and existing tooling (CubicIDE,
++** bas -E) keeps parsing it. */
++static void print_position(int line)
++{
++ if (curfile[0] != '\0')
++ {
++  printf(" in line %d of \"%s\".\n",line,curfile);
++  if (error_log) fprintf(err_log," in line %d of \"%s\".\n",line,curfile);
++ }
++ else
++ {
++  printf(" in line %d.\n",line);
++  if (error_log) fprintf(err_log," in line %d.\n",line);
++ }
++}
++
+ void _warn(int n)
+ {
+ char *msg;
+@@ -133,8 +151,7 @@ char *msg;
+  }
+  printf("%s",msg);
+  if (error_log) fprintf(err_log,"%s",msg);
+- printf(" in line %d.\n",lineno);
+- if (error_log) fprintf(err_log," in line %d.\n",lineno);
++ print_position(lineno);
+ }
+ 
+ void _error(int n)
+@@ -314,8 +331,7 @@ char *msg;
+  if (error_log) fprintf(err_log,"%s",msg);
+  if (n > 1 && n != 8)
+  {
+-  printf(" in line %d.\n",badline);
+-  if (error_log) fprintf(err_log," in line %d.\n",badline);
++  print_position(badline);
+  }
+ 
+  if (n != 0) errors++;
+@@ -330,6 +346,75 @@ void _abort(int n)
+  cleanup();
+ }
+ 
++static BOOL take_line_marker(buf)
++char *buf;
++{
++/*
++** Consume a "#line N "FILE"" marker emitted by yap -g.
++**
++** Comment removal, blank-line consolidation and #include make yap's
++** output stop tracking its input 1:1, so without these markers every
++** diagnostic would name a line of the preprocessed text. On a match,
++** lineno and curfile are set so the position reported is the one in the
++** original source, and TRUE is returned to say the line is not program
++** text. '#' in column 1 cannot occur in ACE BASIC once the preprocessor
++** has run, so there is nothing to collide with.
++**
++** A malformed marker is left alone rather than guessed at - it will then
++** fail to parse as BASIC, which is the honest outcome.
++*/
++char *p,*q;
++long n;
++
++ if (strncmp(buf,"#line",5) != 0) return(FALSE);
++
++ p = buf + 5;
++ if (*p != ' ' && *p != '\t') return(FALSE);
++ while (*p == ' ' || *p == '\t') p++;
++ if (*p < '0' || *p > '9') return(FALSE);
++
++ n = strtol(p,&q,10);
++ p = q;
++ while (*p == ' ' || *p == '\t') p++;
++
++ if (*p == '"')
++ {
++	size_t len;
++	p++;
++	q = strchr(p,'"');
++	if (q == NULL) return(FALSE);
++	len = (size_t)(q - p);
++	if (len > MAXBMAPPATH-1) len = MAXBMAPPATH-1;
++	memcpy(curfile,p,len);
++	curfile[len] = '\0';
++ }
++
++ /* the marker names the line AFTER it; the caller's lineno++ adds the 1 */
++ lineno = (int)n - 1;
++ return(TRUE);
++}
++
++char *find_extension(char *path)
++{
++/*
++** Pointer to the extension of `path` (the '.' itself), or NULL if the
++** filename has none.
++**
++** Must look at the LAST dot of the LAST path component: searching for the
++** first dot anywhere in the string turned "my.prog.b" into "my.prog.b.b",
++** and a directory containing a dot ("/tmp/a.b/prog.b") broke the .s name
++** derivation as well.
++*/
++char *base,*p;
++
++ base = path;
++ for (p = path; *p != '\0'; p++)
++     if (*p == '/' || *p == ':' || *p == '\\') base = p + 1;
++
++ p = strrchr(base,'.');
++ return((p != NULL && p != base) ? p : NULL);
++}
++
+ void open_files(char *source)
+ {
+ int  cc;
+@@ -349,14 +434,12 @@ char *xtn;
+  /* copy source file name */
+  strcpy(srcfile,source);
+ 
+- /* 
+- ** Does source file name already have an extension (.b or .bas)? 
+- ** If not, add one. 
++ /*
++ ** Does source file name already have an extension (.b or .bas)?
++ ** If not, add one.
+  */
+- cc=0;
+- while (srcfile[cc] && srcfile[cc] != '.') cc++;
+-
+- xtn = &srcfile[cc];
++ xtn = find_extension(srcfile);
++ if (xtn == NULL) xtn = srcfile + strlen(srcfile);
+ 
+  /*
+  ** Allow an extension of ".bas",".BAS",
+@@ -386,8 +469,9 @@ char *xtn;
+  }
+ 
+  /* copy source file name and change extension to ".s" */
+- cc=0;
+- while (srcfile[cc] != '.') { destfile[cc] = srcfile[cc]; cc++; }
++ xtn = find_extension(srcfile);
++ cc = xtn ? (int)(xtn - srcfile) : (int)strlen(srcfile);
++ memcpy(destfile,srcfile,(size_t)cc);
+  destfile[cc] = '\0';
+  strcat(destfile,".s");
+ 
+@@ -432,6 +516,18 @@ BOOL continue_line;
+   /* next line of source code */
+   line[linelen] = '\0';
+ 
++  /* Swallow any yap -g line markers and refill from the line after. */
++  while (take_line_marker(line))
++  {
++   column = linelen = -1;
++   do
++   {
++   	line[++linelen]=(ch=getc(src));
++   }
++   while ((ch != '\n') && (ch != EOF) && (linelen < MAXLINELEN));
++   line[linelen] = '\0';
++  }
++
+   /* 
+   ** !!! eoln for previous line [PRINT statement etc] !!! 
+   **
+diff --git a/src/ace/c/lexvar.c b/src/ace/c/lexvar.c
+index 697277b..75f44db 100755
+--- a/src/ace/c/lexvar.c
++++ b/src/ace/c/lexvar.c
+@@ -139,6 +139,8 @@ FILE   *src;                     /* source file handle */
+ FILE   *dest;                    /* object file handle */
+ int    column,linelen;           /* current column & length of char buffer */ 
+ int    lineno=0;                 /* current line of source */
++char   curfile[MAXBMAPPATH]="";  /* source file per yap's #line markers,
++				 ** "" when none have been seen */
+ int    errors=0;                 /* # of errors generated */
+ char   line[MAXLINELEN];         /* Nth line buffer */
+ char   lastline[MAXLINELEN];  	 /* (N-1)th line buffer */
+diff --git a/src/bas/c/bas.c b/src/bas/c/bas.c
+index 7f3133c..1f7e826 100644
+--- a/src/bas/c/bas.c
++++ b/src/bas/c/bas.c
+@@ -592,6 +592,10 @@ char **argv;
+  /* ---- 1. preprocess ---- */
+  nargs = 0;
+  targv[nargs++] = cfg_yap;
++ /* -g: keep ace's diagnostics pointing at the original source rather than
++ ** at the preprocessed text in the temp directory, which the user never
++ ** sees and cannot open. */
++ targv[nargs++] = "-g";
+  sprintf(path,"%s.b",workbase);
+  targv[nargs++] = srcpath;
+  targv[nargs++] = path;
+diff --git a/src/yap/c/yap.c b/src/yap/c/yap.c
+index 074b317..2a3f893 100644
+--- a/src/yap/c/yap.c
++++ b/src/yap/c/yap.c
+@@ -84,6 +84,21 @@ static char *outBuf = NULL;
+ static size_t outBufLen = 0;
+ static size_t outBufCap = 0;
+ 
++/*
++** -g: line markers.
++**
++** Comment removal, blank-line consolidation and #include all make the
++** output stop tracking the input 1:1, so a diagnostic from ace would
++** otherwise name a line of the preprocessed text - useless in an editor.
++** With -g a "#line N "FILE"" marker is emitted whenever the position
++** drifts, saying which source line the NEXT output line came from; ace
++** consumes them (see lex.c nextch()) and reports the original position.
++*/
++static int   genLineMarkers = 0;
++static char  markerFile[MAX_PATH] = "";
++static long  markerLine = 0;	/* source line ace will attribute to the
++				** next output line, per markers so far */
++
+ /* ---- Shared line buffer, as in the original ---- */
+ static char  rdLineBuf[MAX_LINE+1];
+ 
+@@ -128,6 +143,8 @@ static void show_usage()
+  printf("  -D<name>[=val]  Define a macro\n");
+  printf("  -U<name>        Undefine a macro\n");
+  printf("  -I<path>        Add include search path\n");
++ printf("  -g              Emit #line markers so ace reports positions\n");
++ printf("                  in the original source\n");
+ }
+ 
+ /*---- macro table ---------------------------------------------------------*/
+@@ -202,7 +219,7 @@ size_t extra;
+  outBuf = p;
+ }
+ 
+-static void output_line(ln)
++static void out_raw_line(ln)
+ const char *ln;
+ {
+  size_t n = strlen(ln);
+@@ -213,10 +230,37 @@ const char *ln;
+  outBuf[outBufLen++] = '\n';
+ }
+ 
++static void sync_line_marker()
++{
++/* Emit a marker if the next output line would not land where the reader
++** currently thinks it is. Called immediately before every emitted line. */
++ char buf[MAX_PATH+64];
++ const char *file = inclFileName[includeDepth];
++ long line = inclLineNum[includeDepth];
++
++ if (!genLineMarkers) return;
++ if (line == markerLine && strcmp(file,markerFile) == 0) return;
++
++ sprintf(buf,"#line %ld \"%s\"",line,file);
++ out_raw_line(buf);
++ copy_bounded(markerFile,file,sizeof(markerFile));
++ markerLine = line;
++}
++
++static void output_line(ln)
++const char *ln;
++{
++ sync_line_marker();
++ out_raw_line(ln);
++ markerLine++;
++}
++
+ static void output_blank_line()
+ {
++ sync_line_marker();
+  out_reserve(1);
+  outBuf[outBufLen++] = '\n';
++ markerLine++;
+ }
+ 
+ static void flush_output()
+@@ -899,6 +943,10 @@ char **argv;
+ 		show_usage();
+ 		return(FALSE);
+ 
++	 case 'G':
++		genLineMarkers = TRUE;
++		break;
++
+ 	 case 'D':
+ 		if (a[2] == '\0')
+ 		   { printf("Error: -D requires a macro name\n"); return(FALSE); }
+diff --git a/utils/yap/tests/run_tests.rexx b/utils/yap/tests/run_tests.rexx
+index 3bbe19d..813e3c0 100644
+--- a/utils/yap/tests/run_tests.rexx
++++ b/utils/yap/tests/run_tests.rexx
+@@ -69,6 +69,8 @@ runTest: PROCEDURE EXPOSE yap testsDir pass fail
+             flags = '-DPLATFORM=AMIGA -UDEBUG'
+         WHEN testName = 'test_include_angle' THEN
+             flags = '-Iincdir'
++        WHEN testName = 'test_linemarkers' THEN
++            flags = '-g'
+         OTHERWISE NOP
+     END
+ 
+diff --git a/utils/yap/tests/run_tests.sh b/utils/yap/tests/run_tests.sh
+index 4c6a2ce..385a092 100755
+--- a/utils/yap/tests/run_tests.sh
++++ b/utils/yap/tests/run_tests.sh
+@@ -59,9 +59,10 @@ run_test() {
+ 
+     # Same per-test flags as run_tests.rexx
+     case $name in
+-        test_cli_define)   set -- -DPLATFORM=AMIGA -UDEBUG ;;
++        test_cli_define)    set -- -DPLATFORM=AMIGA -UDEBUG ;;
+         test_include_angle) set -- -Iincdir ;;
+-        *)                 set -- ;;
++        test_linemarkers)   set -- -g ;;
++        *)                  set -- ;;
+     esac
+ 
+     if ! "$YAP" "$@" "$input" "$actual" >"$tmp/$name.out" 2>&1; then
+diff --git a/utils/yap/tests/test_linemarkers.b b/utils/yap/tests/test_linemarkers.b
+new file mode 100644
+index 0000000..8ac4c55
+--- /dev/null
++++ b/utils/yap/tests/test_linemarkers.b
+@@ -0,0 +1,10 @@
++REM first line
++PRINT "one"
++
++' a comment line
++
++
++PRINT "two"
++/* block
++   comment */
++PRINT "three"
+diff --git a/utils/yap/tests/test_linemarkers.expected b/utils/yap/tests/test_linemarkers.expected
+new file mode 100644
+index 0000000..d0e6b9e
+--- /dev/null
++++ b/utils/yap/tests/test_linemarkers.expected
+@@ -0,0 +1,9 @@
++#line 1 "test_linemarkers.b"
++REM first line
++PRINT "one"
++
++#line 7 "test_linemarkers.b"
++PRINT "two"
++
++#line 10 "test_linemarkers.b"
++PRINT "three"

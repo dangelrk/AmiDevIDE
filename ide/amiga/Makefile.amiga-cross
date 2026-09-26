@@ -1,0 +1,168 @@
+# Cross-compiles core/ and amiga/src/ (the MUI application) with the
+# vbcc toolchain from macOS/Linux/Windows.
+#
+# Usage:
+#   source $(VBCC)/setenv_mac.sh   # or setenv_lin.sh / setenv_win.sh
+#   make -f amiga/Makefile.amiga-cross core-objects   # core/ only, compile-only
+#   make -f amiga/Makefile.amiga-cross app            # full amigaide-mui executable
+#
+# UNVERIFIED beyond compiling/linking clean here: no FS-UAE/real-Amiga
+# interactive test rig in this environment.
+
+VBCC       ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../toolchain)
+TARGET     := +aos68k
+CPU        ?= 68020
+CC         := $(VBCC)/bin/vc
+
+# vc execs vbccm68k, vasmm68k_mot and vlink by bare name, so they have to be
+# reachable through PATH.  Sourcing toolchain/setenv.sh does that too, but the
+# Makefile must stand on its own -- the superbuild invokes it directly.
+export PATH := $(VBCC)/bin:$(PATH)
+
+ROOT       := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+
+# Build stamp, same rule as the Qt build's cmake/BuildStamp.cmake: the git
+# commit count with a trailing '+' when the tree is dirty, and today's date.
+# Passed as -D so nothing in the repository changes per build.
+BUILD_NUMBER := $(shell git -C $(ROOT) rev-list --count HEAD 2>/dev/null || echo 0)$(shell git -C $(ROOT) diff --quiet HEAD 2>/dev/null || echo +)
+BUILD_DATE   := $(shell date "+%d.%m.%Y")
+
+
+CORE_SRC   := $(ROOT)/core/src
+CORE_VENDOR:= $(ROOT)/core/vendor
+CORE_INC   := $(ROOT)/core/include
+AMIGA_SRC  := $(ROOT)/amiga/src
+OBJDIR     := $(ROOT)/amiga/obj
+
+# Written as a header rather than passed with -D: vc re-splits its own
+# command line and drops the quotes around a -D value before vbccm68k sees
+# it, so -DX='"1+"' arrives as X=1+ and fails to compile. Mirrors what
+# cmake/BuildStamp.cmake does for the Qt build. Rewritten only when the
+# contents change, so an unchanged stamp does not force a rebuild.
+BUILDSTAMP := $(OBJDIR)/AmigaIDEBuildStamp.h
+BINDIR     := $(ROOT)/amiga/bin
+
+RUNTIME_INC := $(VBCC)/targets/m68k-amigaos/include
+RUNTIME_LIB := $(VBCC)/targets/m68k-amigaos/lib
+NDK_INC     := $(VBCC)/sdk/NDK_3.2/Include_H
+NDK_LIB     := $(VBCC)/sdk/NDK_3.2/lib
+MUI_INC     := $(VBCC)/sdk/MUI_3.8/Developer/C/Include
+MCC_INC     := $(VBCC)/sdk/MCC/Developer/C/include
+REGEX_INC   := $(VBCC)/sdk/regex/include
+REQTOOLS_INC:= $(VBCC)/sdk/reqtools/include
+
+# core/-only compile: proves every core/ module still cross-compiles
+# clean against the real vbcc/m68k-amigaos target (verified by hand for
+# every module -- zero errors, zero warnings except one optimizer hint
+# in aide_disasm.c). Uses -I$(CORE_INC)/-I$(CORE_VENDOR) only, matching
+# core/'s "no Qt, no MUI" contract -- no MUI/NDK includes needed here.
+CORE_CFLAGS := -c99 -cpu=$(CPU) -O2 -I$(RUNTIME_INC) -I$(CORE_INC) -I$(CORE_VENDOR)
+
+# Full app compile: core/ + amiga/src/ together, MUI/NDK/MCC/regex
+# includes added. AMISSL-style ordering caveats don't apply here (no
+# AmiSSL dependency), but MCC/regex before NDK/RUNTIME is the include
+# order verified with other MUI projects, kept regardless.
+APP_CFLAGS := $(TARGET) -O2 -cpu=$(CPU) \
+              -I$(OBJDIR) -I$(AMIGA_SRC) -I$(CORE_INC) -I$(CORE_VENDOR) \
+              -I$(MCC_INC) -I$(REGEX_INC) -I$(REQTOOLS_INC) -I$(MUI_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
+
+# -lmieee: parson (core/vendor/parson.c) and vc.cfg-less double
+# arithmetic elsewhere need mathieeedoubbas.library's stub routines on a
+# 68000/68020 with no FPU.
+LDFLAGS := $(TARGET) -L$(RUNTIME_LIB) -L$(NDK_LIB) -lmieee
+# DoMethod()/DoSuperMethod()/CoerceMethod() (clib/alib_protos.h) are
+# amiga.lib object code, not muimaster.library LVO calls.
+APP_LIBS := -lamiga
+
+# One list, shared with core/CMakeLists.txt and Makefile.amiga -- see
+# core/sources.mk.  This used to be $(wildcard $(CORE_SRC)/*.c), which was
+# convenient but meant the cross build and the native build could disagree
+# about what core/ contains, and they did.
+include $(ROOT)/core/sources.mk
+CORE_SOURCES := $(addprefix $(ROOT)/core/,$(AIDE_CORE_SOURCES))
+CORE_OBJECTS := $(addprefix $(OBJDIR)/core_,$(addsuffix .o,$(basename $(notdir $(AIDE_CORE_SOURCES)))))
+
+AMIGA_SOURCES := $(AMIGA_SRC)/app/main.c $(AMIGA_SRC)/app/mainwindow.c \
+                  $(AMIGA_SRC)/app/prefswindow.c \
+                  $(AMIGA_SRC)/mui/mui_stubs.c $(AMIGA_SRC)/mui/aide_regex_amiga.c \
+                  $(AMIGA_SRC)/mui/aide_fs_amiga.c \
+                  $(AMIGA_SRC)/index/symbolindex.c \
+                  $(AMIGA_SRC)/help/helpwindow.c \
+                  $(AMIGA_SRC)/disasm/disasmwindow.c \
+                  $(AMIGA_SRC)/project/settingswindow.c
+AMIGA_OBJECTS := $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/mui_stubs.o \
+                  $(OBJDIR)/aide_regex_amiga.o $(OBJDIR)/aide_fs_amiga.o \
+                  $(OBJDIR)/symbolindex.o $(OBJDIR)/helpwindow.o $(OBJDIR)/disasmwindow.o \
+                  $(OBJDIR)/settingswindow.o
+
+TARGET_BIN := $(BINDIR)/amigaide
+
+.PHONY: core-objects app clean buildstamp
+
+core-objects: $(CORE_OBJECTS)
+
+app: $(BINDIR) $(TARGET_BIN)
+
+# Regenerated on every build; only rewritten when it differs.
+.PHONY: buildstamp
+buildstamp: | $(OBJDIR)
+	@printf '/* Generated by Makefile.amiga-cross -- DO NOT EDIT, DO NOT COMMIT. */\n#define AMIGAIDE_BUILD_NUMBER "%s"\n#define AMIGAIDE_BUILD_DATE "%s"\n' \
+		'$(BUILD_NUMBER)' '$(BUILD_DATE)' > $(BUILDSTAMP).tmp
+	@cmp -s $(BUILDSTAMP).tmp $(BUILDSTAMP) 2>/dev/null || mv $(BUILDSTAMP).tmp $(BUILDSTAMP)
+	@rm -f $(BUILDSTAMP).tmp
+
+# The phony target above refreshes the contents; this gives the file itself a
+# rule so a clean tree can build at all.  Without it make stops at "No rule to
+# make target .../AmigaIDEBuildStamp.h" -- order-only prerequisites run before
+# the recipe, but they do not satisfy make's need for a rule when the file is
+# missing, and obj/ was never empty in the old tree so this never showed.
+$(BUILDSTAMP): | $(OBJDIR) buildstamp
+	@:
+
+$(TARGET_BIN): $(AMIGA_OBJECTS) $(CORE_OBJECTS)
+	$(CC) $(LDFLAGS) -o "$(TARGET_BIN)" $(AMIGA_OBJECTS) $(CORE_OBJECTS) $(APP_LIBS)
+
+$(OBJDIR)/core_%.o: $(CORE_SRC)/%.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/core_parson.o: $(CORE_VENDOR)/parson.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/main.o: $(AMIGA_SRC)/app/main.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+# $(BUILDSTAMP) is a real prerequisite, not order-only: the phony
+# buildstamp target refreshes it first, and because it is only rewritten
+# when the stamp actually changed, this rebuilds exactly when it must.
+$(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c $(BUILDSTAMP) | $(OBJDIR) buildstamp
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/prefswindow.o: $(AMIGA_SRC)/app/prefswindow.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/mui_stubs.o: $(AMIGA_SRC)/mui/mui_stubs.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/aide_regex_amiga.o: $(AMIGA_SRC)/mui/aide_regex_amiga.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/aide_fs_amiga.o: $(AMIGA_SRC)/mui/aide_fs_amiga.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/symbolindex.o: $(AMIGA_SRC)/index/symbolindex.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/helpwindow.o: $(AMIGA_SRC)/help/helpwindow.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/disasmwindow.o: $(AMIGA_SRC)/disasm/disasmwindow.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/settingswindow.o: $(AMIGA_SRC)/project/settingswindow.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR) $(BINDIR):
+	@mkdir -p "$@"
+
+clean:
+	rm -rf "$(OBJDIR)" "$(TARGET_BIN)"

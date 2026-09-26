@@ -1,0 +1,8 @@
+/build/
+*.o
+*.obj
+.DS_Store
+a.out
+/bin/
+amiga/bin/
+amiga/obj/

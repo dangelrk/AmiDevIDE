@@ -1,0 +1,227 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 16:20:27 +0200
+Subject: [PATCH] docs: write up the five upstream compiler bugs
+
+Five defects found while porting ACE to a host cross-compiler, all of
+which affect the native AmigaOS build too, collected in a form that can be
+handed to the maintainer: the use-after-free in change() that corrupts -O
+output, the unchecked fopen() in fsize(), the NULL libname crash after a
+failed DECLARE, the stray 0xFF byte on every generated .info, and the
+first-dot extension handling.
+
+Each entry names the file, quotes the offending code, states the effect
+and how it was fixed here.  Also lists the smaller findings that were left
+alone (bin/bas dropping options with -S, the stale ami.lib references) and
+records what was and was not verified -- runtime behaviour on real
+hardware was not, since this checkout has no bootable emulator.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ docs/upstream-findings.md | 196 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 196 insertions(+)
+ create mode 100644 docs/upstream-findings.md
+
+diff --git a/docs/upstream-findings.md b/docs/upstream-findings.md
+new file mode 100644
+index 0000000..facc00b
+--- /dev/null
++++ b/docs/upstream-findings.md
+@@ -0,0 +1,196 @@
++# Fünf Fehler im ACE-Compiler (gefunden beim Portieren auf einen Host-Cross-Compiler)
++
++Diese Fehler betreffen **auch den nativen AmigaOS-Build** — sie haben nichts mit
++der Portierung zu tun, sie sind ihr nur aufgefallen. Reihenfolge nach Auswirkung.
++
++Gefunden an ACE 3.0.1, Baseline-Commit `d1fa4d5`. Jeder Punkt nennt den Fix, wie er
++hier umgesetzt wurde; ob er so übernommen wird, ist natürlich eine andere Frage.
++
++---
++
++## 1. Use-after-free im Peephole-Optimierer → beschädigter Assembler
++
++**`src/ace/c/sym.c`, `change()`**
++
++```c
++void change(cx,opcode,srcopr,destopr)
++{
++ free_code_members(cx);                              /* gibt cx->opcode frei */
++ if ((BOOL)alloc_code_members(cx,opcode,srcopr,destopr))
++ { strcpy(cx->srcopr,srcopr); ... }                  /* liest daraus */
++}
++```
++
++`alloc_code()` legt `opcode`, `srcopr` und `destopr` in **einer** Allokation ab
++(`cnode->srcopr = cnode->opcode + opcode_size`). `free_code_members()` gibt genau
++diesen Block frei. Zwei Aufrufer in `opt.c` übergeben aber Felder desselben Knotens:
++
++```c
++opt.c:293   change(first, "addq", first->srcopr, first->destopr);   /* addq_for_add  */
++opt.c:321   change(first, "extb.l", first->srcopr, "  ");           /* extb_for_020  */
++```
++
++Der String wird also gelesen, nachdem er freigegeben wurde.
++
++**Auswirkung:** Mit `-O` entstehen kaputte Operanden. Reproduzierbar mit einem
++schlichten `bas -SO` auf `submods/list/list.b`:
++
++```
++	extb.l	<Binärmüll>
++```
++
++vasm bricht dann ab mit `error 10: number or identifier expected`. Wie oft es
++zuschlägt, hängt vom Allokator ab — mit `AllocRemember` sieht es möglicherweise
++lange gutartig aus, ist aber dieselbe Lücke.
++
++**Fix:** In `change()` die drei Strings in einen eigenen Puffer kopieren, bevor
++`free_code_members()` läuft. Das repariert alle Aufrufer auf einmal.
++
++**Nebenbefund:** Der Testkorpus in `verify/tests/cases` wurde offenbar nie mit `-O`
++gebaut — sonst wäre das aufgefallen. Nach dem Fix bauen alle 223 Nicht-Fehler-Fälle
++sowohl ohne als auch mit `-O`.
++
++---
++
++## 2. `fsize()` prüft `fopen()` nicht → Absturz statt Fehler 50
++
++**`src/ace/c/assign.c`**
++
++```c
++unsigned long fsize(char *file) {
++    unsigned long len;
++    FILE *f = fopen(file, "r");
++    fseek(f, 0, SEEK_END);      /* f kann NULL sein */
++```
++
++Dazu kommt: Der einzige Aufrufer prüft auf `-1`
++
++```c
++libfunc.c:298   if ((bmap_size=fsize(bmap)) == -1L) { _error(50); return(FALSE); }
++```
++
++— aber `fsize()` ist `unsigned` und kann `-1` gar nicht liefern. Der Fehlerpfad
++war also von vornherein tot.
++
++**Auswirkung:** Eine fehlende oder unlesbare `.bmap`-Datei lässt `ace` in `fseek()`
++abstürzen, statt „Can't open bmap file" zu melden.
++
++**Fix:** Rückgabetyp `long`, `if (f == NULL) return -1L;`.
++
++---
++
++## 3. Absturz nach fehlgeschlagenem `DECLARE FUNCTION ... LIBRARY`
++
++**`src/ace/c/codegen.c`, `gen_lib_call()`**
++
++`found_func()` (libfunc.c:402) setzt `declared_func->libname` **nur**, wenn die
++Funktion in der `.bmap` gefunden wurde. Schlägt das fehl, bleibt das Symbol
++trotzdem in der Tabelle. Ein späterer Aufruf landet dann hier:
++
++```c
++codegen.c:80   if ((libnum=check_for_ace_lib(func_item->libname)) == NEGATIVE)
++```
++
++und `check_for_ace_lib()` läuft in `strcmp(acelib[c].name, NULL)`.
++
++**Auswirkung:** Segfault statt einer zweiten Fehlermeldung. Vor Fix 2 war das nicht
++erreichbar, weil `fsize()` schon vorher abstürzte — die beiden hängen zusammen.
++
++**Fix:** `if (func_item->libname == NULL) return;` — der Fehler wurde beim DECLARE
++bereits gemeldet.
++
++---
++
++## 4. Jede erzeugte `.info`-Datei ist ein Byte zu lang
++
++**`src/ace/c/parse.c`, `emit_icon()` (Option `-i`)**
++
++```c
++while (!feof(icon_src)) fputc(fgetc(icon_src),icon_dest);
++```
++
++`feof()` wird erst *nach* dem fehlgeschlagenen Lesen wahr, also wird `EOF` (-1)
++noch als `0xFF` geschrieben.
++
++**Auswirkung:** Jedes von `ace -i` erzeugte Programm-Icon hat ein überzähliges
++`0xFF` am Ende. Workbench verzeiht das offenbar, sauber ist es nicht.
++
++**Fix:** `while ((cc=fgetc(icon_src)) != EOF) fputc(cc,icon_dest);`
++
++---
++
++## 5. Dateiendung wird am **ersten** Punkt bestimmt
++
++**`src/ace/c/lex.c`, `open_files()`**
++
++```c
++cc=0;
++while (srcfile[cc] && srcfile[cc] != '.') cc++;   /* erster Punkt */
++```
++
++und dieselbe Logik nochmal beim Ableiten des `.s`-Namens.
++
++**Auswirkung:**
++
++| Eingabe | erwartet | tatsächlich |
++|---|---|---|
++| `my.prog.b` | `my.prog.s` | sucht `my.prog.b.b` → „can't open" |
++| `Work:a.b/prog.b` | `Work:a.b/prog.s` | leitet aus `Work:a` ab |
++
++Der zweite Fall trifft jedes Verzeichnis mit einem Punkt im Namen.
++
++**Fix:** Letzten Punkt der letzten Pfadkomponente suchen (Trenner `/`, `:`, `\`).
++
++---
++
++## Kleinigkeiten, nicht angefasst
++
++Aufgefallen, aber im `bas`-Skript bzw. der Doku, nicht im Compiler:
++
++- **`bin/bas:108-113`** — `-S` verwirft alle anderen Optionen: `SET aceopts ""`
++  löscht den ganzen Optionsstring, statt nur das `S` zu entfernen. `bas -Sc foo`
++  verliert also das `c`.
++- **`bin/bas:143`** — `pos('m', '$aceopts')` trifft ein `m` an beliebiger Stelle.
++- **`src/lib/README.md`**, **`verify/scripts/ffp-test.script:144`**,
++  **`mk-lib-phase3-verify.script:158`** verweisen auf `ACElib:ami.lib`; die Datei
++  heißt `amiga.lib`. Die beiden Verify-Skripte laufen so nicht.
++- **`verify/scripts/run-mk-auto-verify.sh`** ruft `phase1-verify.sh` auf, die Datei
++  heißt `mk-phase1-verify.sh`.
++- **`README.md:187`** verweist auf `bin/1.3/ReadMe` — existiert nicht.
++- **`src/lib/c/arg.c`** und **`base.c`** stehen in keiner `C_SOURCES`-Liste.
++
++---
++
++## Zwei Ergänzungen, die auch nativ nützen
++
++Kein Fehler, aber beim Portieren entstanden und auf dem Amiga genauso brauchbar:
++
++- **`ace -0`** erzwingt 68000-Code. Bisher ließ sich die 68020-Vorgabe
++  (`parsevar.c:194 cpu020_opt=TRUE`) **nur** über `OPTION 2-` im Quelltext
++  abschalten — ein Build-System, das die CPU pro Projekt einstellt, kann das nicht.
++- **`yap -g` plus `#line`-Auswertung in `ace`.** yap entfernt Kommentare, fasst
++  Leerzeilen zusammen und fügt Includes ein, also zeigen alle Fehlermeldungen auf
++  Zeilen der *vorverarbeiteten* Datei. Mit den Markern meldet `ace`:
++
++  ```
++  ** Undefined function or array not dimensioned in line 3 of "incd/helper.b".
++  ```
++
++  Originaldatei und Originalzeile, auch für Fehler innerhalb eines `#include` —
++  vorher gar nicht zuzuordnen. Die Meldung ist additiv erweitert: ohne Marker bleibt
++  der Text unverändert, bestehende Werkzeuge (CubicIDE, `bas -E`) laufen weiter.
++
++---
++
++## Wie geprüft wurde
++
++- 223 Nicht-Fehler-Fälle aus `verify/tests/cases` bauen zu Amiga-Executables,
++  ohne **und** mit `-O`; die 28 `errors/`-Fälle werden weiterhin abgelehnt.
++- Der erzeugte Assembler wurde gegen einen m68k-`ace` aus den Baseline-Quellen
++  verglichen (unter `vamos` ausgeführt): 192 Dateien byteidentisch. 57 Fälle nicht
++  vergleichbar, weil die Referenz unter vamos abstürzt.
++- Der native Build (`vbcc`, ohne `ACE_HOST`) übersetzt und linkt weiterhin sauber.
++
++**Nicht geprüft:** Laufzeitverhalten auf echter Hardware. In diesem Checkout fehlt
++die Workbench-Installation unter `verify/scripts/otherthenamiga/aos3` (nur
++`S/user-startup` ist da), der Emulator bootet also nicht.

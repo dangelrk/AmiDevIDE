@@ -1,0 +1,281 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 15:29:03 +0200
+Subject: [PATCH] Fix a use-after-free in the peephole optimiser, and find
+ bmaps without an assign
+
+Both found by building a real multi-module project (submods/list) through
+a generated Makefile rather than through bas.
+
+change() (sym.c) freed a CODE node's fields before copying the new ones in,
+but callers routinely pass one of that node's OWN fields -- opt.c's
+extb_for_020() passes first->srcopr, addq_for_add() passes first->srcopr
+and first->destopr.  alloc_code() keeps opcode, srcopr and destopr in a
+single allocation, so the string being read had already been freed.  With
+-O, list.b came out with "extb.l <garbage>" and vasm rejected it.  This is
+a pre-existing bug, reproducible through plain "bas -SO"; it is not
+specific to the new build path.  change() now takes a private copy first.
+
+make_bmap_name() only knew $ACE_BMAPS and the ACEbmaps: assign, so ace
+could not find a .bmap when invoked from a Makefile with neither -- and
+aide_makegen.h promises a "complete, self-standing" Makefile.  It now also
+looks at <dir of ace>/../sdk/ACE/bmaps, derived from argv[0], which is
+exactly the installed cross-compiler layout.  Candidates are tried in
+order and only accepted if the file is really there, so the assign still
+wins on a native Amiga.
+
+ace also gains -0 to force 68000.  Until now the only way to turn 68020
+code generation off was OPTION 2- in the source, which a build system
+configuring the CPU per project cannot use.
+
+Verified: all 223 non-error cases build both with and without -O (they
+were only ever built without it before), 12/12 yap tests, amiga-check
+still builds, and compare-host-vs-amiga.sh still reports the same 192
+identical .s files.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/ace/c/acedef.h     |  1 +
+ src/ace/c/lexvar.c     |  2 ++
+ src/ace/c/libfunc.c    | 60 +++++++++++++++++++++++++++++-------------
+ src/ace/c/parse.c      | 28 +++++++++++++++++++-
+ src/ace/c/sym.c        | 35 +++++++++++++++++++++---
+ src/make/Makefile-host |  3 +++
+ 6 files changed, 106 insertions(+), 23 deletions(-)
+
+diff --git a/src/ace/c/acedef.h b/src/ace/c/acedef.h
+index 789d861..d420b03 100755
+--- a/src/ace/c/acedef.h
++++ b/src/ace/c/acedef.h
+@@ -575,6 +575,7 @@ void	cleanup();
+ void	_warn();
+ void	_error();
+ void	_abort();
++extern char	aceprogdir[MAXBMAPPATH];
+ char	*find_extension();
+ void	open_files();
+ void	nextch();
+diff --git a/src/ace/c/lexvar.c b/src/ace/c/lexvar.c
+index 75f44db..c97de9a 100755
+--- a/src/ace/c/lexvar.c
++++ b/src/ace/c/lexvar.c
+@@ -139,6 +139,8 @@ FILE   *src;                     /* source file handle */
+ FILE   *dest;                    /* object file handle */
+ int    column,linelen;           /* current column & length of char buffer */ 
+ int    lineno=0;                 /* current line of source */
++char   aceprogdir[MAXBMAPPATH]=""; /* directory ace was started from,
++				   ** derived from argv[0]; see main() */
+ char   curfile[MAXBMAPPATH]="";  /* source file per yap's #line markers,
+ 				 ** "" when none have been seen */
+ int    errors=0;                 /* # of errors generated */
+diff --git a/src/ace/c/libfunc.c b/src/ace/c/libfunc.c
+index 01915b6..d7e1120 100755
+--- a/src/ace/c/libfunc.c
++++ b/src/ace/c/libfunc.c
+@@ -138,35 +138,59 @@ char *libname;
+  strcat(libraryname,".library");
+ }
+ 
++static void join_bmap_path(dir,libname)
++char *dir;
++char *libname;
++{
++/* dir + separator + libname + ".bmap", truncated to fit bmapname */
++size_t n = strlen(dir);
++
++ if (n > MAXBMAPPATH - MAXIDSIZE - 8) n = MAXBMAPPATH - MAXIDSIZE - 8;
++ memcpy(bmapname,dir,n);
++ bmapname[n] = '\0';
++ if (n > 0 && bmapname[n-1] != '/' && bmapname[n-1] != ':'
++	   && bmapname[n-1] != '\\')
++    strcat(bmapname,"/");
++ strcat(bmapname,libname);
++ strcat(bmapname,".bmap");
++}
++
+ void make_bmap_name(libname)
+ char *libname;
+ {
+ /*
+-** Build the path of a library's .bmap file.
++** Build the path of a library's .bmap file, trying in order:
+ **
+-** ACE_BMAPS overrides the location, which is what host (cross-compiler)
+-** builds use since there is no ACEbmaps: assign there.  Unset -> the
+-** classic AmigaOS assign, so native behaviour is unchanged.
++**   1. $ACE_BMAPS            explicit override
++**   2. <dir of ace>/../sdk/ACE/bmaps
++**                            the installed cross-compiler layout, so a
++**                            generated Makefile needs no environment at
++**                            all -- it just runs $(VBCC)/bin/ace
++**   3. ACEbmaps:             the classic AmigaOS assign
++**
++** A candidate is only accepted if the file is actually there; the last
++** one is used regardless so a failure still names a sensible path.
+ */
+-char *dir = getenv("ACE_BMAPS");
+-size_t n;
++char *dir;
++char cand[MAXBMAPPATH];
+ 
++ dir = getenv("ACE_BMAPS");
+  if (dir != NULL && *dir != '\0')
+  {
+-	n = strlen(dir);
+-	/* keep room for the separator, the library name and ".bmap" */
+-	if (n > MAXBMAPPATH - MAXIDSIZE - 8) n = MAXBMAPPATH - MAXIDSIZE - 8;
+-	memcpy(bmapname,dir,n);
+-	bmapname[n] = '\0';
+-	/* only add a separator if the setting isn't already one */
+-	if (n > 0 && bmapname[n-1] != '/' && bmapname[n-1] != ':'
+-		  && bmapname[n-1] != '\\')
+-	   strcat(bmapname,"/");
++	join_bmap_path(dir,libname);
++	if (fsize(bmapname) != -1L) return;
+  }
+- else strcpy(bmapname,"ACEbmaps:");
+ 
+- strcat(bmapname,libname);
+- strcat(bmapname,".bmap");
++ if (aceprogdir[0] != '\0'
++     && strlen(aceprogdir) + sizeof("/../sdk/ACE/bmaps") < sizeof(cand))
++ {
++	strcpy(cand,aceprogdir);
++	strcat(cand,"/../sdk/ACE/bmaps");
++	join_bmap_path(cand,libname);
++	if (fsize(bmapname) != -1L) return;
++ }
++
++ join_bmap_path("ACEbmaps:",libname);
+ }
+ 
+ void get_libname(libname,ut_libname)
+diff --git a/src/ace/c/parse.c b/src/ace/c/parse.c
+index 75f62ed..7712097 100755
+--- a/src/ace/c/parse.c
++++ b/src/ace/c/parse.c
+@@ -1237,7 +1237,8 @@ void usage()
+  printf("Commands:\n");
+  printf("  words      List all reserved words\n\n");
+  printf("Options:\n");
+- printf("  -2         Generate MC68020 code\n");
++ printf("  -0         Generate MC68000 code\n");
++ printf("  -2         Generate MC68020 code (default)\n");
+  printf("  -b         Enable Ctrl-C break checking\n");
+  printf("  -c         Include comments in assembly output\n");
+  printf("  -E         Log errors to <sourcefile>.err\n");
+@@ -1280,6 +1281,11 @@ BOOL legalopt=TRUE;
+   else
+   if (*opt == '2') cpu020_opt=TRUE;
+   else
++  /* Force plain 68000. Until now the only way to turn 68020 code
++  ** generation off was OPTION 2- in the source, which a build system
++  ** configuring the CPU per project (AmigaIDE) cannot use. */
++  if (*opt == '0') cpu020_opt=FALSE;
++  else
+   if (*opt == 't') trace_opt=TRUE;
+   else
+      legalopt=FALSE;
+@@ -1325,6 +1331,26 @@ char *argv[];
+ {
+ char *tmparg;
+ 
++ /*
++ ** Remember where we were started from, so the .bmap directory can be
++ ** found relative to the binary when no assign and no ACE_BMAPS exist
++ ** (see make_bmap_name()). Only useful when argv[0] carries a path --
++ ** a bare "ace" found via PATH leaves this empty, and the other
++ ** candidates take over.
++ */
++ if (argc > 0 && argv[0] != NULL)
++ {
++  char *base = argv[0];
++  char *p;
++  for (p = argv[0]; *p != '\0'; p++)
++      if (*p == '/' || *p == ':' || *p == '\\') base = p;
++  if (base != argv[0] && (size_t)(base - argv[0]) < sizeof(aceprogdir))
++  {
++   memcpy(aceprogdir,argv[0],(size_t)(base - argv[0]));
++   aceprogdir[base - argv[0]] = '\0';
++  }
++ }
++
+  show_title();
+   
+  /* 
+diff --git a/src/ace/c/sym.c b/src/ace/c/sym.c
+index 0999195..a602cf4 100755
+--- a/src/ace/c/sym.c
++++ b/src/ace/c/sym.c
+@@ -430,18 +430,45 @@ char *opcode;
+ char *srcopr;
+ char *destopr;
+ {
++/*
++** Replace a CODE node's instruction and operands.
++**
++** Callers routinely pass one of cx's OWN fields -- see opt.c's
++** extb_for_020() ("extb.l", first->srcopr) and addq_for_add()
++** (first->srcopr, first->destopr). alloc_code() stores opcode, srcopr and
++** destopr in a single allocation, so freeing the old fields first would
++** free the very string being read back, and the peephole optimiser then
++** emitted garbage operands ("extb.l \xe0e\xda\xb3") that vasm rejected.
++** Take a private copy before touching the node.
++*/
++char   *copy,*o,*s,*d;
++size_t lo,ls,ld;
++
++ lo = strlen(opcode)+1;
++ ls = strlen(srcopr)+1;
++ ld = strlen(destopr)+1;
++
++ if ((copy=(char *)malloc(lo+ls+ld)) == NULL)
++    alloc_die("Can't allocate memory for CODE node fields!");
++ o = copy; s = o+lo; d = s+ls;
++ memcpy(o,opcode,lo);
++ memcpy(s,srcopr,ls);
++ memcpy(d,destopr,ld);
++
+  /* free the old fields */
+  free_code_members(cx);
+ 
+  /* allocate memory & insert new instruction & operands */
+- if ((BOOL)alloc_code_members(cx,opcode,srcopr,destopr))
++ if ((BOOL)alloc_code_members(cx,o,s,d))
+  {
+- 	strcpy(cx->opcode,opcode);
+- 	strcpy(cx->srcopr,srcopr);
+- 	strcpy(cx->destopr,destopr);
++ 	strcpy(cx->opcode,o);
++ 	strcpy(cx->srcopr,s);
++ 	strcpy(cx->destopr,d);
+  }
+  else
+   alloc_die("Can't allocate memory for CODE node fields!");
++
++ free(copy);
+ }
+ 
+ /* --DATA list functions-- */
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index daeb557..03f973d 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -199,6 +199,7 @@ $(AMIGA_DIR)/%.o: $(ACE_SRC_DIR)/%.c $(ACE_SRC_DIR)/acedef.h
+ #   $(VBCC)/bin/{ace,yap,bas}
+ #   $(VBCC)/config/ace68k
+ #   $(VBCC)/sdk/ACE/{lib,bmaps,include,icons,submods}
++#   $(VBCC)/sdk/ACE/quickref.txt   (one-line help per keyword, for IDEs)
+ #
+ # submods/ is installed because sources reference their objects through the
+ # ace: assign ("REM #using ace:submods/list/list.o"), which bas maps onto
+@@ -221,6 +222,8 @@ install: all
+ 	$(Q)cp -R $(ROOT)/bmaps/. $(INSTALL_SDK)/bmaps/
+ 	$(Q)cp -R $(ROOT)/include/. $(INSTALL_SDK)/include/
+ 	$(Q)cp -R $(ROOT)/icons/. $(INSTALL_SDK)/icons/
++	$(ECHO) "  sdk/ACE/quickref.txt"
++	$(Q)cp $(ROOT)/docs/quickref.txt $(INSTALL_SDK)/quickref.txt
+ 	$(Q)cp -R $(ROOT)/submods/. $(INSTALL_SDK)/submods/
+ 	$(ECHO) "  config/ace68k"
+ 	$(Q)printf '%s\n' \

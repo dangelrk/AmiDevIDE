@@ -1,0 +1,965 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 10:49:36 +0200
+Subject: [PATCH] Make the ace compiler buildable as a host cross-compiler
+
+ace is a pure text-in/text-out translator: it reads BASIC with stdio,
+writes 68000 assembly with fprintf, and resolves library functions from
+the .bmap files on disk rather than from the running system.  The whole
+AmigaOS surface was 11 call sites in 5 files, so it ports cleanly.
+
+  hostcompat.h  exact-width Amiga base types for ACE_HOST builds.  LONG
+                must stay 32 bits (FLOAT_BITS) and SHORT 16 bits (.bmap
+                LVOs rely on the wraparound for negative offsets).
+  alloc.c       AllocRemember/FreeRemember -> a malloc chain.  Same
+                semantics, no intuition.library, builds on both sides.
+  break.c       new: Ctrl-C handling behind install_break_handler() and
+                break_requested().  Separate module because acedef.h
+                declares ACE's own kill(), which collides with POSIX
+                kill() from <signal.h>.
+  lex.c         dropped open/close_shared_libs(): the intuition.library
+                base it fetched was never dereferenced.
+  libfunc.c     .bmap reading via fopen/fread; ACE_BMAPS overrides the
+                ACEbmaps: assign (falls back to it when unset).
+  parse.c       ACE_HOME overrides ACE:icons/exe.info likewise.
+
+Also fixes three latent defects that the port made reachable:
+
+  assign.c      fsize() never checked fopen(), so a missing .bmap
+                segfaulted in fseek() instead of raising error 50.  It
+                also returned unsigned, making the caller's == -1L test
+                dead.  Now returns long/-1.
+  codegen.c     with the crash above gone, a failed DECLARE left libname
+                NULL and the eventual call crashed in strcmp().  Guard it.
+  parse.c       the icon copy loop used feof(), appending one stray 0xFF
+                byte to every generated .info file.
+
+14 %ld/%lx conversions took LONG arguments, which is fine where int and
+long are both 32 bits but corrupts emitted constants on LP64 hosts.
+FLOAT_BITS.l is now ULONG so negative float literals can't sign-extend.
+Makefile-host keeps -Werror=format so this cannot regress.
+
+Verified on macOS arm64: 223 of verify/tests/cases compile with no
+errors and no crashes, the 28 errors/ cases are all still rejected,
+1.5 emits #$3fc00000 and DATA -1.5 emits bfc00000 (IEEE 754), and
+DisplayBeep resolves through the .bmap to jsr -96(a6).
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/ace/c/acedef.h     |  33 ++++----
+ src/ace/c/alloc.c      |  82 +++++++++++++++----
+ src/ace/c/assign.c     |  24 +++---
+ src/ace/c/break.c      |  56 +++++++++++++
+ src/ace/c/codegen.c    |  11 ++-
+ src/ace/c/event.c      |   2 +-
+ src/ace/c/factor.c     |   4 +-
+ src/ace/c/gadget.c     |   4 +-
+ src/ace/c/hostcompat.h |  51 ++++++++++++
+ src/ace/c/lex.c        |  19 +----
+ src/ace/c/libfunc.c    |  35 ++++++--
+ src/ace/c/misc.c       |   4 +-
+ src/ace/c/parse.c      |  31 +++++---
+ src/ace/c/parsevar.c   |   2 +-
+ src/make/Makefile-ace  |   4 +-
+ src/make/Makefile-host | 176 +++++++++++++++++++++++++++++++++++++++++
+ 16 files changed, 457 insertions(+), 81 deletions(-)
+ create mode 100644 src/ace/c/break.c
+ create mode 100644 src/ace/c/hostcompat.h
+ create mode 100644 src/make/Makefile-host
+
+diff --git a/src/ace/c/acedef.h b/src/ace/c/acedef.h
+index 2fa72af..c4321fa 100755
+--- a/src/ace/c/acedef.h
++++ b/src/ace/c/acedef.h
+@@ -50,33 +50,36 @@
+ 	   4th September 1996
+ */
+ 
++#ifdef ACE_HOST
++#include "hostcompat.h"
++#else
+ #include <exec/types.h>
+ #include <exec/memory.h>
+ #include <libraries/dos.h>
++#endif
+ #include <stdio.h>
+ #include <string.h>
+ #include <stdlib.h>
+ 
+ /* Amiga OS function prototypes */
+-struct Remember;
+-struct Library;
+-void *AllocRemember();
+-void FreeRemember();
+-struct Library *OpenLibrary();
+-void CloseLibrary();
++#ifndef ACE_HOST
+ ULONG SetSignal();
+-LONG Open();
+-LONG Read();
+-void Close();
++#endif
++
++/* Ctrl-C polling: SetSignal() on AmigaOS, a SIGINT flag on the host. */
++BOOL break_requested();
+ 
+ /* Non-standard C function prototypes */
+ char *itoa();
+ char *ltoa();
+ char *strupr();
+-unsigned long fsize();
++long fsize();
+ 
+-/* float-to-bits union for emit boundaries */
+-typedef union { float f; LONG l; } FLOAT_BITS;
++/* float-to-bits union for emit boundaries.
++** The integer half is UNSIGNED on purpose: the bit pattern is printed with
++** %x, and a signed member would sign-extend negative constants into
++** "ffffffffbfc00000" instead of "bfc00000" wherever int is wider than 32 bits. */
++typedef union { float f; ULONG l; } FLOAT_BITS;
+ 
+ /* AmigaBASIC reserved words */
+ enum { 	abssym = 0,
+@@ -441,6 +444,9 @@ enum {	variable = 	3000,
+ 
+ #define	MAXLINELEN   1024          /* max length of a BASIC line */
+ #define	MAXIDSIZE     42           /* max length of identifier (+ qualifier) */
++#define	MAXBMAPPATH  512           /* max length of a .bmap path (ACE_BMAPS
++				      makes this a full host path, not just
++				      the short ACEbmaps: assign) */
+ #define	MAXSTRLEN   1024           /* max length of string */
+ #define	MAXSHORT   32767           /* max +ve short value */
+ #define	MINSHORT  -32768           /* min -ve short value */
+@@ -563,8 +569,7 @@ SHORT	peephole();
+ void	optimise();
+ 
+ /* lex.c */
+-void	open_shared_libs();
+-void	close_shared_libs();
++void	install_break_handler();
+ void 	setup();
+ void	cleanup();
+ void	_warn();
+diff --git a/src/ace/c/alloc.c b/src/ace/c/alloc.c
+index cf00f45..ce2e33a 100755
+--- a/src/ace/c/alloc.c
++++ b/src/ace/c/alloc.c
+@@ -34,25 +34,84 @@
+ */
+ 	
+ #include <acedef.h>
+-#include <intuition/intuition.h>
+ 
+ /* external variables */
+ extern	int	lev;
+ 
++/*
++** Tracked allocation list.
++**
++** This replaces Intuition's AllocRemember()/FreeRemember(), which tied the
++** compiler to intuition.library for what is really just a bump-and-forget
++** pool.  A plain malloc() chain gives the same semantics (allocate freely,
++** release everything at once) and builds on AmigaOS and on the host alike.
++*/
++typedef struct MemNode
++{
++	struct MemNode	*next;
++	void		*mem;
++} MEMNODE;
++
+ /* local variables */
+-struct Remember *GenRememberList = NULL;
+-struct Remember *SymRememberList[2] = { NULL, NULL };
++MEMNODE *GenAllocList = NULL;
++MEMNODE *SymAllocList[2] = { NULL, NULL };
+ 
+ /* protos */
+-void *malloc();
++void *list_alloc();
++void list_free();
+ 
+ /* functions */
++void *list_alloc(list,bytes)
++MEMNODE **list;
++ULONG	bytes;
++{
++/*
++** Allocate a zeroed block and remember it in *list.
++** Returns NULL if either the block or its bookkeeping node can't be had.
++*/
++MEMNODE *node;
++void	*mem;
++
++ if ((node=(MEMNODE *)malloc(sizeof(MEMNODE))) == NULL) return(NULL);
++
++ /* calloc(): AllocRemember() with MEMF_CLEAR was not used, but ACE relies
++ ** on fresh symbol-table nodes being zeroed, so keep it deterministic. */
++ if ((mem=calloc(1,(size_t)(bytes ? bytes : 1))) == NULL)
++ {
++	free(node);
++	return(NULL);
++ }
++
++ node->mem  = mem;
++ node->next = *list;
++ *list	    = node;
++
++ return(mem);
++}
++
++void list_free(list)
++MEMNODE **list;
++{
++/* free every block on *list and the list itself */
++MEMNODE *node,*next;
++
++ node = *list;
++ while (node != NULL)
++ {
++	next = node->next;
++	free(node->mem);
++	free(node);
++	node = next;
++ }
++ *list = NULL;
++}
++
+ void *alloc(bytes,flags)
+ ULONG bytes,flags;
+ {
+ /* allocate memory as requested */
+ 
+- return((void *)AllocRemember(&GenRememberList,bytes,flags));     
++ return(list_alloc(&GenAllocList,bytes));
+ }
+ 
+ void *sym_alloc(bytes,flags)
+@@ -60,18 +119,17 @@ ULONG bytes,flags;
+ {
+ /* allocate memory for current level's symbol table as requested */
+ 
+- return((void *)AllocRemember(&SymRememberList[lev],bytes,flags));     
++ return(list_alloc(&SymAllocList[lev],bytes));
+ }
+ 
+ void free_alloc()
+ {
+ /* free all memory allocated by alloc */
+ 
+- if (GenRememberList != NULL) 
++ if (GenAllocList != NULL)
+  {
+ 	puts("freeing memory...");
+-	FreeRemember(&GenRememberList,TRUE);
+-	GenRememberList = NULL;
++	list_free(&GenAllocList);
+  }
+ }
+ 
+@@ -79,11 +137,7 @@ void free_sym_alloc()
+ {
+ /* free all memory allocated by sym_alloc for current level */
+ 
+- if (SymRememberList[lev] != NULL) 
+- {
+-	FreeRemember(&SymRememberList[lev],TRUE);
+-	SymRememberList[lev] = NULL;
+- }
++ if (SymAllocList[lev] != NULL) list_free(&SymAllocList[lev]);
+ }
+ 
+ CODE  *alloc_code(opcode,srcopr,destopr)
+diff --git a/src/ace/c/assign.c b/src/ace/c/assign.c
+index f5034a6..2b5aa10 100755
+--- a/src/ace/c/assign.c
++++ b/src/ace/c/assign.c
+@@ -127,11 +127,15 @@ char* strupr(char *str) {
+     return str;
+ }
+ 
+-unsigned long fsize(char *file) {
+-    unsigned long len;
+-    FILE *f = fopen(file, "r");
++long fsize(char *file) {
++    /* Size of file in bytes, or -1 if it can't be opened.
++    ** Callers test for -1, so this must be signed; without the NULL check
++    ** a missing .bmap crashed in fseek() instead of raising error 50. */
++    long len;
++    FILE *f = fopen(file, "rb");
++    if (f == NULL) return -1L;
+     fseek(f, 0, SEEK_END);
+-    len = (unsigned long)ftell(f);
++    len = ftell(f);
+     fclose(f);
+     return len;
+ }
+@@ -259,7 +263,7 @@ char addrbuf[20],buf[80];
+      in stack frame for other purposes (eg: passing
+      to SUBs, use in factor() etc). 
+    */
+-   sprintf(buf,"#_stringvar%ld",string_item->numconst.longnum);
++   sprintf(buf,"#_stringvar%d",string_item->numconst.longnum);
+    gen("move.l",buf,addrbuf);
+  }
+ 
+@@ -1031,7 +1035,7 @@ do
+       }
+ 
+       /* Compute data bytes: d4 * elem_size */
+-      sprintf(numbuf,"#%ld",elem_size);
++      sprintf(numbuf,"#%d",elem_size);
+       gen("move.l","d4","-(sp)");
+       gen("move.l",numbuf,"-(sp)");
+       gen_rt_call("lmulu");
+@@ -1039,7 +1043,7 @@ do
+       /* d0 = data bytes */
+ 
+       /* Add header size */
+-      sprintf(numbuf,"#%ld",header_size);
++      sprintf(numbuf,"#%d",header_size);
+       gen("add.l",numbuf,"d0");
+ 
+       /* Allocate via _ACEalloc(size, type) */
+@@ -1382,21 +1386,21 @@ FLOAT_BITS u;
+     if (sym == singleconst)
+     {
+      u.f = singleval * signf;
+-     sprintf(fnumbuf,"%lx",u.l);
++     sprintf(fnumbuf,"%x",u.l);
+      make_data_const(fnumbuf);
+     }
+     else
+      if (sym == longconst)
+      {
+       u.f = (float)longval * signf;
+-      sprintf(fnumbuf,"%lx",u.l);
++      sprintf(fnumbuf,"%x",u.l);
+       make_data_const(fnumbuf);
+      }
+      else
+      if (sym == shortconst)
+      {
+       u.f = (float)shortval * signf;
+-      sprintf(fnumbuf,"%lx",u.l);
++      sprintf(fnumbuf,"%x",u.l);
+       make_data_const(fnumbuf);
+      }
+      else _error(26);  /* constant expected */
+diff --git a/src/ace/c/break.c b/src/ace/c/break.c
+new file mode 100644
+index 0000000..b0175ea
+--- /dev/null
++++ b/src/ace/c/break.c
+@@ -0,0 +1,56 @@
++/*
++** break.c - user-interrupt handling for ACE.
++**
++** Deliberately does NOT include acedef.h: on the host that header's
++** declaration of ACE's own kill() (the symbol-table list killer) collides
++** with POSIX kill() from <signal.h>.  Only the two base types are needed
++** here, so pull those in directly.
++**
++** AmigaOS delivers Ctrl-C as a task signal that has to be polled; on the
++** host a SIGINT handler sets a flag.  Both are hidden behind the same pair
++** of functions so the parser and lexer don't care which platform they're on.
++*/
++
++#ifdef ACE_HOST
++
++#include "hostcompat.h"
++#include <signal.h>
++
++static volatile sig_atomic_t host_break_flag = 0;
++
++static void host_break_handler(sig)
++int sig;
++{
++ host_break_flag = 1;
++ /* re-arm: some platforms reset the disposition to SIG_DFL on delivery */
++ signal(SIGINT,host_break_handler);
++}
++
++void install_break_handler()
++{
++ signal(SIGINT,host_break_handler);
++}
++
++BOOL break_requested()
++{
++ return(host_break_flag ? TRUE : FALSE);
++}
++
++#else
++
++#include <exec/types.h>
++#include <libraries/dos.h>
++
++ULONG SetSignal();
++
++void install_break_handler()
++{
++ /* nothing to install - Ctrl-C arrives as a task signal */
++}
++
++BOOL break_requested()
++{
++ return((SetSignal(0L,SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C) ? TRUE : FALSE);
++}
++
++#endif
+diff --git a/src/ace/c/codegen.c b/src/ace/c/codegen.c
+index 1bbaff1..209748a 100644
+--- a/src/ace/c/codegen.c
++++ b/src/ace/c/codegen.c
+@@ -77,6 +77,15 @@ SYM *func_item;
+  BYTE libnum;
+  char func_address[MAXIDSIZE+9];
+ 
++ /*
++ ** libname is only filled in once the function has been located in a .bmap
++ ** (see found_func()).  If that lookup failed - a missing or unreadable
++ ** .bmap, error 50 - the symbol is still in the table, so a later call would
++ ** reach here with a NULL name.  The error has already been reported; just
++ ** don't emit a call through it.
++ */
++ if (func_item->libname == NULL) return;
++
+  if ((libnum=check_for_ace_lib(func_item->libname)) == NEGATIVE)
+     make_library_base(func_item->libname);
+  else
+@@ -227,7 +236,7 @@ LONG elem_size;
+  else
+  {
+   /* string or other: use multiplication */
+-  sprintf(buf, "#%ld", elem_size);
++  sprintf(buf, "#%d", elem_size);
+   gen("move.l", "d7", "-(sp)");
+   gen("move.l", buf, "-(sp)");
+   gen_rt_call("lmulu");
+diff --git a/src/ace/c/event.c b/src/ace/c/event.c
+index 16c8476..88bbe2b 100755
+--- a/src/ace/c/event.c
++++ b/src/ace/c/event.c
+@@ -130,7 +130,7 @@ char  theLabel[80];
+        case singleconst : timer_event_seconds=singleval; break;
+       }
+       u.f = timer_event_seconds;
+-      sprintf(ontimer_seconds,"#$%lx",u.l);
++      sprintf(ontimer_seconds,"#$%x",u.l);
+      }
+      insymbol();
+      if (sym != rparen) _error(9);       
+diff --git a/src/ace/c/factor.c b/src/ace/c/factor.c
+index 8ff0431..ef514fe 100755
+--- a/src/ace/c/factor.c
++++ b/src/ace/c/factor.c
+@@ -419,14 +419,14 @@ SYM  *invoke_item;
+                      insymbol();
+                      return(ftype);
+ 
+-  case longconst   : sprintf(numbuf,"#%ld",longval);
++  case longconst   : sprintf(numbuf,"#%d",longval);
+        		     gen("move.l",numbuf,"-(sp)");
+                      ftype=typ;
+                      insymbol();
+                      return(ftype);
+ 
+   case singleconst : { FLOAT_BITS u; u.f = singleval;
+-		       sprintf(numbuf,"#$%lx",u.l); }
++		       sprintf(numbuf,"#$%x",u.l); }
+        		     gen("move.l",numbuf,"-(sp)");
+                      ftype=typ;
+        		     insymbol();
+diff --git a/src/ace/c/gadget.c b/src/ace/c/gadget.c
+index a6cfa3f..a11ab67 100755
+--- a/src/ace/c/gadget.c
++++ b/src/ace/c/gadget.c
+@@ -647,12 +647,12 @@ int  gtype;
+ 					    gen("move.l", "(a0)",
+ 						"-(sp)");
+ 					    /* Push num_elements */
+-					    sprintf(numbuf, "#%ld",
++					    sprintf(numbuf, "#%d",
+ 						    nelem);
+ 					    gen("move.l", numbuf,
+ 						"-(sp)");
+ 					    /* Push element_size */
+-					    sprintf(numbuf, "#%ld",
++					    sprintf(numbuf, "#%d",
+ 						    elemsz);
+ 					    gen("move.l", numbuf,
+ 						"-(sp)");
+diff --git a/src/ace/c/hostcompat.h b/src/ace/c/hostcompat.h
+new file mode 100644
+index 0000000..292d731
+--- /dev/null
++++ b/src/ace/c/hostcompat.h
+@@ -0,0 +1,51 @@
++/*
++** hostcompat.h - Amiga base types for host (cross-compiler) builds of ACE.
++**
++** Included from acedef.h in place of <exec/types.h>, <exec/memory.h> and
++** <libraries/dos.h> when ACE_HOST is defined.  The native AmigaOS build is
++** unaffected and keeps using the real NDK headers.
++**
++** The widths below are NOT free to change; two places in the compiler depend
++** on them exactly:
++**
++**   acedef.h    FLOAT_BITS is a union of `float` and LONG.  A 64-bit LONG
++**               would make it emit garbage in the upper half of every
++**               single-precision constant.
++**   libfunc.c   .bmap library vector offsets are decoded as a 16-bit
++**               quantity and rely on SHORT wrapping to produce negative
++**               LVOs (e.g. 0xffe2 -> -30).
++**
++** Values match NDK 3.2 <exec/types.h> so that host and Amiga builds agree.
++*/
++
++#ifndef ACE_HOSTCOMPAT_H
++#define ACE_HOSTCOMPAT_H
++
++#include <stdint.h>
++
++typedef int8_t          BYTE;    /* signed 8-bit  */
++typedef uint8_t         UBYTE;   /* unsigned 8-bit */
++typedef int16_t         WORD;    /* signed 16-bit */
++typedef uint16_t        UWORD;   /* unsigned 16-bit */
++typedef int16_t         SHORT;   /* signed 16-bit */
++typedef uint16_t        USHORT;  /* unsigned 16-bit */
++typedef int32_t         LONG;    /* signed 32-bit */
++typedef uint32_t        ULONG;   /* unsigned 32-bit */
++typedef int16_t         BOOL;    /* sizeof(BOOL) == 2, as on AmigaOS */
++typedef unsigned char  *STRPTR;
++typedef void           *APTR;
++
++#ifndef TRUE
++#define TRUE  1
++#endif
++#ifndef FALSE
++#define FALSE 0
++#endif
++
++/* From <exec/memory.h>.  ACE only ever passes this through to alloc()/
++** sym_alloc(), which ignore it on the host. */
++#ifndef MEMF_ANY
++#define MEMF_ANY (0UL)
++#endif
++
++#endif /* ACE_HOSTCOMPAT_H */
+diff --git a/src/ace/c/lex.c b/src/ace/c/lex.c
+index 845c7fa..152dee4 100755
+--- a/src/ace/c/lex.c
++++ b/src/ace/c/lex.c
+@@ -54,24 +54,9 @@
+ extern	LONG	atomval;
+ 
+ /* globals */
+-ULONG	IntuitionBase = 0;
+ BOOL 	inside_string = FALSE;	/* see last line of nextch() */
+ 
+ /* functions */
+-void open_shared_libs(void)
+-{
+- if ((IntuitionBase = (ULONG)OpenLibrary("intuition.library",0)) == 0)
+- {
+-  printf("Unable to open intuition.library!\n");
+-  exit(10);
+- }
+-}
+-
+-void close_shared_libs(void)
+-{
+- if (IntuitionBase != 0) CloseLibrary((void *)IntuitionBase);
+-}
+- 
+ void setup(void)
+ {
+ int i;
+@@ -128,8 +113,6 @@ void cleanup(void)
+  if (err_log != NULL) fclose(err_log);
+ 
+  free_alloc();
+- 
+- close_shared_libs();
+ 
+  /* exit with return value */
+  if (early_exit) exitvalue=10;
+@@ -425,7 +408,7 @@ int  i,n;
+ BOOL continue_line;
+ 
+  /* if user hits ctrl-c clean up and abort. */
+- if (SetSignal(0L,SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C)
++ if (break_requested())
+  {
+   puts("\n*** Break: ACE terminating.");
+   early_exit=TRUE;
+diff --git a/src/ace/c/libfunc.c b/src/ace/c/libfunc.c
+index 1ab7085..01915b6 100755
+--- a/src/ace/c/libfunc.c
++++ b/src/ace/c/libfunc.c
+@@ -141,7 +141,30 @@ char *libname;
+ void make_bmap_name(libname)
+ char *libname;
+ {
+- strcpy(bmapname,"ACEbmaps:");
++/*
++** Build the path of a library's .bmap file.
++**
++** ACE_BMAPS overrides the location, which is what host (cross-compiler)
++** builds use since there is no ACEbmaps: assign there.  Unset -> the
++** classic AmigaOS assign, so native behaviour is unchanged.
++*/
++char *dir = getenv("ACE_BMAPS");
++size_t n;
++
++ if (dir != NULL && *dir != '\0')
++ {
++	n = strlen(dir);
++	/* keep room for the separator, the library name and ".bmap" */
++	if (n > MAXBMAPPATH - MAXIDSIZE - 8) n = MAXBMAPPATH - MAXIDSIZE - 8;
++	memcpy(bmapname,dir,n);
++	bmapname[n] = '\0';
++	/* only add a separator if the setting isn't already one */
++	if (n > 0 && bmapname[n-1] != '/' && bmapname[n-1] != ':'
++		  && bmapname[n-1] != '\\')
++	   strcat(bmapname,"/");
++ }
++ else strcpy(bmapname,"ACEbmaps:");
++
+  strcat(bmapname,libname);
+  strcat(bmapname,".bmap");
+ }
+@@ -287,7 +310,7 @@ SYM  *declared_func;
+ */
+ 
+ unsigned char		*buf;
+-struct FileHandle	*f;
++FILE			*f;
+ unsigned char		ch,name[MAXIDSIZE];
+ LONG	 		bmap_size,count,cc,rc;
+ SHORT			offset=0;
+@@ -302,9 +325,11 @@ unsigned char *tmp;
+  {
+   /* read whole bmap file into a buffer */
+   buf = (unsigned char *)alloc(bmap_size,MEMF_ANY);
+-  f = (struct FileHandle *)Open(bmap,MODE_OLDFILE);
+-  Read(f,buf,bmap_size);
+-  Close(f);
++  if (buf == NULL) { _error(50); return(FALSE); }
++
++  if ((f=fopen(bmap,"rb")) == NULL) { _error(50); return(FALSE); }
++  bmap_size = (LONG)fread(buf,1,(size_t)bmap_size,f);
++  fclose(f);
+ 
+   count=0;  /* start of buffer */
+ 
+diff --git a/src/ace/c/misc.c b/src/ace/c/misc.c
+index 6fc1997..a334569 100755
+--- a/src/ace/c/misc.c
++++ b/src/ace/c/misc.c
+@@ -174,7 +174,7 @@ void make_label_from_linenum(int intconst, char *buf)
+  switch(intconst)
+  {
+   case shortconst : sprintf(buf,"_LINE%d",shortval); break;
+-  case longconst  : sprintf(buf,"_LINE%ld",longval); break;
++  case longconst  : sprintf(buf,"_LINE%d",longval); break;
+  }
+ }
+ 
+@@ -314,7 +314,7 @@ char buf[40],numbuf[40];
+   case shorttype  : itoa(item->numconst.shortnum,buf,10); break;
+   case longtype   : ltoa(item->numconst.longnum,buf,10); break;
+   case singletype : { FLOAT_BITS u; u.f = item->numconst.singlenum;
+-                      sprintf(buf,"%lx",u.l); }
++                      sprintf(buf,"%x",u.l); }
+                     strcat(numbuf,"$");
+   		    break;
+  }
+diff --git a/src/ace/c/parse.c b/src/ace/c/parse.c
+index ee490d7..ec3de8e 100755
+--- a/src/ace/c/parse.c
++++ b/src/ace/c/parse.c
+@@ -1119,23 +1119,36 @@ static void emit_icon(source_name)
+ char *source_name;
+ {
+ char icon_name[MAXSTRLEN];
++char proto_name[MAXBMAPPATH];
++char *home;
+ FILE *icon_src,*icon_dest;
+ int  cc;
+ 
+  if (make_icon && !early_exit)
+  {
+-  if ((icon_src = fopen("ACE:icons/exe.info","r")) == NULL)
+-    puts("can't open ACE:icons/exe.info for reading.");
++  /*
++  ** ACE_HOME overrides the location of the prototype icon; host builds set
++  ** it because there is no ACE: assign there.  Unset -> classic behaviour.
++  */
++  home = getenv("ACE_HOME");
++  if (home != NULL && *home != '\0'
++      && strlen(home) < MAXBMAPPATH - sizeof("/icons/exe.info"))
++     sprintf(proto_name,"%s/icons/exe.info",home);
++  else
++     strcpy(proto_name,"ACE:icons/exe.info");
++
++  if ((icon_src = fopen(proto_name,"rb")) == NULL)
++    printf("can't open %s for reading.\n",proto_name);
+   else
+   {
+    cc=0; while(source_name[cc] != '.') cc++;
+    source_name[cc] = '\0';
+    sprintf(icon_name,"%s.info",source_name);
+-   if ((icon_dest = fopen(icon_name,"w")) == NULL)
++   if ((icon_dest = fopen(icon_name,"wb")) == NULL)
+       printf("can't open %s.info for writing.\n",source_name);
+    else
+    {
+-    while (!feof(icon_src)) fputc(fgetc(icon_src),icon_dest);
++    while ((cc=fgetc(icon_src)) != EOF) fputc(cc,icon_dest);
+     fclose(icon_dest);
+     fclose(icon_src);
+     puts("icon created.");
+@@ -1278,7 +1291,7 @@ BOOL legalopt=TRUE;
+ 
+ void ctrl_c_break_test()
+ {
+-	if (SetSignal(0L,SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C) 
++	if (break_requested())
+ 	{
+ 		puts("\n*** Break: ACE terminating.");
+ 		exit(5);
+@@ -1342,10 +1355,10 @@ char *tmparg;
+ 		if (tmparg) free(tmparg);
+  }
+ 
+- open_shared_libs();
++ install_break_handler();
+ 
+- /* 
+- ** compile program 
++ /*
++ ** compile program
+  */
+  if (argc == 2) 
+  {
+@@ -1358,7 +1371,7 @@ char *tmparg;
+  {
+     /* options plus source file */
+     if (!check_options(argv[1])) 
+-       { usage(); close_shared_libs(); exit(10); } /* illegal options */  
++       { usage(); exit(10); } /* illegal options */
+     open_files(argv[2]);  
+     setup();
+     compile(srcfile,destfile);
+diff --git a/src/ace/c/parsevar.c b/src/ace/c/parsevar.c
+index d90b338..24e14e4 100755
+--- a/src/ace/c/parsevar.c
++++ b/src/ace/c/parsevar.c
+@@ -80,7 +80,7 @@ ACELIBS acelib[NUMACELIBS],otherlib[NUMLIBS];
+ 
+ char librarybase[MAXIDSIZE+6];
+ char libraryname[MAXIDSIZE+20];
+-char bmapname[MAXIDSIZE+20];
++char bmapname[MAXBMAPPATH];
+ BOOL restore_a4=FALSE;
+ BOOL restore_a5=FALSE;
+ CODE *exit_for_cx=NULL;
+diff --git a/src/make/Makefile-ace b/src/make/Makefile-ace
+index b004050..188746b 100644
+--- a/src/make/Makefile-ace
++++ b/src/make/Makefile-ace
+@@ -79,8 +79,8 @@ endif
+ #       via #include directives in other source files:
+ #         - lexvar.c  (included in lex.c)
+ #         - symvar.c  (included in sym.c)
+-SOURCES = alloc.c assign.c basfun.c codegen.c control.c declare.c \
+-          event.c expr.c factor.c file.c gadget.c gfx.c \
++SOURCES = alloc.c assign.c basfun.c break.c codegen.c control.c \
++          declare.c event.c expr.c factor.c file.c gadget.c gfx.c \
+           invoke.c lex.c libfunc.c memory.c menu.c message.c \
+           misc.c opt.c parse.c parsevar.c print.c screen.c \
+           serial.c statement.c sub.c sym.c ver.c window.c
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+new file mode 100644
+index 0000000..506462e
+--- /dev/null
++++ b/src/make/Makefile-host
+@@ -0,0 +1,176 @@
++################################################################################
++# ACE Compiler Makefile - HOST (cross-compiler) build
++################################################################################
++#
++# Description:
++#   Builds the ACE toolchain as NATIVE HOST binaries (macOS / Linux / Windows),
++#   so that Amiga executables can be produced without an Amiga or an emulator.
++#
++#   This complements, and does not replace, Makefile-ace / Makefile-lib, which
++#   build ACE natively on AmigaOS with vbcc.  Both continue to work.
++#
++#   The host pipeline is:
++#
++#       prog.b -> bas -> yap -> ace -> vasmm68k_mot -> vlink -> prog
++#                                      \_____________________/
++#                                        from the vbcc toolchain ($VBCC/bin)
++#
++# Location:
++#   ACE:src/make/Makefile-host
++#
++# Usage:
++#   From src/make/ directory:
++#     make -f Makefile-host           # Build host binaries
++#     make -f Makefile-host V=1       # Verbose
++#     make -f Makefile-host clean
++#     make -f Makefile-host install   # Install into $(VBCC)
++#     make -f Makefile-host help
++#
++# Requirements:
++#   - A C compiler (clang or gcc)
++#   - GNU Make
++#   - For install/use: the vbcc toolchain in $(VBCC), providing
++#     bin/vasmm68k_mot and bin/vlink
++#
++################################################################################
++
++################################################################################
++# PLATFORM DETECTION
++################################################################################
++# Mirrors ~/Dev/amiga/makefiles/Makefile.platform so the two agree on names.
++
++ifeq ($(OS),Windows_NT)
++  PLATFORM = windows
++  EXEEXT   = .exe
++else
++  UNAME_S := $(shell uname -s)
++  ifeq ($(UNAME_S),Darwin)
++    PLATFORM = macos
++  else ifeq ($(UNAME_S),Linux)
++    PLATFORM = linux
++  else
++    # MSYS2/MinGW/Cygwin report MINGW64_NT-..., MSYS_NT-..., CYGWIN_NT-...
++    PLATFORM = windows
++    EXEEXT   = .exe
++  endif
++endif
++EXEEXT ?=
++
++################################################################################
++# CONFIGURATION
++################################################################################
++
++# Toolchain root of the vbcc cross-compiler (provides vasmm68k_mot and vlink).
++# setenv_{mac,lin,win}.sh export VBCC; fall back to the documented location.
++VBCC ?= $(HOME)/Dev/amiga
++
++CC     ?= cc
++# -std=gnu89          : the compiler sources are K&R C throughout
++# -DACE_HOST          : selects hostcompat.h over the Amiga NDK headers
++# -Werror=format      : LONG is exactly 32 bits here, so a stray %ld would
++#                       emit corrupt constants into the generated assembly.
++#                       This is the one warning class that must stay fatal.
++CFLAGS ?= -O2
++CFLAGS += -std=gnu89 -DACE_HOST -Wformat -Werror=format \
++          -Wno-deprecated-non-prototype
++
++# WARN=1 turns on -Wall.  Off by default: these are 1990s K&R sources and the
++# ~150 unused-variable/dangling-else findings are pre-existing noise that would
++# bury anything new.
++WARN = 0
++ifeq ($(WARN),1)
++  CFLAGS += -Wall
++endif
++
++LDFLAGS ?=
++LDLIBS  ?=
++
++ROOT        = ../..
++ACE_SRC_DIR = ../ace/c
++YAP_SRC_DIR = ../yap/c
++BAS_SRC_DIR = ../bas/c
++BUILD_DIR   = $(ROOT)/bin/host/$(PLATFORM)
++OBJ_DIR     = $(BUILD_DIR)/obj
++
++ACE_BIN = $(BUILD_DIR)/ace$(EXEEXT)
++YAP_BIN = $(BUILD_DIR)/yap$(EXEEXT)
++BAS_BIN = $(BUILD_DIR)/bas$(EXEEXT)
++
++# Verbose control (same convention as Makefile-ace)
++V = 0
++ifeq ($(V),1)
++  Q =
++  ECHO = @true
++else
++  Q = @
++  ECHO = @echo
++endif
++
++################################################################################
++# SOURCE FILES
++################################################################################
++
++# Same 30 modules as Makefile-ace.  lexvar.c and symvar.c are #included by
++# lex.c and sym.c respectively and must NOT be compiled separately.
++ACE_SOURCES = alloc.c assign.c basfun.c break.c codegen.c control.c \
++              declare.c event.c expr.c factor.c file.c gadget.c gfx.c \
++              invoke.c lex.c libfunc.c memory.c menu.c message.c \
++              misc.c opt.c parse.c parsevar.c print.c screen.c \
++              serial.c statement.c sub.c sym.c ver.c window.c
++
++ACE_OBJECTS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(ACE_SOURCES))
++
++################################################################################
++# BUILD TARGETS
++################################################################################
++
++.PHONY: all ace yap bas clean rebuild install info help dirs
++
++all: ace
++	@echo "Host build complete: $(ACE_BIN)"
++
++ace: dirs $(ACE_BIN)
++
++$(ACE_BIN): $(ACE_OBJECTS)
++	$(ECHO) "Linking ace..."
++	$(Q)$(CC) $(LDFLAGS) $(ACE_OBJECTS) -o $@ $(LDLIBS)
++
++$(OBJ_DIR)/%.o: $(ACE_SRC_DIR)/%.c $(ACE_SRC_DIR)/acedef.h $(ACE_SRC_DIR)/hostcompat.h
++	$(ECHO) "Compiling $<..."
++	$(Q)$(CC) $(CFLAGS) -I$(ACE_SRC_DIR) -c $< -o $@
++
++dirs:
++	$(Q)mkdir -p $(OBJ_DIR)
++
++################################################################################
++# UTILITY TARGETS
++################################################################################
++
++clean:
++	$(ECHO) "Cleaning host build..."
++	$(Q)rm -rf $(BUILD_DIR)
++	@echo "Clean complete"
++
++rebuild: clean all
++
++info:
++	@echo "PLATFORM  = $(PLATFORM)"
++	@echo "CC        = $(CC)"
++	@echo "CFLAGS    = $(CFLAGS)"
++	@echo "VBCC      = $(VBCC)"
++	@echo "BUILD_DIR = $(BUILD_DIR)"
++
++help:
++	@echo "ACE host cross-compiler build (Makefile-host)"
++	@echo ""
++	@echo "Targets:"
++	@echo "  all      - Build host binaries (default)"
++	@echo "  clean    - Remove the host build directory"
++	@echo "  rebuild  - clean + all"
++	@echo "  install  - Install into \$$(VBCC) (default $(VBCC))"
++	@echo "  info     - Show detected configuration"
++	@echo ""
++	@echo "Options:"
++	@echo "  V=1      - Verbose output"
++	@echo "  CC=gcc   - Override the host compiler"
++	@echo "  VBCC=... - Override the vbcc toolchain root"

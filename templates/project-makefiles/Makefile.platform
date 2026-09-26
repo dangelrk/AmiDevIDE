@@ -1,0 +1,51 @@
+# Makefile.platform - Plattform-spezifische Einstellungen
+# Automatische Erkennung von Windows, macOS, Linux, AmigaOS
+
+#############################################
+# Platform Detection
+#############################################
+
+ifeq ($(OS),Windows_NT)
+    PLATFORM := Windows
+    ifneq ($(shell uname -s 2>/dev/null),)
+        SHELL_TYPE := MSYS2
+    endif
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Linux)
+        PLATFORM := Linux
+    endif
+    ifeq ($(UNAME_S),Darwin)
+        PLATFORM := macOS
+    endif
+    ifeq ($(UNAME_S),AmigaOS)
+        PLATFORM := AmigaOS
+    endif
+endif
+
+#############################################
+# Load Platform-Specific Settings
+#############################################
+
+ifeq ($(PLATFORM),Windows)
+    include Makefile.windows
+else ifeq ($(PLATFORM),Linux)
+    include Makefile.linux
+else ifeq ($(PLATFORM),macOS)
+    include Makefile.macos
+else ifeq ($(PLATFORM),AmigaOS)
+    include Makefile.amigaos
+else
+    $(error Unknown platform: $(PLATFORM))
+endif
+
+#############################################
+# ADF packaging (amitools / xdftool)
+#############################################
+
+DISTDIR   = dist
+ADF_NAME  = $(PROJECT).adf
+ADF       = $(DISTDIR)/$(ADF_NAME)
+
+# Leeres ADF-Template (einmal erzeugt)
+ADF_TEMPLATE = adf/empty.adf

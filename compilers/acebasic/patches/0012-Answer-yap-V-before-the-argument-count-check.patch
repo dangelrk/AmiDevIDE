@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 17:10:22 +0200
+Subject: [PATCH] Answer yap -V before the argument-count check
+
+"yap -V" is a complete invocation on its own, but the usage check ran
+first and answered it with a usage message instead of the version.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/yap/c/yap.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/yap/c/yap.c b/src/yap/c/yap.c
+index 697d20b..ef3872e 100644
+--- a/src/yap/c/yap.c
++++ b/src/yap/c/yap.c
+@@ -939,6 +939,16 @@ char **argv;
+  char *eq;
+  size_t n;
+ 
++ /* -V before the argument-count check: it is a complete invocation on
++ ** its own and must not be answered with a usage message. */
++ for (i = 1; i < argc; i++)
++     if (argv[i][0] == '-' && (argv[i][1] == 'V' || argv[i][1] == 'v'))
++     {
++	printf("yap %s build %s (%s)\n",
++	       YAP_VERSION,ACE_BUILD_NUMBER,ACE_BUILD_DATE);
++	exit(0);
++     }
++
+  if (argc < 3) { show_usage(); return(FALSE); }
+ 
+  for (i = 1; i < argc; i++)

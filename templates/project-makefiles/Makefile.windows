@@ -1,0 +1,61 @@
+# Makefile.windows - Windows (MSYS2) spezifische Einstellungen
+
+#############################################
+# vbcc Paths für Windows
+# HIER ANPASSEN falls dein vbcc woanders liegt!
+#############################################
+
+# Toolchain root.  toolchain/setenv.sh exports VBCC; when it has been
+# sourced this picks it up automatically.  Otherwise the fallback below
+# is used -- adjust it if your checkout lives elsewhere.
+VBCC_BASE ?= $(if $(VBCC),$(VBCC),/c/Dev/AmiDevIDE/toolchain)
+
+#############################################
+# Abgeleitete Pfade
+#############################################
+
+VBCC_BIN = $(VBCC_BASE)/bin
+VBCC_INC = $(VBCC_BASE)/targets/m68k-amigaos/include
+VBCC_LIB = $(VBCC_BASE)/targets/m68k-amigaos/lib
+# ACE BASIC cross-compiler SDK
+ACE_HOME = $(VBCC_BASE)/sdk/ACE
+ACE_LIB = $(ACE_HOME)/lib
+ACE_INC = $(ACE_HOME)/include
+ACE_BMAPS = $(ACE_HOME)/bmaps
+
+
+# SDK Paths - AKTIV
+NDK32_ASM_INC = $(VBCC_BASE)/sdk/NDK_3.2/Include_I
+NDK32_INC = $(VBCC_BASE)/sdk/NDK_3.2/Include_H
+NDK32_LIB = $(VBCC_BASE)/sdk/NDK_3.2/lib
+MUI38_INC = $(VBCC_BASE)/sdk/MUI_3.8/Developer/C/Include
+MCC_INC = $(VBCC_BASE)/sdk/MCC/Developer/C/include
+REGEX_INC = $(VBCC_BASE)/sdk/regex/include
+REQTOOLS_INC = $(VBCC_BASE)/sdk/reqtools/include
+TCP_INC = $(VBCC_BASE)/sdk/Roadshow/include
+NET_INC = $(VBCC_BASE)/sdk/Roadshow/netinclude
+AMISSL_INC = $(VBCC_BASE)/sdk/AmiSSL-v5/Developer/include
+AMISSL_LIB = $(VBCC_BASE)/sdk/AmiSSL-v5/Developer/lib/AmigaOS3
+SQLITE_INC = $(VBCC_BASE)/sdk/SQLite3/include
+SQLITE_LIB = $(VBCC_BASE)/sdk/SQLite3/lib
+POSIXLIB_INC = $(VBCC_BASE)/sdk/PosixLib/include
+
+
+#############################################
+# Tools
+#############################################
+
+CC = $(VBCC_BIN)/vc.exe
+AS = $(VBCC_BIN)/vasmm68k_mot.exe
+BAS = $(VBCC_BIN)/bas.exe
+MV = mv
+RM = rm -f
+MKDIR = mkdir -p
+
+#############################################
+# vbcc Environment
+#############################################
+
+export VBCC := $(VBCC_BASE)
+export VBCCCONF := $(VBCC_BASE)/config/aos68k
+export PATH := $(VBCC_BIN):$(PATH)

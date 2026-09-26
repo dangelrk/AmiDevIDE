@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AmiDevIDE &mdash; Quellen</title>
+<style>
+:root{--bg:#f7f5f0;--surface:#fffdf8;--surface-2:#f0ece2;--border:#ddd6c6;
+  --text:#1e1c18;--muted:#6b6558;--accent:#a3410b;--code:#efeade;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16150f;--surface:#1e1d16;--surface-2:#262419;--border:#3a382b;
+  --text:#eae6da;--muted:#9b9686;--accent:#f0913f;--code:#131209}}
+:root[data-theme="dark"]{--bg:#16150f;--surface:#1e1d16;--surface-2:#262419;
+  --border:#3a382b;--text:#eae6da;--muted:#9b9686;--accent:#f0913f;--code:#131209}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif}
+.wrap{max-width:58rem;margin:0 auto;padding:2.5rem 1.25rem 5rem}
+h1{font-size:clamp(1.7rem,4vw,2.3rem);margin:0 0 .5rem;letter-spacing:-.02em}
+h2{font-size:1.3rem;margin:2.5rem 0 .8rem;padding-top:1.1rem;border-top:1px solid var(--border)}
+.lede{color:var(--muted);margin:0 0 .5rem;max-width:44rem}
+.meta{font:.8rem/1.5 var(--mono);color:var(--muted)}
+a{color:var(--accent);word-break:break-word}
+code{font:.875em/1.4 var(--mono);background:var(--code);padding:.12em .38em;border-radius:3px}
+pre{background:var(--code);border:1px solid var(--border);border-radius:6px;
+  padding:.9rem 1rem;overflow-x:auto}
+pre code{background:none;padding:0;font-size:.85rem;white-space:pre}
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px;
+  background:var(--surface);margin:1rem 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:32rem}
+th,td{padding:.6rem .85rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+thead th{background:var(--surface-2);font-size:.8rem;letter-spacing:.02em;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+.muted{color:var(--muted);font-size:.85em}
+.note{background:var(--surface);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:.9rem 1.1rem;margin:1.2rem 0}
+.note p:first-child{margin-top:0} .note p:last-child{margin-bottom:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Quellen</h1>
+<p class="lede">Diese Archive braucht AmiDevIDE, um die Toolchain zu bauen.
+Normalerweise holt sie <code>bootstrap/acd_fetch.py</code> automatisch &mdash; diese
+Seite ist der manuelle Weg, falls der Rechner offline ist oder ein Server klemmt.</p>
+<p class="meta">Generiert am 26.09.2026 aus <code>bootstrap/sources.toml</code>. Nicht von Hand bearbeiten.</p>
+
+<h2>So geht der manuelle Weg</h2>
+<ol>
+  <li>Die Archive unten herunterladen.</li>
+  <li>Unver&auml;ndert nach <code>var/downloads/</code> legen &mdash; nicht entpacken,
+      nicht umbenennen.</li>
+  <li>Bootstrap starten:
+      <pre><code>cmake --build build --target acd-toolchain</code></pre>
+      oder direkt:
+      <pre><code>python3 bootstrap/acd_fetch.py --offline
+python3 bootstrap/acd_build_tools.py
+python3 bootstrap/acd_install_sdk.py
+python3 bootstrap/acd_gen_config.py</code></pre></li>
+</ol>
+<div class="note">
+<p><strong>Bereits Entpacktes wird erkannt.</strong> Liegt ein Quellbaum schon unter
+<code>var/src/</code> oder ein SDK unter <code>toolchain/sdk/</code>, wird der jeweilige
+Schritt &uuml;bersprungen. Du kannst also auch eine bestehende Installation von Hand
+hineinkopieren.</p>
+</div>
+
+<h2>Archive</h2>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Komponente</th><th>Version</th><th>Download</th></tr></thead>
+  <tbody>
+      <tr>
+        <td><strong>vasm</strong><br>
+            <span class="muted">Portable and retargetable assembler, source release.</span></td>
+        <td>2.0f</td>
+        <td><a href="http://sun.hasenbraten.de/vasm/release/vasm.tar.gz">vasm.tar.gz</a><br>
+            <span class="muted">This URL always serves the current release, so no scraping needed.</span></td>
+      </tr>
+      <tr>
+        <td><strong>vlink</strong><br>
+            <span class="muted">Portable linker for multiple file formats, source release.</span></td>
+        <td>0.18a</td>
+        <td><a href="http://sun.hasenbraten.de/vlink/release/vlink.tar.gz">vlink.tar.gz</a><br>
+            <span class="muted">This URL always serves the current release, so no scraping needed.</span></td>
+      </tr>
+      <tr>
+        <td><strong>vbcc</strong><br>
+            <span class="muted">The vbcc C compiler, full release source.</span></td>
+        <td>0.9hP2</td>
+        <td><a href="http://phoenix.owl.de/tags/vbcc0_9hP2.tar.gz">vbcc0_9hP2.tar.gz</a><br>
+            <span class="muted">There is no &#x27;latest&#x27; URL; the newest vbccX_Y[Pn].tar.gz under phoenix.owl.de/tags/ wins.</span></td>
+      </tr>
+      <tr>
+        <td><strong>vbcc target m68k-amigaos</strong><br>
+            <span class="muted">Prebuilt vbcc C runtime for AmigaOS 2.x/3.x M680x0 (headers + libs).</span></td>
+        <td>2022-05-22</td>
+        <td><a href="http://phoenix.owl.de/vbcc/2022-05-22/vbcc_target_m68k-amigaos.lha">vbcc_target_m68k-amigaos.lha</a><br>
+            <span class="muted">The one component not built from source -- it ships as a binary runtime.</span></td>
+      </tr>
+      <tr>
+        <td><strong>NDK 3.2</strong><br>
+            <span class="muted">Amiga Native Developer Kit 3.2: includes, FD/SFD, linker libs, autodocs.</span></td>
+        <td>&mdash;</td>
+        <td><a href="https://aminet.net/dev/misc/NDK3.2.lha">NDK3.2.lha</a><br>
+            <span class="muted">NDK 3.2 is NEWER than NDK 3.9, counter-intuitive as that reads.</span></td>
+      </tr>
+      <tr>
+        <td><strong>MUI 3.8 developer</strong><br>
+            <span class="muted">MagicUserInterface 3.8 developer files: includes, FD, autodocs, examples.</span></td>
+        <td>&mdash;</td>
+        <td><a href="https://aminet.net/dev/mui/mui38dev.lha">mui38dev.lha</a><br>
+            <span class="muted">Archive root is MUI/, installed as sdk/MUI_3.8/.</span></td>
+      </tr>
+      <tr>
+        <td><strong>ACE BASIC</strong><br>
+            <span class="muted">ACE BASIC compiler, upstream release the AmiDevIDE patch series applies to.</span></td>
+        <td>3.0.1</td>
+        <td><a href="https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz">ACEBasic-3.0.1.tar.gz</a><br>
+            <span class="muted">Pinned: compilers/acebasic/patches/ only apply to this exact tag. acd_ace.py checks the sha256 and applies them.</span></td>
+      </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Auf Aktualit&auml;t pr&uuml;fen</h2>
+<pre><code>python3 bootstrap/acd_fetch.py --check-updates   # meldet, &auml;ndert nichts
+python3 bootstrap/acd_fetch.py --update          # zieht + schreibt sources.lock.json fort</code></pre>
+
+<h2>Entpacken</h2>
+<p><code>.lha</code> braucht ein Werkzeug, das nicht &uuml;berall vorhanden ist.
+<code>acd_extract.py</code> probiert der Reihe nach <code>lha</code>, <code>lhasa</code>,
+<code>7z</code> und zuletzt das Python-Modul <code>lhafile</code>. Wenn nichts davon
+da ist:</p>
+<pre><code>pip3 install lhafile          # portabel, keine Systempakete n&ouml;tig
+# oder
+brew install lhasa            # macOS
+sudo apt install lhasa        # Debian/Ubuntu
+pacman -S mingw-w64-x86_64-p7zip   # MSYS2</code></pre>
+</div>
+</body>
+</html>

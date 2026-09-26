@@ -1,0 +1,38 @@
+# Generated toolchain root ($VBCC) and all working data.
+/toolchain/
+/var/
+
+# Build output
+/build/
+/ide/build/
+/ide/bin/
+/ide/amiga/bin/
+/ide/amiga/obj/
+*.o
+*.obj
+a.out
+
+# Editor / OS noise
+.DS_Store
+*.swp
+compile_commands.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Local agent/editor settings
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Amiga system files are licensed and must never be committed, wherever
+# they end up (Kickstart ROMs, Workbench disks and hard-disk images)
+*.rom
+rom.key
+*.adf
+*.hdf
+*.uaem
+
+# Unfinished downloads
+*.part

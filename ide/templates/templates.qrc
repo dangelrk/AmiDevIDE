@@ -1,0 +1,8 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/templates">
+    <file>shared-library/library.c</file>
+    <file>shared-library/libstart.s</file>
+    <file>shared-library/testprog.c</file>
+  </qresource>
+</RCC>

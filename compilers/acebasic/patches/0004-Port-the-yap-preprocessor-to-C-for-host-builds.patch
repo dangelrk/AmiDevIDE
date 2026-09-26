@@ -1,0 +1,1133 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 10:57:25 +0200
+Subject: [PATCH] Port the yap preprocessor to C for host builds
+
+utils/yap/yap.b is 1381 lines of ACE BASIC, so it only runs on an Amiga -
+compiling it with the host ace would just produce another Amiga binary.
+The host pipeline needs the same preprocessing before ace sees the source,
+so this is a direct C port.
+
+Behaviour matches the original, including its limits and its quirks: the
+four comment types, blank-line consolidation, #define/#undef/#ifdef/
+#ifndef/#else/#endif/#include, global include-once, token-based
+non-recursive macro replacement that skips string literals, and truncation
+of lines past 1024 characters.  Conditionals are still evaluated inside
+false branches so nesting stays in step.
+
+Two deliberate differences:
+  - the output buffer grows instead of being a fixed 128 KB ALLOC, so a
+    large source cannot silently overrun it
+  - <...> includes resolve via ACE_INC, falling back to the ACEinclude:
+    assign when it is unset, mirroring how ACE_BMAPS works in ace
+
+utils/yap/tests/run_tests.sh is the host counterpart of run_tests.rexx and
+drives the same inputs against the same .expected files, so the port is
+checked against the BASIC original's recorded behaviour rather than
+against itself.  All 11 tests pass.
+
+Also verified end to end: yap then ace over the 223 non-error cases in
+verify/tests/cases succeeds for all of them, and #include <ace/limits.h>
+expands MaxInt and MAXSTRINGLEN into the correct emitted constants.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/make/Makefile-host       |   9 +-
+ src/yap/c/yap.c              | 954 +++++++++++++++++++++++++++++++++++
+ utils/yap/tests/run_tests.sh |  96 ++++
+ 3 files changed, 1057 insertions(+), 2 deletions(-)
+ create mode 100644 src/yap/c/yap.c
+ create mode 100755 utils/yap/tests/run_tests.sh
+
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index 86d0b58..bdefb10 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -126,10 +126,11 @@ ACE_OBJECTS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(ACE_SOURCES))
+ 
+ .PHONY: all ace yap bas clean rebuild install info help dirs amiga-check
+ 
+-all: ace
+-	@echo "Host build complete: $(ACE_BIN)"
++all: ace yap
++	@echo "Host build complete: $(BUILD_DIR)"
+ 
+ ace: dirs $(ACE_BIN)
++yap: dirs $(YAP_BIN)
+ 
+ $(ACE_BIN): $(ACE_OBJECTS)
+ 	$(ECHO) "Linking ace..."
+@@ -139,6 +140,10 @@ $(OBJ_DIR)/%.o: $(ACE_SRC_DIR)/%.c $(ACE_SRC_DIR)/acedef.h $(ACE_SRC_DIR)/hostco
+ 	$(ECHO) "Compiling $<..."
+ 	$(Q)$(CC) $(CFLAGS) -I$(ACE_SRC_DIR) -c $< -o $@
+ 
++$(YAP_BIN): $(YAP_SRC_DIR)/yap.c
++	$(ECHO) "Compiling+linking yap..."
++	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(LDLIBS)
++
+ dirs:
+ 	$(Q)mkdir -p $(OBJ_DIR)
+ 
+diff --git a/src/yap/c/yap.c b/src/yap/c/yap.c
+new file mode 100644
+index 0000000..074b317
+--- /dev/null
++++ b/src/yap/c/yap.c
+@@ -0,0 +1,954 @@
++/*
++** YAP - Yet Another Preprocessor for ACE BASIC (host port)
++**
++** A C port of utils/yap/yap.b, which is itself written in ACE BASIC and so
++** can only run on an Amiga.  The host cross-compiler needs the same
++** preprocessing before ace sees the source, hence this.
++**
++** Behaviour is deliberately identical to the BASIC original, down to the
++** limits and the quirks:
++**
++**   - removes all four comment types: C block, C++ line, ACE block, ACE line
++**   - consolidates runs of blank lines into one
++**   - #define / #undef / #ifdef / #ifndef / #else / #endif / #include
++**   - macro replacement is token-based, skips string literals, non-recursive
++**   - each file is included at most once, globally
++**   - lines longer than 1024 characters are truncated
++**
++** The one intentional difference: the output buffer grows instead of being
++** a fixed 128 KB allocation, so large sources can't silently overrun it.
++**
++** Usage: yap [options] <inputfile> <outputfile>
++**   -H              show help
++**   -D<name>[=val]  define a macro
++**   -U<name>        undefine a macro
++**   -I<path>        add an include search path
++**
++** For <...> includes the original looks in the ACEinclude: assign.  Here
++** ACE_INC overrides that, falling back to the assign name when unset.
++*/
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++/* ---- Limits (same as yap.b) ---- */
++#define MAX_MACROS           2048
++#define MAX_MACRO_NAME       48
++#define MAX_MACRO_VALUE      256
++#define MAX_COND_DEPTH       16
++#define MAX_INCLUDE_DEPTH    8
++#define MAX_INCLUDED_FILES   128
++#define MAX_INCLUDE_PATHS    8
++#define MAX_PATH             256
++#define MAX_LINE             1024	/* excluding the terminator */
++
++#define TRUE  1
++#define FALSE 0
++
++/* ---- Macro table ---- */
++static char  macroName[MAX_MACROS][MAX_MACRO_NAME];
++static char  macroValue[MAX_MACROS][MAX_MACRO_VALUE];
++static int   macroCount = 0;
++
++/* ---- Include search paths ---- */
++static char  includePath[MAX_INCLUDE_PATHS][MAX_PATH];
++static int   includePathCount = 0;
++
++/* ---- Include-once tracking ---- */
++static char  includedFiles[MAX_INCLUDED_FILES][MAX_PATH];
++static int   includedCount = 0;
++
++/* ---- Include file stack (one entry per depth, plus depth 0) ---- */
++static char   inclFileName[MAX_INCLUDE_DEPTH+1][MAX_PATH];
++static long   inclLineNum[MAX_INCLUDE_DEPTH+1];
++static char  *inBuf[MAX_INCLUDE_DEPTH+1];
++static long   inBufLen[MAX_INCLUDE_DEPTH+1];
++static long   inBufPos[MAX_INCLUDE_DEPTH+1];
++static int    includeDepth = 0;
++
++/* ---- Conditional stack (1-based, like the original) ---- */
++static int   condActive[MAX_COND_DEPTH+1];
++static int   condSeenTrue[MAX_COND_DEPTH+1];
++static int   condHadElse[MAX_COND_DEPTH+1];
++static int   condDepth = 0;
++static int   cachedOutputActive = TRUE;
++
++/* ---- Comment state, carried across lines ---- */
++static int   inCComment   = FALSE;
++static int   inAceComment = FALSE;
++static int   lastWasBlank = FALSE;
++
++/* ---- Output buffer (grows on demand) ---- */
++static char *outBuf = NULL;
++static size_t outBufLen = 0;
++static size_t outBufCap = 0;
++
++/* ---- Shared line buffer, as in the original ---- */
++static char  rdLineBuf[MAX_LINE+1];
++
++static char  inFile[MAX_PATH];
++static char  outFile[MAX_PATH];
++static int   exitCode = 0;
++
++/*--------------------------------------------------------------------------*/
++
++static void copy_bounded(dst,src,size)
++char *dst;
++const char *src;
++size_t size;
++{
++/* strncpy that always terminates; mirrors assignment to a sized ACE STRING */
++ size_t n = strlen(src);
++ if (n > size-1) n = size-1;
++ memcpy(dst,src,n);
++ dst[n] = '\0';
++}
++
++static int is_ident_start(ch)
++int ch;
++{
++ return(ch == '_' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
++}
++
++static int is_ident_char(ch)
++int ch;
++{
++ return(ch == '_' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
++		  || (ch >= '0' && ch <= '9'));
++}
++
++static void show_usage()
++{
++ printf("YAP - Yet Another Preprocessor for ACE BASIC\n");
++ printf("Usage: yap [options] <inputfile> <outputfile>\n");
++ printf("\n");
++ printf("Options:\n");
++ printf("  -H              Show this help\n");
++ printf("  -D<name>[=val]  Define a macro\n");
++ printf("  -U<name>        Undefine a macro\n");
++ printf("  -I<path>        Add include search path\n");
++}
++
++/*---- macro table ---------------------------------------------------------*/
++
++static int macro_find(nm)
++const char *nm;
++{
++ int i;
++ for (i = 0; i < macroCount; i++)
++     if (strcmp(macroName[i],nm) == 0) return(i);
++ return(-1);
++}
++
++static void macro_define(nm,val)
++const char *nm;
++const char *val;
++{
++ int idx = macro_find(nm);
++
++ if (idx >= 0) { copy_bounded(macroValue[idx],val,MAX_MACRO_VALUE); return; }
++
++ if (macroCount >= MAX_MACROS)
++ {
++	printf("Error: too many macros (max %d)\n",MAX_MACROS);
++	exit(10);
++ }
++ copy_bounded(macroName[macroCount],nm,MAX_MACRO_NAME);
++ copy_bounded(macroValue[macroCount],val,MAX_MACRO_VALUE);
++ macroCount++;
++}
++
++static void macro_undef(nm)
++const char *nm;
++{
++/* remove by swapping the last entry down, as the original does */
++ int idx = macro_find(nm);
++
++ if (idx < 0) return;
++ macroCount--;
++ if (idx < macroCount)
++ {
++	strcpy(macroName[idx],macroName[macroCount]);
++	strcpy(macroValue[idx],macroValue[macroCount]);
++ }
++}
++
++/*---- diagnostics ---------------------------------------------------------*/
++
++static void directive_error(msg)
++const char *msg;
++{
++ printf("Error: %s line %ld: %s\n",
++	inclFileName[includeDepth],inclLineNum[includeDepth],msg);
++ exitCode = 10;
++}
++
++/*---- output --------------------------------------------------------------*/
++
++static void out_reserve(extra)
++size_t extra;
++{
++ char *p;
++
++ if (outBufLen + extra <= outBufCap) return;
++ if (outBufCap == 0) outBufCap = 131072;	/* the original's fixed size */
++ while (outBufLen + extra > outBufCap) outBufCap *= 2;
++ if ((p=(char *)realloc(outBuf,outBufCap)) == NULL)
++ {
++	printf("Error: cannot allocate output buffer\n");
++	exit(10);
++ }
++ outBuf = p;
++}
++
++static void output_line(ln)
++const char *ln;
++{
++ size_t n = strlen(ln);
++
++ out_reserve(n+1);
++ memcpy(outBuf+outBufLen,ln,n);
++ outBufLen += n;
++ outBuf[outBufLen++] = '\n';
++}
++
++static void output_blank_line()
++{
++ out_reserve(1);
++ outBuf[outBufLen++] = '\n';
++}
++
++static void flush_output()
++{
++ FILE *f;
++
++ if (outBufLen == 0) return;
++
++ if ((f=fopen(outFile,"wb")) == NULL)
++ {
++	printf("Error: cannot open output file: %s\n",outFile);
++	exitCode = 10;
++	return;
++ }
++ if (fwrite(outBuf,1,outBufLen,f) != outBufLen)
++ {
++	printf("Error: short write on: %s\n",outFile);
++	exitCode = 10;
++ }
++ fclose(f);
++}
++
++/*---- conditionals --------------------------------------------------------*/
++
++static void update_cached_output_active()
++{
++ int i;
++
++ cachedOutputActive = TRUE;
++ for (i = 1; i <= condDepth; i++)
++     if (condActive[i] == FALSE) { cachedOutputActive = FALSE; return; }
++}
++
++static int parent_active(uptolevel)
++int uptolevel;
++{
++ int i;
++
++ for (i = 1; i <= uptolevel; i++)
++     if (condActive[i] == FALSE) return(FALSE);
++ return(TRUE);
++}
++
++/*---- directive argument parsing ------------------------------------------*/
++
++static const char *skip_ws(s)
++const char *s;
++{
++ while (*s == ' ' || *s == '\t') s++;
++ return(s);
++}
++
++static size_t scan_ident(s,out,size)
++const char *s;
++char *out;
++size_t size;
++{
++/* copy the leading identifier of s into out; returns how many chars it had */
++ size_t n = 0;
++
++ while (s[n] != '\0' && is_ident_char((unsigned char)s[n])) n++;
++ if (n > size-1) { memcpy(out,s,size-1); out[size-1]='\0'; }
++ else            { memcpy(out,s,n);      out[n]='\0'; }
++ return(n);
++}
++
++static void handle_define(rest)
++const char *rest;
++{
++ char nm[MAX_PATH],val[MAX_PATH];
++ const char *p = skip_ws(rest);
++ size_t n;
++
++ if (*p == '\0') { directive_error("#define missing name"); return; }
++ if (!is_ident_start((unsigned char)*p))
++    { directive_error("#define invalid name"); return; }
++
++ n = scan_ident(p,nm,sizeof(nm));
++ p = skip_ws(p+n);
++
++ if (*p == '\0') { macro_define(nm,"1"); return; }
++
++ copy_bounded(val,p,sizeof(val));
++ macro_define(nm,val);
++}
++
++static void handle_undef(rest)
++const char *rest;
++{
++ char nm[MAX_PATH];
++ const char *p = skip_ws(rest);
++
++ if (*p == '\0') { directive_error("#undef missing name"); return; }
++ scan_ident(p,nm,sizeof(nm));
++ macro_undef(nm);
++}
++
++static void handle_if(rest,negate)
++const char *rest;
++int negate;
++{
++/* shared body of #ifdef and #ifndef */
++ char nm[MAX_PATH];
++ const char *p;
++ int parent,defined,taken;
++
++ if (condDepth >= MAX_COND_DEPTH)
++    { directive_error("conditional nesting too deep"); return; }
++
++ parent = parent_active(condDepth);
++
++ p = skip_ws(rest);
++ if (*p == '\0')
++ {
++	directive_error(negate ? "#ifndef missing name" : "#ifdef missing name");
++	return;
++ }
++ scan_ident(p,nm,sizeof(nm));
++
++ defined = (macro_find(nm) >= 0);
++ taken   = negate ? !defined : defined;
++
++ condDepth++;
++ if (parent && taken)
++ {
++	condActive[condDepth]   = TRUE;
++	condSeenTrue[condDepth] = TRUE;
++ }
++ else
++ {
++	condActive[condDepth]   = FALSE;
++	condSeenTrue[condDepth] = parent ? taken : TRUE;
++ }
++ condHadElse[condDepth] = FALSE;
++ update_cached_output_active();
++}
++
++static void handle_else()
++{
++ if (condDepth == 0)
++    { directive_error("#else without #ifdef/#ifndef"); return; }
++ if (condHadElse[condDepth])
++    { directive_error("duplicate #else"); return; }
++
++ condHadElse[condDepth] = TRUE;
++ if (parent_active(condDepth-1) && condSeenTrue[condDepth] == FALSE)
++ {
++	condActive[condDepth]   = TRUE;
++	condSeenTrue[condDepth] = TRUE;
++ }
++ else condActive[condDepth] = FALSE;
++
++ update_cached_output_active();
++}
++
++static void handle_endif()
++{
++ if (condDepth == 0)
++    { directive_error("#endif without #ifdef/#ifndef"); return; }
++ condDepth--;
++ update_cached_output_active();
++}
++
++/*---- includes ------------------------------------------------------------*/
++
++static void file_dir(path,out,size)
++const char *path;
++char *out;
++size_t size;
++{
++/* everything up to and including the last '/' or ':', or "" if neither */
++ int i,lastSep = -1;
++
++ for (i = 0; path[i] != '\0'; i++)
++     if (path[i] == '/' || path[i] == ':') lastSep = i;
++
++ if (lastSep < 0) { out[0]='\0'; return; }
++ if ((size_t)(lastSep+1) > size-1) { out[0]='\0'; return; }
++ memcpy(out,path,lastSep+1);
++ out[lastSep+1] = '\0';
++}
++
++static int already_included(path)
++const char *path;
++{
++ int i;
++
++ for (i = 0; i < includedCount; i++)
++     if (strcmp(includedFiles[i],path) == 0) return(TRUE);
++ return(FALSE);
++}
++
++static void add_included(path)
++const char *path;
++{
++ if (includedCount >= MAX_INCLUDED_FILES)
++ {
++	printf("Error: too many included files (max %d)\n",MAX_INCLUDED_FILES);
++	exit(10);
++ }
++ copy_bounded(includedFiles[includedCount],path,MAX_PATH);
++ includedCount++;
++}
++
++static int file_readable(path)
++const char *path;
++{
++ FILE *f = fopen(path,"rb");
++
++ if (f == NULL) return(FALSE);
++ fclose(f);
++ return(TRUE);
++}
++
++static int join_path(out,size,dir,name)
++char *out;
++size_t size;
++const char *dir;
++const char *name;
++{
++ if (strlen(dir) + strlen(name) + 1 > size) return(FALSE);
++ strcpy(out,dir);
++ strcat(out,name);
++ return(TRUE);
++}
++
++static int find_include_file(nm,isAngle,out,size)
++const char *nm;
++int isAngle;
++char *out;
++size_t size;
++{
++ char tryPath[MAX_PATH],curDir[MAX_PATH];
++ const char *sysinc;
++ int i;
++
++ if (!isAngle)
++ {
++	/* relative to the including file's directory */
++	file_dir(inclFileName[includeDepth],curDir,sizeof(curDir));
++	if (curDir[0] != '\0'
++	    && join_path(tryPath,sizeof(tryPath),curDir,nm)
++	    && file_readable(tryPath))
++	   { copy_bounded(out,tryPath,size); return(TRUE); }
++
++	/* then the current working directory */
++	if (file_readable(nm)) { copy_bounded(out,nm,size); return(TRUE); }
++ }
++ else
++ {
++	/* the system include tree: ACE_INC on the host, ACEinclude: on Amiga */
++	sysinc = getenv("ACE_INC");
++	if (sysinc != NULL && *sysinc != '\0')
++	{
++	 size_t n = strlen(sysinc);
++	 if (n < sizeof(curDir)-2)
++	 {
++	  strcpy(curDir,sysinc);
++	  if (curDir[n-1] != '/' && curDir[n-1] != ':' && curDir[n-1] != '\\')
++	     strcat(curDir,"/");
++	 }
++	 else curDir[0] = '\0';
++	}
++	else strcpy(curDir,"ACEinclude:");
++
++	if (curDir[0] != '\0'
++	    && join_path(tryPath,sizeof(tryPath),curDir,nm)
++	    && file_readable(tryPath))
++	   { copy_bounded(out,tryPath,size); return(TRUE); }
++ }
++
++ /* finally the -I paths */
++ for (i = 0; i < includePathCount; i++)
++     if (join_path(tryPath,sizeof(tryPath),includePath[i],nm)
++	 && file_readable(tryPath))
++	{ copy_bounded(out,tryPath,size); return(TRUE); }
++
++ return(FALSE);
++}
++
++static int load_file_to_buffer(depth)
++int depth;
++{
++ FILE *f;
++ long len;
++
++ inBuf[depth]    = NULL;
++ inBufLen[depth] = 0;
++ inBufPos[depth] = 0;
++
++ if ((f=fopen(inclFileName[depth],"rb")) == NULL)
++ {
++	printf("Error: cannot open: %s\n",inclFileName[depth]);
++	exitCode = 10;
++	return(FALSE);
++ }
++ fseek(f,0,SEEK_END);
++ len = ftell(f);
++ fseek(f,0,SEEK_SET);
++
++ if (len <= 0) { fclose(f); return(TRUE); }
++
++ if ((inBuf[depth]=(char *)malloc((size_t)len)) == NULL)
++ {
++	printf("Error: out of memory for: %s\n",inclFileName[depth]);
++	fclose(f);
++	exitCode = 10;
++	return(FALSE);
++ }
++ if ((long)fread(inBuf[depth],1,(size_t)len,f) != len)
++ {
++	printf("Error: short read on: %s\n",inclFileName[depth]);
++	fclose(f);
++	exitCode = 10;
++	return(FALSE);
++ }
++ fclose(f);
++ inBufLen[depth] = len;
++ return(TRUE);
++}
++
++static void handle_include(rest)
++const char *rest;
++{
++ char nm[MAX_PATH],resolved[MAX_PATH];
++ const char *p = skip_ws(rest);
++ const char *start;
++ char endChar;
++ int isAngle;
++ size_t n;
++
++ if (*p == '\0') { directive_error("#include missing filename"); return; }
++
++ if      (*p == '"') { endChar = '"'; isAngle = FALSE; p++; }
++ else if (*p == '<') { endChar = '>'; isAngle = TRUE;  p++; }
++ else { directive_error("#include expected \" or <"); return; }
++
++ start = p;
++ while (*p != '\0' && *p != endChar) p++;
++ if (*p != endChar)
++    { directive_error("#include unterminated filename"); return; }
++
++ n = (size_t)(p - start);
++ if (n == 0) { directive_error("#include empty filename"); return; }
++ if (n > sizeof(nm)-1) n = sizeof(nm)-1;
++ memcpy(nm,start,n);
++ nm[n] = '\0';
++
++ if (!find_include_file(nm,isAngle,resolved,sizeof(resolved)))
++ {
++	char msg[MAX_PATH+64];
++	sprintf(msg,"cannot find include file: %s",nm);
++	directive_error(msg);
++	return;
++ }
++
++ if (already_included(resolved)) return;
++
++ if (includeDepth >= MAX_INCLUDE_DEPTH - 1)
++    { directive_error("#include nesting too deep"); return; }
++
++ add_included(resolved);
++
++ includeDepth++;
++ copy_bounded(inclFileName[includeDepth],resolved,MAX_PATH);
++ inclLineNum[includeDepth] = 0;
++
++ if (!load_file_to_buffer(includeDepth)) includeDepth--;
++}
++
++/*---- directive dispatch --------------------------------------------------*/
++
++static int is_directive_line(ln)
++const char *ln;
++{
++ const char *p = skip_ws(ln);
++
++ return(*p == '#');
++}
++
++static void handle_directive(ln)
++const char *ln;
++{
++ char kw[16];
++ const char *p = skip_ws(ln);
++ const char *start;
++ size_t n,i;
++
++ if (*p != '#') return;
++ p++;					/* skip '#' */
++ p = skip_ws(p);
++
++ start = p;
++ while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) p++;
++ n = (size_t)(p - start);
++ if (n > sizeof(kw)-1) n = sizeof(kw)-1;
++ for (i = 0; i < n; i++)
++ {
++	char c = start[i];
++	kw[i] = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
++ }
++ kw[n] = '\0';
++
++ /*
++ ** Conditionals are handled even inside a false branch, otherwise nesting
++ ** would go out of step.  Everything else only applies where output is live.
++ */
++ if      (strcmp(kw,"ifdef")  == 0) handle_if(p,FALSE);
++ else if (strcmp(kw,"ifndef") == 0) handle_if(p,TRUE);
++ else if (strcmp(kw,"else")   == 0) handle_else();
++ else if (strcmp(kw,"endif")  == 0) handle_endif();
++ else if (cachedOutputActive)
++ {
++	if      (strcmp(kw,"define")  == 0) handle_define(p);
++	else if (strcmp(kw,"undef")   == 0) handle_undef(p);
++	else if (strcmp(kw,"include") == 0) handle_include(p);
++ }
++}
++
++/*---- comment removal -----------------------------------------------------*/
++
++static void remove_comments(ln,out)
++const char *ln;
++char *out;
++{
++/*
++** Single-pass scanner removing all four comment types, respecting string
++** literals, and trimming trailing whitespace.  Block-comment state carries
++** over to the next line via inCComment / inAceComment.
++*/
++ size_t sLen = strlen(ln);
++ size_t i,oLen;
++ int inString = FALSE;
++ int ch,nx;
++
++ /* fast path: nothing that could start a comment or a string */
++ if (!inCComment && !inAceComment)
++ {
++	int hasSpecial = FALSE;
++	for (i = 0; i < sLen; i++)
++	{
++	 ch = (unsigned char)ln[i];
++	 if (ch=='/' || ch=='{' || ch=='\'' || ch=='"') { hasSpecial=TRUE; break; }
++	}
++	if (!hasSpecial)
++	{
++	 oLen = sLen;
++	 while (oLen > 0 && (ln[oLen-1]==' ' || ln[oLen-1]=='\t')) oLen--;
++	 memcpy(out,ln,oLen);
++	 out[oLen] = '\0';
++	 return;
++	}
++ }
++
++ oLen = 0;
++ i = 0;
++ while (i < sLen)
++ {
++	ch = (unsigned char)ln[i];
++
++	if (inCComment)
++	{
++	 if (ch=='*' && i+1 < sLen && ln[i+1]=='/') { inCComment=FALSE; i+=2; }
++	 else i++;
++	 continue;
++	}
++
++	if (inAceComment)
++	{
++	 if (ch=='}') inAceComment = FALSE;
++	 i++;
++	 continue;
++	}
++
++	if (ch=='"')
++	{
++	 inString = !inString;
++	 out[oLen++] = (char)ch;
++	 i++;
++	 continue;
++	}
++
++	if (!inString)
++	{
++	 if (ch=='/' && i+1 < sLen)
++	 {
++	  nx = (unsigned char)ln[i+1];
++	  if (nx=='*') { inCComment = TRUE; i += 2; continue; }
++	  if (nx=='/') break;			/* rest of line is a comment */
++	 }
++	 if (ch=='{') { inAceComment = TRUE; i++; continue; }
++	 if (ch=='\'') break;			/* rest of line is a comment */
++	}
++
++	out[oLen++] = (char)ch;
++	i++;
++ }
++
++ while (oLen > 0 && (out[oLen-1]==' ' || out[oLen-1]=='\t')) oLen--;
++ out[oLen] = '\0';
++}
++
++/*---- macro replacement ---------------------------------------------------*/
++
++static void replace_macros(ln,out)
++const char *ln;
++char *out;
++{
++/*
++** Token scan: identifiers outside string literals are looked up and, if
++** known, replaced by their value.  Replacement is not recursive - the
++** substituted text is copied out verbatim, never rescanned.
++*/
++ size_t sLen = strlen(ln);
++ size_t i = 0, oLen = 0, start, n, vLen;
++ int inQuote = FALSE;
++ int ch,idx;
++ char tok[MAX_PATH];
++
++ if (macroCount == 0) { strcpy(out,ln); return; }
++
++ while (i < sLen)
++ {
++	ch = (unsigned char)ln[i];
++
++	if (ch=='"')            { inQuote = !inQuote; out[oLen++]=(char)ch; i++; }
++	else if (inQuote)       { out[oLen++]=(char)ch; i++; }
++	else if (is_ident_start(ch))
++	{
++	 start = i;
++	 while (i < sLen && is_ident_char((unsigned char)ln[i])) i++;
++	 n = i - start;
++
++	 if (n < sizeof(tok))
++	 {
++	  memcpy(tok,ln+start,n);
++	  tok[n] = '\0';
++	  idx = macro_find(tok);
++	 }
++	 else idx = -1;
++
++	 if (idx >= 0)
++	 {
++	  vLen = strlen(macroValue[idx]);
++	  if (oLen + vLen > MAX_LINE) vLen = MAX_LINE - oLen;
++	  memcpy(out+oLen,macroValue[idx],vLen);
++	  oLen += vLen;
++	 }
++	 else
++	 {
++	  if (oLen + n > MAX_LINE) n = MAX_LINE - oLen;
++	  memcpy(out+oLen,ln+start,n);
++	  oLen += n;
++	 }
++	}
++	else { out[oLen++]=(char)ch; i++; }
++
++	if (oLen >= MAX_LINE) break;
++ }
++ out[oLen] = '\0';
++}
++
++/*---- main loop -----------------------------------------------------------*/
++
++static int read_line_from_buffer(depth)
++int depth;
++{
++/* copy the next line at inBufPos into rdLineBuf, stripping CR and LF */
++ long startPos = inBufPos[depth];
++ long endPos   = inBufLen[depth];
++ long scanPos,lineLen,copyLen;
++ char *buf = inBuf[depth];
++
++ if (startPos >= endPos) return(FALSE);
++
++ scanPos = startPos;
++ while (scanPos < endPos && buf[scanPos] != '\n') scanPos++;
++
++ lineLen = scanPos - startPos;
++ inBufPos[depth] = (scanPos < endPos) ? scanPos + 1 : scanPos;
++
++ if (lineLen > 0 && buf[startPos+lineLen-1] == '\r') lineLen--;
++
++ copyLen = lineLen;
++ if (copyLen > MAX_LINE) copyLen = MAX_LINE;	/* long lines are truncated */
++ memcpy(rdLineBuf,buf+startPos,(size_t)copyLen);
++ rdLineBuf[copyLen] = '\0';
++ return(TRUE);
++}
++
++static void process_file()
++{
++ char work[MAX_LINE+1];
++ char subst[MAX_LINE+1];
++ const char *line;
++
++ includeDepth = 0;
++ copy_bounded(inclFileName[0],inFile,MAX_PATH);
++ inclLineNum[0] = 0;
++
++ if (!load_file_to_buffer(0)) return;
++
++ for (;;)
++ {
++	if (inBufPos[includeDepth] >= inBufLen[includeDepth]
++	    || !read_line_from_buffer(includeDepth))
++	{
++	 if (includeDepth == 0) break;
++	 includeDepth--;
++	 continue;
++	}
++	inclLineNum[includeDepth]++;
++
++	remove_comments(rdLineBuf,work);
++
++	if (is_directive_line(work)) { handle_directive(work); continue; }
++
++	if (!cachedOutputActive) continue;
++
++	line = work;
++	if (macroCount > 0) { replace_macros(work,subst); line = subst; }
++
++	if (line[0] == '\0')
++	{
++	 if (!lastWasBlank) { output_blank_line(); lastWasBlank = TRUE; }
++	}
++	else { output_line(line); lastWasBlank = FALSE; }
++ }
++
++ if (inCComment)
++ {
++	printf("Error: %s: unterminated C block comment at end of file\n",
++	       inclFileName[0]);
++	exitCode = 10;
++ }
++ if (inAceComment)
++ {
++	printf("Error: %s: unterminated ACE block comment at end of file\n",
++	       inclFileName[0]);
++	exitCode = 10;
++ }
++ if (condDepth > 0)
++ {
++	printf("Error: %s: unterminated #ifdef/#ifndef at end of file\n",
++	       inclFileName[0]);
++	exitCode = 10;
++ }
++
++ flush_output();
++}
++
++/*---- argument parsing ----------------------------------------------------*/
++
++static int parse_args(argc,argv)
++int argc;
++char **argv;
++{
++ int i,nFiles = 0;
++ char rest[MAX_PATH];
++ char *eq;
++ size_t n;
++
++ if (argc < 3) { show_usage(); return(FALSE); }
++
++ for (i = 1; i < argc; i++)
++ {
++	char *a = argv[i];
++
++	if (a[0] != '-')
++	{
++	 nFiles++;
++	 if      (nFiles == 1) copy_bounded(inFile,a,MAX_PATH);
++	 else if (nFiles == 2) copy_bounded(outFile,a,MAX_PATH);
++	 continue;
++	}
++
++	switch (a[1] >= 'a' && a[1] <= 'z' ? a[1] - 'a' + 'A' : a[1])
++	{
++	 case 'H':
++		show_usage();
++		return(FALSE);
++
++	 case 'D':
++		if (a[2] == '\0')
++		   { printf("Error: -D requires a macro name\n"); return(FALSE); }
++		copy_bounded(rest,a+2,sizeof(rest));
++		if ((eq=strchr(rest,'=')) != NULL)
++		   { *eq = '\0'; macro_define(rest,eq+1); }
++		else macro_define(rest,"1");
++		break;
++
++	 case 'U':
++		if (a[2] == '\0')
++		   { printf("Error: -U requires a macro name\n"); return(FALSE); }
++		macro_undef(a+2);
++		break;
++
++	 case 'I':
++		if (a[2] == '\0')
++		   { printf("Error: -I requires a path\n"); return(FALSE); }
++		if (includePathCount >= MAX_INCLUDE_PATHS)
++		{
++		 printf("Error: too many -I paths (max %d)\n",MAX_INCLUDE_PATHS);
++		 return(FALSE);
++		}
++		copy_bounded(rest,a+2,sizeof(rest)-1);
++		n = strlen(rest);
++		if (n > 0 && rest[n-1] != '/' && rest[n-1] != ':') strcat(rest,"/");
++		copy_bounded(includePath[includePathCount],rest,MAX_PATH);
++		includePathCount++;
++		break;
++
++	 default:
++		/* unknown options are ignored, as in the original */
++		break;
++	}
++ }
++
++ if (nFiles < 2)
++ {
++	printf("Error: need input and output file\n");
++	show_usage();
++	return(FALSE);
++ }
++ return(TRUE);
++}
++
++int main(argc,argv)
++int argc;
++char **argv;
++{
++ if (!parse_args(argc,argv)) return(10);
++ process_file();
++ return(exitCode);
++}
+diff --git a/utils/yap/tests/run_tests.sh b/utils/yap/tests/run_tests.sh
+new file mode 100755
+index 0000000..4c6a2ce
+--- /dev/null
++++ b/utils/yap/tests/run_tests.sh
+@@ -0,0 +1,96 @@
++#!/bin/sh
++#
++# YAP test runner - HOST version.
++#
++# The Amiga counterpart is run_tests.rexx; this drives the same test_*.b
++# inputs against the same test_*.expected outputs, so the C port in
++# src/yap/c/yap.c is checked against the behaviour of the ACE BASIC
++# original in utils/yap/yap.b.
++#
++# Usage: ./run_tests.sh [testname]
++#   No args: run all tests
++#   With arg: run only that test (e.g. "comments", "define")
++#
++# Must be run from utils/yap/tests/.
++#
++# YAP=<path> overrides which binary is tested.
++
++set -u
++
++here=$(cd "$(dirname "$0")" && pwd)
++root=$(cd "$here/../../.." && pwd)
++
++case $(uname -s) in
++  Darwin) platform=macos ;;
++  Linux)  platform=linux ;;
++  *)      platform=windows ;;
++esac
++
++YAP=${YAP:-$root/bin/host/$platform/yap}
++
++if [ ! -x "$YAP" ]; then
++    echo "yap not found at $YAP"
++    echo "Build it first: cd src/make && make -f Makefile-host yap"
++    exit 10
++fi
++
++cd "$here" || exit 10
++
++tmp=$(mktemp -d) || exit 10
++trap 'rm -rf "$tmp"' EXIT INT TERM
++
++pass=0
++fail=0
++
++run_test() {
++    name=$1
++    input="$name.b"
++    expected="$name.expected"
++    actual="$tmp/$name.actual"
++
++    if [ ! -f "$expected" ]; then
++        echo "[SKIP] $name (no .expected file)"
++        return
++    fi
++    if [ ! -f "$input" ]; then
++        echo "[SKIP] $name (no .b file)"
++        return
++    fi
++
++    # Same per-test flags as run_tests.rexx
++    case $name in
++        test_cli_define)   set -- -DPLATFORM=AMIGA -UDEBUG ;;
++        test_include_angle) set -- -Iincdir ;;
++        *)                 set -- ;;
++    esac
++
++    if ! "$YAP" "$@" "$input" "$actual" >"$tmp/$name.out" 2>&1; then
++        echo "[FAIL] $name (yap returned $?)"
++        sed 's/^/       /' "$tmp/$name.out"
++        fail=$((fail + 1))
++        return
++    fi
++
++    if diff -u "$expected" "$actual" >"$tmp/$name.diff" 2>&1; then
++        echo "[PASS] $name"
++        pass=$((pass + 1))
++    else
++        echo "[FAIL] $name (output mismatch)"
++        sed 's/^/       /' "$tmp/$name.diff" | head -30
++        fail=$((fail + 1))
++    fi
++}
++
++if [ $# -ge 1 ]; then
++    run_test "test_$1"
++else
++    for e in test_*.expected; do
++        [ -e "$e" ] || continue
++        run_test "${e%.expected}"
++    done
++fi
++
++echo ""
++echo "Results: $pass passed, $fail failed"
++[ "$fail" -eq 0 ] || exit 10
++exit 0

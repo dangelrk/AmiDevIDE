@@ -1,0 +1,141 @@
+# Native-on-Amiga counterpart of Makefile.amiga-cross. The flags mirror
+# Makefile.amiga-cross exactly (which IS fully verified -- both core-objects
+# and the full `app` link succeed clean against the real vbcc/m68k-amigaos
+# toolchain), only the toolchain root and DOS commands differ.
+#
+# Partially verified now: the compile rules below were exercised on the host
+# with ROOT/VBCC/SDK/OBJDIR overridden, and all 29 core objects build clean.
+# What remains untested is everything that needs an actual Amiga -- the
+# makedir/delete recipes, the "vbcc:"/"SDK:" assigns, and the final link.
+#
+# Usage (from an Amiga shell, with the vbcc toolchain installed under the
+# "vbcc:" assign -- see templates/project-makefiles/Makefile.amigaos,
+# and MUI/NDK/MCC/regex under their own "SDK:" assign, NOT vbcc:sdk/ --
+# see INSTALL.md, "AmigaOS nativ", for what has to be copied there):
+#   make -f amiga/Makefile.amiga core-objects   # core/ only, compile-only
+#   make -f amiga/Makefile.amiga app            # full amigaide executable
+#   make -f amiga/Makefile.amiga clean          # remove obj/ and the binary
+#
+# Every object file has its own target: prerequisite line below (deliberately
+# NOT pattern/suffix rules -- explicit per-file rules avoid gnu_make_amiga's
+# one real prerequisite-side gotcha, no wildcard expansion in prerequisites;
+# see AideIDE's own generated Makefiles in aide_makegen.c for the same
+# choice). Automatic variables ($@, $(@D), ...) ARE safe here despite that:
+# the target make for this project is gnu_make_amiga
+# (https://github.com/dmcoles/gnu_make_amiga, GNU Make 4.4.1) -- its port
+# changes the colon-adjacent-to-whitespace parsing heuristic and how
+# recipe commands are executed (SystemTags()/Execute, no Unix shell), not
+# variable expansion, so the full POSIX automatic-variable set works
+# unchanged. (The style here still stays fully-explicit, one-line-per-file,
+# same as the rest of this file -- a deliberate choice now, not a hedge
+# against an unknown make.) Re-running `make -f amiga/Makefile.amiga app`
+# after editing a single .c file now only recompiles that file (and
+# re-links), not all ~30 -- important on real 68k hardware, where a full
+# rebuild is slow enough to matter far more than on the cross-compile host.
+
+VBCC       = vbcc:
+SDK        = SDK:
+CPU        = 68020
+CC         = $(VBCC)bin/vc
+
+ROOT        = /AmigaIDE
+CORE_SRC    = $(ROOT)/core/src
+CORE_VENDOR = $(ROOT)/core/vendor
+CORE_INC    = $(ROOT)/core/include
+AMIGA_SRC   = $(ROOT)/amiga/src
+OBJDIR      = $(ROOT)/amiga/obj
+BINDIR      = $(ROOT)/amiga/bin
+
+RUNTIME_INC = $(VBCC)targets/m68k-amigaos/include
+RUNTIME_LIB = $(VBCC)targets/m68k-amigaos/lib
+NDK_INC     = $(SDK)NDK_3.2/Include_H
+NDK_LIB     = $(SDK)NDK_3.2/lib
+MUI_INC     = $(SDK)MUI_3.8/Developer/C/Include
+MCC_INC     = $(SDK)MCC/Developer/C/include
+REGEX_INC   = $(SDK)regex/include
+REQTOOLS_INC= $(SDK)reqtools/include
+
+CORE_CFLAGS = -c99 -cpu=$(CPU) -O2 -I$(RUNTIME_INC) -I$(CORE_INC) -I$(CORE_VENDOR)
+APP_CFLAGS  = +aos68k -O2 -cpu=$(CPU) \
+              -I$(AMIGA_SRC) -I$(CORE_INC) -I$(CORE_VENDOR) \
+              -I$(MCC_INC) -I$(REGEX_INC) -I$(REQTOOLS_INC) -I$(MUI_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
+
+LDFLAGS  = +aos68k -L$(RUNTIME_LIB) -L$(NDK_LIB) -lmieee
+APP_LIBS = -lamiga
+
+# One list, shared with core/CMakeLists.txt and Makefile.amiga-cross -- see
+# core/sources.mk.  Spelling it out here a third time is what let this file
+# fall behind: it was still missing aide_basicparser.c and
+# aide_basic_keywords.c months after ACE BASIC support landed.
+include $(ROOT)/core/sources.mk
+CORE_OBJECTS = $(addprefix $(OBJDIR)/core_,$(addsuffix .o,$(basename $(notdir $(AIDE_CORE_SOURCES)))))
+
+AMIGA_OBJECTS = $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/mui_stubs.o \
+    $(OBJDIR)/aide_regex_amiga.o $(OBJDIR)/aide_fs_amiga.o \
+    $(OBJDIR)/symbolindex.o $(OBJDIR)/helpwindow.o $(OBJDIR)/disasmwindow.o \
+    $(OBJDIR)/settingswindow.o
+
+TARGET_BIN = $(BINDIR)/amigaide
+
+.PHONY: core-objects app clean
+
+core-objects: $(OBJDIR) $(CORE_OBJECTS)
+
+app: $(OBJDIR) $(BINDIR) $(TARGET_BIN)
+
+$(TARGET_BIN): $(AMIGA_OBJECTS) $(CORE_OBJECTS)
+	$(CC) $(LDFLAGS) -o $(TARGET_BIN) $(AMIGA_OBJECTS) $(CORE_OBJECTS) $(APP_LIBS)
+
+$(OBJDIR):
+	-makedir $(OBJDIR)
+
+$(BINDIR):
+	-makedir $(BINDIR)
+
+$(OBJDIR)/main.o: $(AMIGA_SRC)/app/main.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/main.c -o $(OBJDIR)/main.o
+
+$(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/mainwindow.c -o $(OBJDIR)/mainwindow.o
+
+$(OBJDIR)/prefswindow.o: $(AMIGA_SRC)/app/prefswindow.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/prefswindow.c -o $(OBJDIR)/prefswindow.o
+
+$(OBJDIR)/mui_stubs.o: $(AMIGA_SRC)/mui/mui_stubs.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/mui/mui_stubs.c -o $(OBJDIR)/mui_stubs.o
+
+$(OBJDIR)/aide_regex_amiga.o: $(AMIGA_SRC)/mui/aide_regex_amiga.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/mui/aide_regex_amiga.c -o $(OBJDIR)/aide_regex_amiga.o
+
+$(OBJDIR)/aide_fs_amiga.o: $(AMIGA_SRC)/mui/aide_fs_amiga.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/mui/aide_fs_amiga.c -o $(OBJDIR)/aide_fs_amiga.o
+
+$(OBJDIR)/symbolindex.o: $(AMIGA_SRC)/index/symbolindex.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/index/symbolindex.c -o $(OBJDIR)/symbolindex.o
+
+$(OBJDIR)/helpwindow.o: $(AMIGA_SRC)/help/helpwindow.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/help/helpwindow.c -o $(OBJDIR)/helpwindow.o
+
+$(OBJDIR)/disasmwindow.o: $(AMIGA_SRC)/disasm/disasmwindow.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/disasm/disasmwindow.c -o $(OBJDIR)/disasmwindow.o
+
+$(OBJDIR)/settingswindow.o: $(AMIGA_SRC)/project/settingswindow.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/project/settingswindow.c -o $(OBJDIR)/settingswindow.o
+
+# One explicit target: prerequisite pair per core source, exactly as before --
+# still no pattern rules and no wildcards in prerequisites, which is the point
+# of the fully-explicit style documented at the top of this file.  The only
+# change is that the pairs are emitted from the shared list instead of typed
+# out, so adding a file to core/sources.mk cannot leave this build behind.
+# $(eval) is plain variable expansion, untouched by gnu_make_amiga's parsing
+# and command-execution changes.
+define ACD_CORE_RULE
+$$(OBJDIR)/core_$(basename $(notdir $(1))).o: $$(ROOT)/core/$(1)
+	$$(CC) $$(APP_CFLAGS) -c $$(ROOT)/core/$(1) -o $$(OBJDIR)/core_$(basename $(notdir $(1))).o
+endef
+
+$(foreach src,$(AIDE_CORE_SOURCES),$(eval $(call ACD_CORE_RULE,$(src))))
+
+clean:
+	delete $(OBJDIR) all quiet
+	delete $(BINDIR)/amigaide quiet

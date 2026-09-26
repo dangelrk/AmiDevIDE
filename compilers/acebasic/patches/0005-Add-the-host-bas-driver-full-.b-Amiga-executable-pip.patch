@@ -1,0 +1,1000 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 11:06:28 +0200
+Subject: [PATCH] Add the host bas driver: full .b -> Amiga executable pipeline
+
+bin/bas is an AmigaDOS script that shells out to ARexx for all its string
+handling and to the ACE BASIC binary utils/parseusing for the #using scan,
+so none of it runs on a host.  src/bas/c/bas.c reimplements the driver in
+C, keeping the same stages, flags and link lines, and absorbing
+parseusing.  Tool paths come from $VBCC/config/ace68k, overridable by
+ACE_HOME/ACE_LIB/ACE_INC/ACE_BMAPS/ACE_BIN.
+
+It also translates the AmigaDOS assigns that appear in real sources -
+"REM #using ace:submods/list/list.o" is the standard form and every
+submodule test uses it - onto the configured host directories.  Without
+that no submodule links.
+
+Two bugs in the original are not carried over: it accepted only a single
+option token and -S discarded all the others along with itself
+(bin/bas:112), and its module test matched an 'm' anywhere in the option
+string.  It also works around ace deriving the extension from the FIRST
+dot in a filename (lex.c open_files), which turned "my.prog.b" into
+"my.prog.b.b" - the pipeline runs on a fixed dot-free name in a temp
+directory and restores the real name when copying results back.
+
+Building the whole test corpus exposed one more sign-extension bug that
+-Werror=format could not catch, because the casts were explicit:
+
+  factor.c, control.c, declare.c, parse.c emitted 32-bit hashes via
+  "%lx" with (unsigned long), which sign-extends a negative LONG on LP64.
+  atom, generic_atom, typecase and colon_sep all died in vasm with
+  "immediate operand out of range" on #$ffffffffada7caaa.
+
+Since LONG is `int` on the host and `long` on the Amiga, the format
+conversions now carry explicit C-type casts - (long) with %ld, (unsigned
+long) with %lx - so both compilers agree and neither warns.
+
+Verified on macOS arm64: all 223 non-error cases in verify/tests/cases
+build to AmigaOS executables, all 28 errors/ cases are rejected, the 11
+yap tests pass, submods/list/test_list links against two submodule
+objects into an 82 KB executable, and -S, -m, -Sc, OPTION 2- and dotted
+filenames all behave.  make -f Makefile-host amiga-check still builds.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ src/ace/c/assign.c     |  12 +-
+ src/ace/c/codegen.c    |   2 +-
+ src/ace/c/control.c    |   2 +-
+ src/ace/c/declare.c    |   4 +-
+ src/ace/c/event.c      |   2 +-
+ src/ace/c/factor.c     |   6 +-
+ src/ace/c/gadget.c     |   8 +-
+ src/ace/c/misc.c       |   4 +-
+ src/ace/c/parse.c      |   2 +-
+ src/bas/c/bas.c        | 705 +++++++++++++++++++++++++++++++++++++++++
+ src/make/Makefile-host |   7 +-
+ 11 files changed, 732 insertions(+), 22 deletions(-)
+ create mode 100644 src/bas/c/bas.c
+
+diff --git a/src/ace/c/assign.c b/src/ace/c/assign.c
+index 2b5aa10..951a978 100755
+--- a/src/ace/c/assign.c
++++ b/src/ace/c/assign.c
+@@ -263,7 +263,7 @@ char addrbuf[20],buf[80];
+      in stack frame for other purposes (eg: passing
+      to SUBs, use in factor() etc). 
+    */
+-   sprintf(buf,"#_stringvar%d",string_item->numconst.longnum);
++   sprintf(buf,"#_stringvar%ld",(long)string_item->numconst.longnum);
+    gen("move.l",buf,addrbuf);
+  }
+ 
+@@ -1035,7 +1035,7 @@ do
+       }
+ 
+       /* Compute data bytes: d4 * elem_size */
+-      sprintf(numbuf,"#%d",elem_size);
++      sprintf(numbuf,"#%ld",(long)elem_size);
+       gen("move.l","d4","-(sp)");
+       gen("move.l",numbuf,"-(sp)");
+       gen_rt_call("lmulu");
+@@ -1043,7 +1043,7 @@ do
+       /* d0 = data bytes */
+ 
+       /* Add header size */
+-      sprintf(numbuf,"#%d",header_size);
++      sprintf(numbuf,"#%ld",(long)header_size);
+       gen("add.l",numbuf,"d0");
+ 
+       /* Allocate via _ACEalloc(size, type) */
+@@ -1386,21 +1386,21 @@ FLOAT_BITS u;
+     if (sym == singleconst)
+     {
+      u.f = singleval * signf;
+-     sprintf(fnumbuf,"%x",u.l);
++     sprintf(fnumbuf,"%lx",(unsigned long)u.l);
+      make_data_const(fnumbuf);
+     }
+     else
+      if (sym == longconst)
+      {
+       u.f = (float)longval * signf;
+-      sprintf(fnumbuf,"%x",u.l);
++      sprintf(fnumbuf,"%lx",(unsigned long)u.l);
+       make_data_const(fnumbuf);
+      }
+      else
+      if (sym == shortconst)
+      {
+       u.f = (float)shortval * signf;
+-      sprintf(fnumbuf,"%x",u.l);
++      sprintf(fnumbuf,"%lx",(unsigned long)u.l);
+       make_data_const(fnumbuf);
+      }
+      else _error(26);  /* constant expected */
+diff --git a/src/ace/c/codegen.c b/src/ace/c/codegen.c
+index 209748a..4ca507c 100644
+--- a/src/ace/c/codegen.c
++++ b/src/ace/c/codegen.c
+@@ -236,7 +236,7 @@ LONG elem_size;
+  else
+  {
+   /* string or other: use multiplication */
+-  sprintf(buf, "#%d", elem_size);
++  sprintf(buf, "#%ld", (long)elem_size);
+   gen("move.l", "d7", "-(sp)");
+   gen("move.l", buf, "-(sp)");
+   gen_rt_call("lmulu");
+diff --git a/src/ace/c/control.c b/src/ace/c/control.c
+index 8e43102..376437b 100755
+--- a/src/ace/c/control.c
++++ b/src/ace/c/control.c
+@@ -583,7 +583,7 @@ LONG  hash;
+ 
+    /* emit ISA check */
+    gen("movea.l", tempbuf, "a0");
+-   sprintf(hashbuf, "#$%lx", (unsigned long)hash);
++   sprintf(hashbuf, "#$%lx", (unsigned long)(ULONG)hash);
+    gen("move.l", hashbuf, "d0");
+    enter_XREF("_isa_check");
+    gen("jsr", "_isa_check", "  ");
+diff --git a/src/ace/c/declare.c b/src/ace/c/declare.c
+index d215661..f294267 100755
+--- a/src/ace/c/declare.c
++++ b/src/ace/c/declare.c
+@@ -543,11 +543,11 @@ else
+   sprintf(desc_label,"_CLASSDESC_%s:",classdef_item->name);
+   if (parent_item != NULL)
+    sprintf(desc_literal,"dc.l $%lx,_CLASSDESC_%s",
+-           (unsigned long)classdef_item->numconst.longnum,
++           (unsigned long)(ULONG)classdef_item->numconst.longnum,
+            parent_item->name);
+   else
+    sprintf(desc_literal,"dc.l $%lx,0",
+-           (unsigned long)classdef_item->numconst.longnum);
++           (unsigned long)(ULONG)classdef_item->numconst.longnum);
+   enter_DATA(desc_label,desc_literal);
+ 
+   /* don't want to free memory if no member list! */
+diff --git a/src/ace/c/event.c b/src/ace/c/event.c
+index 88bbe2b..cd9724e 100755
+--- a/src/ace/c/event.c
++++ b/src/ace/c/event.c
+@@ -130,7 +130,7 @@ char  theLabel[80];
+        case singleconst : timer_event_seconds=singleval; break;
+       }
+       u.f = timer_event_seconds;
+-      sprintf(ontimer_seconds,"#$%x",u.l);
++      sprintf(ontimer_seconds,"#$%lx",(unsigned long)u.l);
+      }
+      insymbol();
+      if (sym != rparen) _error(9);       
+diff --git a/src/ace/c/factor.c b/src/ace/c/factor.c
+index ef514fe..cb11e91 100755
+--- a/src/ace/c/factor.c
++++ b/src/ace/c/factor.c
+@@ -419,14 +419,14 @@ SYM  *invoke_item;
+                      insymbol();
+                      return(ftype);
+ 
+-  case longconst   : sprintf(numbuf,"#%d",longval);
++  case longconst   : sprintf(numbuf,"#%ld",(long)longval);
+        		     gen("move.l",numbuf,"-(sp)");
+                      ftype=typ;
+                      insymbol();
+                      return(ftype);
+ 
+   case singleconst : { FLOAT_BITS u; u.f = singleval;
+-		       sprintf(numbuf,"#$%x",u.l); }
++		       sprintf(numbuf,"#$%lx",(unsigned long)u.l); }
+        		     gen("move.l",numbuf,"-(sp)");
+                      ftype=typ;
+        		     insymbol();
+@@ -437,7 +437,7 @@ SYM  *invoke_item;
+        		     insymbol();
+                      return(ftype);
+ 
+-  case atomconst   : sprintf(numbuf,"#$%lx",(unsigned long)atomval);
++  case atomconst   : sprintf(numbuf,"#$%lx",(unsigned long)(ULONG)atomval);
+                      gen("move.l",numbuf,"-(sp)");
+                      ftype=atomtype;
+                      insymbol();
+diff --git a/src/ace/c/gadget.c b/src/ace/c/gadget.c
+index a11ab67..4cb1dc7 100755
+--- a/src/ace/c/gadget.c
++++ b/src/ace/c/gadget.c
+@@ -647,13 +647,13 @@ int  gtype;
+ 					    gen("move.l", "(a0)",
+ 						"-(sp)");
+ 					    /* Push num_elements */
+-					    sprintf(numbuf, "#%d",
+-						    nelem);
++					    sprintf(numbuf, "#%ld",
++						    (long)nelem);
+ 					    gen("move.l", numbuf,
+ 						"-(sp)");
+ 					    /* Push element_size */
+-					    sprintf(numbuf, "#%d",
+-						    elemsz);
++					    sprintf(numbuf, "#%ld",
++						    (long)elemsz);
+ 					    gen("move.l", numbuf,
+ 						"-(sp)");
+ 					    gen_rt_call("_BuildGTLabels");
+diff --git a/src/ace/c/misc.c b/src/ace/c/misc.c
+index a334569..ad9f228 100755
+--- a/src/ace/c/misc.c
++++ b/src/ace/c/misc.c
+@@ -174,7 +174,7 @@ void make_label_from_linenum(int intconst, char *buf)
+  switch(intconst)
+  {
+   case shortconst : sprintf(buf,"_LINE%d",shortval); break;
+-  case longconst  : sprintf(buf,"_LINE%d",longval); break;
++  case longconst  : sprintf(buf,"_LINE%ld",(long)longval); break;
+  }
+ }
+ 
+@@ -314,7 +314,7 @@ char buf[40],numbuf[40];
+   case shorttype  : itoa(item->numconst.shortnum,buf,10); break;
+   case longtype   : ltoa(item->numconst.longnum,buf,10); break;
+   case singletype : { FLOAT_BITS u; u.f = item->numconst.singlenum;
+-                      sprintf(buf,"%x",u.l); }
++                      sprintf(buf,"%lx",(unsigned long)u.l); }
+                     strcat(numbuf,"$");
+   		    break;
+  }
+diff --git a/src/ace/c/parse.c b/src/ace/c/parse.c
+index ec3de8e..75f62ed 100755
+--- a/src/ace/c/parse.c
++++ b/src/ace/c/parse.c
+@@ -560,7 +560,7 @@ int  i, j;
+   /* emit hashes for each dispatched position */
+   for (j = 0; j < dispatch_count; j++)
+   {
+-   sprintf(buf, "$%lx", (unsigned long)on_hashes[i][j]);
++   sprintf(buf, "$%lx", (unsigned long)(ULONG)on_hashes[i][j]);
+    gen("dc.l", buf, "  ");
+   }
+   /* emit method address (relocation — vasm resolves at link time) */
+diff --git a/src/bas/c/bas.c b/src/bas/c/bas.c
+new file mode 100644
+index 0000000..7f3133c
+--- /dev/null
++++ b/src/bas/c/bas.c
+@@ -0,0 +1,705 @@
++/*
++** bas - ACE BASIC compile driver (host port)
++**
++** Runs the full pipeline on macOS / Linux / Windows:
++**
++**     prog.b -> yap -> ace -> vasmm68k_mot -> vlink -> prog
++**
++** The Amiga original (bin/bas) is an AmigaDOS script that shells out to
++** ARexx for every piece of string handling and to a separate ACE BASIC
++** binary (utils/parseusing) for the #using scan.  None of that exists on a
++** host, so this reimplements the whole driver in C.  The pipeline, the flags
++** and the link lines are the same.
++**
++** Two things the original gets wrong are fixed here:
++**   - it only accepted a single option token, and -S silently discarded
++**     every other option along with itself (bin/bas:112)
++**   - its `pos('m', ...)` module test matched an 'm' anywhere in the option
++**     string
++**
++** Usage:
++**   bas [options] sourcefile[.b] [extra.o ...]
++**
++** Options are passed to ace, except -S which is handled here:
++**   -S   stop after ace and keep the .s
++**   -m   compile as a module: stop after assembling and keep the .o
++**   -2 -b -c -E -i -l -O -t -w   see ace -h
++**
++** Configuration is looked up in this order:
++**   1. environment: ACE_HOME, ACE_LIB, ACE_INC, ACE_BMAPS, ACE_BIN
++**   2. $VBCC/config/ace68k          (key=value, one per line)
++**   3. defaults derived from $VBCC
++*/
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <ctype.h>
++
++#ifdef _WIN32
++#include <process.h>
++#include <direct.h>
++#define PATHSEP '\\'
++#else
++#include <unistd.h>
++#include <sys/wait.h>
++#include <sys/stat.h>
++#define PATHSEP '/'
++#endif
++
++#define MAXPATH     1024
++#define MAXARGS     64
++#define MAXOPTS     32
++#define MAXEXTRA    32
++
++/* ---- resolved configuration ---- */
++static char cfg_yap[MAXPATH];
++static char cfg_ace[MAXPATH];
++static char cfg_vasm[MAXPATH];
++static char cfg_vlink[MAXPATH];
++static char cfg_lib[MAXPATH];
++static char cfg_inc[MAXPATH];
++static char cfg_bmaps[MAXPATH];
++static char cfg_home[MAXPATH];
++
++static int verbose = 0;
++static int keep_temps = 0;
++
++/*--------------------------------------------------------------------------*/
++
++static void die(msg,arg)
++const char *msg;
++const char *arg;
++{
++ if (arg != NULL) fprintf(stderr,"bas: %s: %s\n",msg,arg);
++ else             fprintf(stderr,"bas: %s\n",msg);
++ exit(10);
++}
++
++static void set_str(dst,src)
++char *dst;
++const char *src;
++{
++ size_t n = strlen(src);
++
++ if (n >= MAXPATH) die("path too long",src);
++ memcpy(dst,src,n+1);
++}
++
++static void join2(dst,a,b)
++char *dst;
++const char *a;
++const char *b;
++{
++ if (strlen(a) + 1 + strlen(b) + 1 > MAXPATH) die("path too long",a);
++ strcpy(dst,a);
++ if (*a != '\0' && a[strlen(a)-1] != '/' && a[strlen(a)-1] != '\\')
++ {
++	size_t n = strlen(dst);
++	dst[n] = PATHSEP;
++	dst[n+1] = '\0';
++ }
++ strcat(dst,b);
++}
++
++static int file_exists(path)
++const char *path;
++{
++ FILE *f = fopen(path,"rb");
++
++ if (f == NULL) return(0);
++ fclose(f);
++ return(1);
++}
++
++/*---- configuration -------------------------------------------------------*/
++
++static void trim(s)
++char *s;
++{
++ char *p = s;
++ size_t n;
++
++ while (*p == ' ' || *p == '\t') p++;
++ if (p != s) memmove(s,p,strlen(p)+1);
++ n = strlen(s);
++ while (n > 0 && (s[n-1]==' '||s[n-1]=='\t'||s[n-1]=='\r'||s[n-1]=='\n')) s[--n]='\0';
++}
++
++static void read_config(path)
++const char *path;
++{
++/* key=value, one per line; # starts a comment.  Missing file is not an error. */
++ FILE *f = fopen(path,"r");
++ char line[MAXPATH*2];
++
++ if (f == NULL) return;
++ if (verbose) fprintf(stderr,"bas: reading config %s\n",path);
++
++ while (fgets(line,sizeof(line),f) != NULL)
++ {
++	char *eq,*key,*val;
++
++	if ((eq=strchr(line,'#')) != NULL) *eq = '\0';
++	if ((eq=strchr(line,'=')) == NULL) continue;
++	*eq = '\0';
++	key = line;
++	val = eq+1;
++	trim(key);
++	trim(val);
++	if (*key == '\0' || *val == '\0') continue;
++
++	if      (strcmp(key,"yap")     == 0) set_str(cfg_yap,val);
++	else if (strcmp(key,"ace")     == 0) set_str(cfg_ace,val);
++	else if (strcmp(key,"vasm")    == 0) set_str(cfg_vasm,val);
++	else if (strcmp(key,"vlink")   == 0) set_str(cfg_vlink,val);
++	else if (strcmp(key,"libdir")  == 0) set_str(cfg_lib,val);
++	else if (strcmp(key,"incdir")  == 0) set_str(cfg_inc,val);
++	else if (strcmp(key,"bmapdir") == 0) set_str(cfg_bmaps,val);
++	else if (strcmp(key,"homedir") == 0) set_str(cfg_home,val);
++ }
++ fclose(f);
++}
++
++static void env_override(dst,name)
++char *dst;
++const char *name;
++{
++ const char *v = getenv(name);
++
++ if (v != NULL && *v != '\0') set_str(dst,v);
++}
++
++static void configure()
++{
++ const char *vbcc = getenv("VBCC");
++ char path[MAXPATH];
++ char bindir[MAXPATH];
++
++ /* 2. config file */
++ if (vbcc != NULL && *vbcc != '\0')
++ {
++	join2(path,vbcc,"config");
++	join2(path,path,"ace68k");
++	read_config(path);
++ }
++
++ /* 3. defaults derived from $VBCC, for anything still unset */
++ if (vbcc != NULL && *vbcc != '\0')
++ {
++	join2(bindir,vbcc,"bin");
++	if (cfg_yap[0]   == '\0') join2(cfg_yap,bindir,"yap");
++	if (cfg_ace[0]   == '\0') join2(cfg_ace,bindir,"ace");
++	if (cfg_vasm[0]  == '\0') join2(cfg_vasm,bindir,"vasmm68k_mot");
++	if (cfg_vlink[0] == '\0') join2(cfg_vlink,bindir,"vlink");
++	if (cfg_home[0]  == '\0')
++	{
++	 join2(path,vbcc,"sdk");
++	 join2(cfg_home,path,"ACE");
++	}
++ }
++ if (cfg_home[0] != '\0')
++ {
++	if (cfg_lib[0]   == '\0') join2(cfg_lib,cfg_home,"lib");
++	if (cfg_inc[0]   == '\0') join2(cfg_inc,cfg_home,"include");
++	if (cfg_bmaps[0] == '\0') join2(cfg_bmaps,cfg_home,"bmaps");
++ }
++
++ /* 1. environment wins over everything */
++ env_override(cfg_home,"ACE_HOME");
++ env_override(cfg_lib,"ACE_LIB");
++ env_override(cfg_inc,"ACE_INC");
++ env_override(cfg_bmaps,"ACE_BMAPS");
++
++ if (getenv("ACE_BIN") != NULL && *getenv("ACE_BIN") != '\0')
++ {
++	const char *b = getenv("ACE_BIN");
++	join2(cfg_yap,b,"yap");
++	join2(cfg_ace,b,"ace");
++ }
++
++ if (cfg_ace[0] == '\0')
++    die("cannot locate ace - set VBCC, or ACE_BIN, or $VBCC/config/ace68k",NULL);
++}
++
++static void export_env()
++{
++/* the children read these; ace for .bmap and icon lookup, yap for <> includes */
++#ifdef _WIN32
++ char buf[MAXPATH*2];
++ if (cfg_bmaps[0]) { sprintf(buf,"ACE_BMAPS=%s",cfg_bmaps); _putenv(buf); }
++ if (cfg_inc[0])   { sprintf(buf,"ACE_INC=%s",cfg_inc);     _putenv(buf); }
++ if (cfg_home[0])  { sprintf(buf,"ACE_HOME=%s",cfg_home);   _putenv(buf); }
++#else
++ if (cfg_bmaps[0]) setenv("ACE_BMAPS",cfg_bmaps,1);
++ if (cfg_inc[0])   setenv("ACE_INC",cfg_inc,1);
++ if (cfg_home[0])  setenv("ACE_HOME",cfg_home,1);
++#endif
++}
++
++/*---- running tools -------------------------------------------------------*/
++
++static int run_tool(argv)
++char **argv;
++{
++ int i;
++
++ if (verbose)
++ {
++	fprintf(stderr,"bas:");
++	for (i = 0; argv[i] != NULL; i++) fprintf(stderr," %s",argv[i]);
++	fprintf(stderr,"\n");
++ }
++
++#ifdef _WIN32
++ return((int)_spawnv(_P_WAIT,argv[0],(const char * const *)argv));
++#else
++ {
++  pid_t pid = fork();
++  int status;
++
++  if (pid < 0) die("fork failed",NULL);
++  if (pid == 0)
++  {
++	execv(argv[0],argv);
++	fprintf(stderr,"bas: cannot run %s\n",argv[0]);
++	_exit(127);
++  }
++  if (waitpid(pid,&status,0) < 0) die("waitpid failed",NULL);
++  if (WIFEXITED(status))   return(WEXITSTATUS(status));
++  if (WIFSIGNALED(status))
++  {
++	fprintf(stderr,"bas: %s killed by signal %d\n",argv[0],WTERMSIG(status));
++	return(20);
++  }
++  return(20);
++ }
++#endif
++}
++
++/*---- AmigaDOS assign translation -----------------------------------------*/
++
++static int prefix_ci(s,pfx)
++const char *s;
++const char *pfx;
++{
++ size_t i;
++
++ for (i = 0; pfx[i] != '\0'; i++)
++     if (tolower((unsigned char)s[i]) != tolower((unsigned char)pfx[i]))
++	return(0);
++ return(1);
++}
++
++static void translate_assign(dst,src)
++char *dst;
++const char *src;
++{
++/*
++** Existing sources reference objects and libraries through AmigaDOS
++** assigns - "REM #using ace:submods/list/list.o" is the standard form and
++** every submodule test uses it.  There are no assigns on a host, so map the
++** four ACE ones onto the configured directories.  Anything else is passed
++** through untouched.
++*/
++ /* longest first, so "aceinclude:" is not eaten by "ace:" */
++ static const char *assigns[] =
++	{ "acesubmods:","aceinclude:","acebmaps:","acelib:","ace:",NULL };
++ char submods[MAXPATH];
++ const char *base;
++ int i;
++
++ for (i = 0; assigns[i] != NULL; i++)
++ {
++	if (!prefix_ci(src,assigns[i])) continue;
++
++	if      (i == 0) { join2(submods,cfg_home,"submods"); base = submods; }
++	else if (i == 1) base = cfg_inc;
++	else if (i == 2) base = cfg_bmaps;
++	else if (i == 3) base = cfg_lib;
++	else             base = cfg_home;
++
++	if (base == NULL || *base == '\0') break;   /* unconfigured: leave as-is */
++
++	join2(dst,base,src + strlen(assigns[i]));
++	if (verbose) fprintf(stderr,"bas: %s -> %s\n",src,dst);
++	return;
++ }
++
++ set_str(dst,src);
++}
++
++/*---- source scanning -----------------------------------------------------*/
++
++static void upcase(dst,src,size)
++char *dst;
++const char *src;
++size_t size;
++{
++ size_t i;
++
++ for (i = 0; i+1 < size && src[i] != '\0'; i++)
++     dst[i] = (char)toupper((unsigned char)src[i]);
++ dst[i] = '\0';
++}
++
++static int scan_source(srcpath,is68k,extra,nextra,maxextra)
++const char *srcpath;
++int *is68k;
++char extra[][MAXPATH];
++int *nextra;
++int maxextra;
++{
++/*
++** One pass over the head of the source, replacing two things the AmigaDOS
++** script farmed out: the parseusing binary (REM #using, first 20 lines) and
++** an ARexx one-liner looking for OPTION 2- (first 50 lines).
++*/
++ FILE *f = fopen(srcpath,"r");
++ char line[2048],up[2048];
++ int lineno = 0;
++
++ *is68k = 0;
++ if (f == NULL) return(0);
++
++ while (lineno < 50 && fgets(line,sizeof(line),f) != NULL)
++ {
++	char *p;
++
++	lineno++;
++	upcase(up,line,sizeof(up));
++
++	if (strstr(up,"OPTION") != NULL && strstr(up,"2-") != NULL) *is68k = 1;
++
++	if (lineno <= 20 && (p=strstr(up,"#USING")) != NULL)
++	{
++	 char *q = line + (p - up) + 6;		/* same offset in the raw line */
++
++	 while (*q == ' ' || *q == '\t') q++;
++	 trim(q);
++	 if (*q != '\0')
++	 {
++	  if (*nextra >= maxextra) die("too many #using objects",srcpath);
++	  translate_assign(extra[*nextra],q);
++	  (*nextra)++;
++	 }
++	}
++ }
++ fclose(f);
++ return(1);
++}
++
++/*---- temp directory ------------------------------------------------------*/
++
++static char tmpdir[MAXPATH];
++
++static void make_tmpdir()
++{
++#ifdef _WIN32
++ const char *base = getenv("TEMP");
++ static char tmpl[MAXPATH];
++ int i;
++
++ if (base == NULL || *base == '\0') base = ".";
++ for (i = 0; i < 1000; i++)
++ {
++	sprintf(tmpl,"%s%cbas%d_%d",base,PATHSEP,(int)_getpid(),i);
++	if (_mkdir(tmpl) == 0) { set_str(tmpdir,tmpl); return; }
++ }
++ die("cannot create temporary directory",NULL);
++#else
++ static char tmpl[MAXPATH];
++ const char *base = getenv("TMPDIR");
++
++ if (base == NULL || *base == '\0') base = "/tmp";
++ if (strlen(base) + 12 >= MAXPATH) die("TMPDIR too long",base);
++ sprintf(tmpl,"%s/basXXXXXX",base);
++ if (mkdtemp(tmpl) == NULL) die("cannot create temporary directory",NULL);
++ set_str(tmpdir,tmpl);
++#endif
++}
++
++static void remove_tmpdir()
++{
++ char path[MAXPATH];
++ static const char *ext[] = { ".b",".s",".o",".info","",NULL };
++ int i;
++
++ if (keep_temps) { fprintf(stderr,"bas: keeping %s\n",tmpdir); return; }
++ if (tmpdir[0] == '\0') return;
++
++ for (i = 0; ext[i] != NULL; i++)
++ {
++	sprintf(path,"%s%cwork%s",tmpdir,PATHSEP,ext[i]);
++	remove(path);
++ }
++#ifdef _WIN32
++ _rmdir(tmpdir);
++#else
++ rmdir(tmpdir);
++#endif
++}
++
++/*---- file copy -----------------------------------------------------------*/
++
++static int copy_file(from,to)
++const char *from;
++const char *to;
++{
++ FILE *in,*out;
++ char buf[8192];
++ size_t n;
++
++ if ((in=fopen(from,"rb")) == NULL) return(0);
++ if ((out=fopen(to,"wb")) == NULL) { fclose(in); return(0); }
++ while ((n=fread(buf,1,sizeof(buf),in)) > 0)
++	if (fwrite(buf,1,n,out) != n) { fclose(in); fclose(out); return(0); }
++ fclose(in);
++ fclose(out);
++ return(1);
++}
++
++/*---- usage ---------------------------------------------------------------*/
++
++static void usage()
++{
++ printf("bas - ACE BASIC compile driver\n");
++ printf("Usage: bas [options] sourcefile[.b] [extra.o ...]\n");
++ printf("\n");
++ printf("Driver options:\n");
++ printf("  -S            Compile to assembly only, keep <source>.s\n");
++ printf("  -v            Show each tool invocation\n");
++ printf("  -k            Keep the temporary directory\n");
++ printf("  -h            This help\n");
++ printf("\n");
++ printf("Passed through to ace:\n");
++ printf("  -2 -b -c -E -i -l -m -O -t -w   (see ace without arguments)\n");
++ printf("\n");
++ printf("  -m compiles a module: stops after assembling and keeps <source>.o\n");
++ printf("\n");
++ printf("REM #using <path.o> in the first 20 lines adds objects to the link.\n");
++ printf("OPTION 2- in the first 50 lines selects the 68000 runtime.\n");
++}
++
++/*--------------------------------------------------------------------------*/
++
++int main(argc,argv)
++int argc;
++char **argv;
++{
++ char aceopts[MAXOPTS];		/* collected ace option letters */
++ char optarg_buf[MAXOPTS+2];
++ char extra[MAXEXTRA][MAXPATH];
++ char srcpath[MAXPATH];		/* source as given, with .b */
++ char srcbase[MAXPATH];		/* source without the .b extension */
++ char workbase[MAXPATH];	/* <tmpdir>/work - safe name for ace */
++ char path[MAXPATH],path2[MAXPATH];
++ char *targv[MAXARGS];
++ int  nopts = 0, nextra = 0, nargs;
++ int  asm_only = 0, module = 0, is68k = 0;
++ int  i,rc;
++ const char *src = NULL;
++ size_t n;
++
++ for (i = 1; i < argc; i++)
++ {
++	char *a = argv[i];
++
++	if (a[0] == '-' && a[1] != '\0')
++	{
++	 char *p;
++
++	 for (p = a+1; *p != '\0'; p++)
++	 {
++	  switch (*p)
++	  {
++	   case 'S': asm_only = 1; break;
++	   case 'v': verbose = 1; break;
++	   case 'k': keep_temps = 1; break;
++	   case 'h': usage(); return(0);
++	   case 'm':
++		module = 1;
++		/* fall through: ace needs to see -m too */
++	   default:
++		if (nopts >= MAXOPTS-1) die("too many options",a);
++		aceopts[nopts++] = *p;
++		break;
++	  }
++	 }
++	 continue;
++	}
++
++	if (src == NULL) src = a;
++	else
++	{
++	 /* extra objects, comma- or space-separated */
++	 char buf[MAXPATH],*tok;
++
++	 set_str(buf,a);
++	 for (tok = strtok(buf,","); tok != NULL; tok = strtok(NULL,","))
++	 {
++	  trim(tok);
++	  if (*tok == '\0') continue;
++	  if (nextra >= MAXEXTRA) die("too many extra objects",a);
++	  /* translated below, once configure() has resolved the directories */
++	  set_str(extra[nextra++],tok);
++	 }
++	}
++ }
++ aceopts[nopts] = '\0';
++
++ if (src == NULL) { usage(); return(10); }
++
++ configure();
++ export_env();
++
++ /* extra objects from the command line may use AmigaDOS assigns too */
++ for (i = 0; i < nextra; i++)
++ {
++	char raw[MAXPATH];
++	set_str(raw,extra[i]);
++	translate_assign(extra[i],raw);
++ }
++
++ /* ---- work out srcpath (.b) and srcbase (no extension) ---- */
++ set_str(srcbase,src);
++ n = strlen(srcbase);
++ if (n > 2 && strcmp(srcbase+n-2,".b") == 0) srcbase[n-2] = '\0';
++ else if (n > 4 && strcmp(srcbase+n-4,".bas") == 0) srcbase[n-4] = '\0';
++
++ if (strlen(srcbase) + 3 >= MAXPATH) die("path too long",src);
++ sprintf(srcpath,"%s.b",srcbase);
++ if (!file_exists(srcpath)) die("cannot open source file",srcpath);
++
++ scan_source(srcpath,&is68k,extra,&nextra,MAXEXTRA);
++ if (nextra > 0 && verbose)
++ {
++	fprintf(stderr,"bas: extra objects:");
++	for (i = 0; i < nextra; i++) fprintf(stderr," %s",extra[i]);
++	fprintf(stderr,"\n");
++ }
++
++ make_tmpdir();
++ sprintf(workbase,"%s%cwork",tmpdir,PATHSEP);
++
++ /*
++ ** ace derives the extension from the FIRST dot in the name (lex.c
++ ** open_files), so "my.prog.b" would become "my.prog.b.b".  Working on a
++ ** fixed dot-free name in the temp directory sidesteps that entirely; the
++ ** real output name is restored when we copy the results back.
++ */
++
++ /* ---- 1. preprocess ---- */
++ nargs = 0;
++ targv[nargs++] = cfg_yap;
++ sprintf(path,"%s.b",workbase);
++ targv[nargs++] = srcpath;
++ targv[nargs++] = path;
++ targv[nargs]   = NULL;
++ if ((rc=run_tool(targv)) != 0) { remove_tmpdir(); return(rc); }
++
++ /* ---- 2. compile ---- */
++ nargs = 0;
++ targv[nargs++] = cfg_ace;
++ if (nopts > 0)
++ {
++	sprintf(optarg_buf,"-%s",aceopts);
++	targv[nargs++] = optarg_buf;
++ }
++ targv[nargs++] = workbase;		/* ace appends .b itself */
++ targv[nargs]   = NULL;
++ if ((rc=run_tool(targv)) != 0) { remove_tmpdir(); return(rc); }
++
++ sprintf(path,"%s.s",workbase);
++ if (!file_exists(path))
++    { fprintf(stderr,"bas: ace produced no assembly output\n");
++      remove_tmpdir(); return(10); }
++
++ if (asm_only)
++ {
++	sprintf(path2,"%s.s",srcbase);
++	if (!copy_file(path,path2)) die("cannot write",path2);
++	remove_tmpdir();
++	return(0);
++ }
++
++ /* ---- 3. assemble ---- */
++ nargs = 0;
++ targv[nargs++] = cfg_vasm;
++ targv[nargs++] = "-Fhunk";
++ targv[nargs++] = "-o";
++ sprintf(path2,"%s.o",workbase);
++ targv[nargs++] = path2;
++ targv[nargs++] = path;			/* work.s */
++ targv[nargs]   = NULL;
++ if ((rc=run_tool(targv)) != 0) { remove_tmpdir(); return(rc); }
++
++ if (module)
++ {
++	sprintf(path,"%s.o",srcbase);
++	if (!copy_file(path2,path)) die("cannot write",path);
++	remove_tmpdir();
++	return(0);
++ }
++
++ /* ---- 4. link ---- */
++ {
++  char libs[6][MAXPATH];
++  int  nlibs = 0;
++
++  if (is68k)
++  {
++	join2(libs[nlibs++],cfg_lib,"68000/startup.lib");
++	join2(libs[nlibs++],cfg_lib,"68000/db.lib");
++	join2(libs[nlibs++],cfg_lib,"amiga.lib");
++	join2(libs[nlibs++],cfg_lib,"vc.lib");
++	if (verbose) fprintf(stderr,"bas: OPTION 2- found, linking for 68000\n");
++  }
++  else
++  {
++	join2(libs[nlibs++],cfg_lib,"startup.lib");
++	join2(libs[nlibs++],cfg_lib,"db.lib");
++	join2(libs[nlibs++],cfg_lib,"amiga.lib");
++  }
++
++  for (i = 0; i < nlibs; i++)
++      if (!file_exists(libs[i])) die("runtime library not found",libs[i]);
++
++  nargs = 0;
++  targv[nargs++] = cfg_vlink;
++  targv[nargs++] = "-bamigahunk";
++  targv[nargs++] = "-x";
++  targv[nargs++] = "-Bstatic";
++  targv[nargs++] = "-nostdlib";
++  targv[nargs++] = "-mrel";
++  targv[nargs++] = "-s";
++  targv[nargs++] = "-o";
++  targv[nargs++] = workbase;
++  targv[nargs++] = path2;		/* work.o */
++  for (i = 0; i < nextra; i++)
++  {
++	if (nargs >= MAXARGS-8) die("too many link inputs",NULL);
++	targv[nargs++] = extra[i];
++  }
++  for (i = 0; i < nlibs; i++) targv[nargs++] = libs[i];
++  targv[nargs] = NULL;
++
++  if ((rc=run_tool(targv)) != 0) { remove_tmpdir(); return(rc); }
++ }
++
++ /* ---- 5. bring the results back ---- */
++ if (!copy_file(workbase,srcbase)) die("cannot write",srcbase);
++#ifndef _WIN32
++ chmod(srcbase,0755);
++#endif
++
++ sprintf(path,"%s.info",workbase);
++ if (file_exists(path))
++ {
++	sprintf(path2,"%s.info",srcbase);
++	copy_file(path,path2);
++ }
++
++ remove_tmpdir();
++ return(0);
++}
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index bdefb10..67e21c0 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -126,11 +126,12 @@ ACE_OBJECTS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(ACE_SOURCES))
+ 
+ .PHONY: all ace yap bas clean rebuild install info help dirs amiga-check
+ 
+-all: ace yap
++all: ace yap bas
+ 	@echo "Host build complete: $(BUILD_DIR)"
+ 
+ ace: dirs $(ACE_BIN)
+ yap: dirs $(YAP_BIN)
++bas: dirs $(BAS_BIN)
+ 
+ $(ACE_BIN): $(ACE_OBJECTS)
+ 	$(ECHO) "Linking ace..."
+@@ -144,6 +145,10 @@ $(YAP_BIN): $(YAP_SRC_DIR)/yap.c
+ 	$(ECHO) "Compiling+linking yap..."
+ 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(LDLIBS)
+ 
++$(BAS_BIN): $(BAS_SRC_DIR)/bas.c
++	$(ECHO) "Compiling+linking bas..."
++	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(LDLIBS)
++
+ dirs:
+ 	$(Q)mkdir -p $(OBJ_DIR)
+ 

@@ -1,0 +1,276 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 17:08:59 +0200
+Subject: [PATCH] Stamp every binary with version, build number and compile
+ date
+
+ace, yap and bas now all report which build they are, so a binary sitting
+in ~/Dev/amiga/bin can be identified without guessing.  yap and bas had no
+version output at all before; both gained -V, and ace's banner carries the
+stamp.
+
+The build number is the git commit count with a trailing '+' when the
+working tree is dirty, and the date is today's.  Both come from the build
+system as -D defines rather than from a file that is rewritten on each
+build, so recompiling never dirties the repository, and both fall back to
+"0"/__DATE__ outside a git checkout -- which is what a native Amiga build
+from an unpacked archive gets.
+
+ver.o alone is forced to rebuild each time: it carries the stamp, which
+comes from flags make cannot see change.  One tiny translation unit; the
+other thirty still build incrementally.
+
+Version raised to 3.1.0 -- the host cross-compiler is a feature, not a
+patch.  VERSION said 3.0.0 while ver.c said 3.0.1; both now agree.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ VERSION                |  2 +-
+ src/ace/c/parse.c      |  3 ++-
+ src/ace/c/ver.c        | 39 ++++++++++++++++++++++++++++++++-------
+ src/bas/c/bas.c        | 22 +++++++++++++++++++++-
+ src/make/Makefile-host | 22 ++++++++++++++++++++++
+ src/yap/c/yap.c        | 23 ++++++++++++++++++++++-
+ 6 files changed, 100 insertions(+), 11 deletions(-)
+
+diff --git a/VERSION b/VERSION
+index 4a36342..fd2a018 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-3.0.0
++3.1.0
+diff --git a/src/ace/c/parse.c b/src/ace/c/parse.c
+index 7712097..0772c8a 100755
+--- a/src/ace/c/parse.c
++++ b/src/ace/c/parse.c
+@@ -96,6 +96,7 @@ extern	LONG	atomval;
+ 
+ /* external functions */
+ char	*version();
++char	*version_full();
+ 
+ /* functions */
+ void method_block()
+@@ -1225,7 +1226,7 @@ char *source_name,*dest_name;
+ 
+ void show_title()
+ {
+- printf("ACE Amiga BASIC Compiler version %s, copyright ",version());
++ printf("ACE Amiga BASIC Compiler version %s, copyright ",version_full());
+  putchar(169);  /* copyright symbol */
+  puts(" 1991-1996 David Benn.");
+  puts("Copyright 2025,2026 Manfred Bergmann.");
+diff --git a/src/ace/c/ver.c b/src/ace/c/ver.c
+index 24122c9..37358d9 100755
+--- a/src/ace/c/ver.c
++++ b/src/ace/c/ver.c
+@@ -32,20 +32,45 @@
+ **	   9th September 1996
+ */
+ 
++#include <stdio.h>
++
+ /* version string for AmigaDOS VERSION command */
+-static 	char 	*ace_ver = "$VER: ACE 3.0.1 (12.03.26)";
++static 	char 	*ace_ver = "$VER: ACE 3.1.0 (11.08.26)";
+ 
+ /* version number for display */
+-static  char	*version_string = "3.0.1";
++static  char	*version_string = "3.1.0";
++
++/*
++** Build number and compile date come from the build system as -D defines
++** (see src/make/Makefile-host and Makefile-ace): the build number is the
++** git commit count, with a trailing '+' when the working tree is dirty.
++** Both fall back to something harmless when built without git, e.g. from
++** an unpacked archive on a real Amiga.
++*/
++#ifndef ACE_BUILD_NUMBER
++#define ACE_BUILD_NUMBER "0"
++#endif
++#ifndef ACE_BUILD_DATE
++#define ACE_BUILD_DATE __DATE__
++#endif
++
++static	char	build_string[80];
+ 
+ char	*version()
+ {
+ /*
+-** Returns compiler version information.
++** Return the plain version number, e.g. "3.1.0".
+ */
+ 	return version_string;
+ }
+- 
+- 
+- 
+- 
++
++char	*version_full()
++{
++/*
++** Return version, build number and compile date, e.g.
++** "3.1.0 build 14 (11.08.2026)".
++*/
++	sprintf(build_string,"%s build %s (%s)",
++		version_string,ACE_BUILD_NUMBER,ACE_BUILD_DATE);
++	return build_string;
++}
+diff --git a/src/bas/c/bas.c b/src/bas/c/bas.c
+index 1f7e826..afe1cec 100644
+--- a/src/bas/c/bas.c
++++ b/src/bas/c/bas.c
+@@ -47,6 +47,20 @@
+ #define PATHSEP '/'
+ #endif
+ 
++
++/*
++** Version and build stamp. The build number and date are -D defines from
++** the build system (src/make/Makefile-host); both fall back to something
++** harmless when built without git.
++*/
++#define BAS_VERSION "3.1.0"
++#ifndef ACE_BUILD_NUMBER
++#define ACE_BUILD_NUMBER "0"
++#endif
++#ifndef ACE_BUILD_DATE
++#define ACE_BUILD_DATE __DATE__
++#endif
++
+ #define MAXPATH     1024
+ #define MAXARGS     64
+ #define MAXOPTS     32
+@@ -463,13 +477,15 @@ const char *to;
+ 
+ static void usage()
+ {
+- printf("bas - ACE BASIC compile driver\n");
++ printf("bas - ACE BASIC compile driver %s build %s (%s)\n",
++	BAS_VERSION,ACE_BUILD_NUMBER,ACE_BUILD_DATE);
+  printf("Usage: bas [options] sourcefile[.b] [extra.o ...]\n");
+  printf("\n");
+  printf("Driver options:\n");
+  printf("  -S            Compile to assembly only, keep <source>.s\n");
+  printf("  -v            Show each tool invocation\n");
+  printf("  -k            Keep the temporary directory\n");
++ printf("  -V            Show version and exit\n");
+  printf("  -h            This help\n");
+  printf("\n");
+  printf("Passed through to ace:\n");
+@@ -517,6 +533,10 @@ char **argv;
+ 	   case 'v': verbose = 1; break;
+ 	   case 'k': keep_temps = 1; break;
+ 	   case 'h': usage(); return(0);
++	   case 'V':
++		printf("bas %s build %s (%s)\n",
++		       BAS_VERSION,ACE_BUILD_NUMBER,ACE_BUILD_DATE);
++		return(0);
+ 	   case 'm':
+ 		module = 1;
+ 		/* fall through: ace needs to see -m too */
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index 03f973d..1edf553 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -92,6 +92,15 @@ BAS_SRC_DIR = ../bas/c
+ BUILD_DIR   = $(ROOT)/bin/host/$(PLATFORM)
+ OBJ_DIR     = $(BUILD_DIR)/obj
+ 
++# Build stamp. The build number is the git commit count, with a trailing
++# '+' when the working tree is dirty; both fall back to something harmless
++# outside a git checkout. Passed as -D rather than written to a generated
++# header, so a rebuild never dirties the repository.
++BUILD_NUMBER := $(shell git -C $(ROOT) rev-list --count HEAD 2>/dev/null || echo 0)$(shell git -C $(ROOT) diff --quiet HEAD 2>/dev/null || echo +)
++BUILD_DATE   := $(shell date "+%d.%m.%Y")
++CFLAGS += -DACE_BUILD_NUMBER=\"$(BUILD_NUMBER)\" -DACE_BUILD_DATE=\"$(BUILD_DATE)\"
++
++
+ ACE_BIN = $(BUILD_DIR)/ace$(EXEEXT)
+ YAP_BIN = $(BUILD_DIR)/yap$(EXEEXT)
+ BAS_BIN = $(BUILD_DIR)/bas$(EXEEXT)
+@@ -152,6 +161,17 @@ $(BAS_BIN): $(BAS_SRC_DIR)/bas.c
+ dirs:
+ 	$(Q)mkdir -p $(OBJ_DIR)
+ 
++# ver.o carries the build stamp, which comes from -D flags rather than from
++# a source file -- make cannot see that it changed, so force just this one
++# object (and with it the link) to be redone every time. One tiny
++# translation unit; the other 30 still build incrementally.
++.PHONY: force-buildstamp
++force-buildstamp:
++
++$(OBJ_DIR)/ver.o: force-buildstamp
++$(YAP_BIN): force-buildstamp
++$(BAS_BIN): force-buildstamp
++
+ ################################################################################
+ # AMIGA REGRESSION CHECK
+ ################################################################################
+@@ -173,6 +193,8 @@ AMIGA_BIN     = $(AMIGA_DIR)/ace
+ 
+ # Same flags as Makefile-ace.  Note: no -DACE_HOST, so the Amiga branches win.
+ AMIGA_CFLAGS  = +aos68k -c -O2 -cpu=68000 \
++                -DACE_BUILD_NUMBER='"$(BUILD_NUMBER)"' \
++                -DACE_BUILD_DATE='"$(BUILD_DATE)"' \
+                 -I$(ACE_SRC_DIR) -I$(VBCC_INC) -I$(NDK_INC)
+ AMIGA_LDFLAGS = +aos68k -cpu=68000 -L$(VBCC_LIB) -L$(NDK_LIB) -lmieee -lamiga
+ 
+diff --git a/src/yap/c/yap.c b/src/yap/c/yap.c
+index 2a3f893..697d20b 100644
+--- a/src/yap/c/yap.c
++++ b/src/yap/c/yap.c
+@@ -32,6 +32,20 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++
++/*
++** Version and build stamp. The build number and date are -D defines from
++** the build system (src/make/Makefile-host); both fall back to something
++** harmless when built without git.
++*/
++#define YAP_VERSION "3.1.0"
++#ifndef ACE_BUILD_NUMBER
++#define ACE_BUILD_NUMBER "0"
++#endif
++#ifndef ACE_BUILD_DATE
++#define ACE_BUILD_DATE __DATE__
++#endif
++
+ /* ---- Limits (same as yap.b) ---- */
+ #define MAX_MACROS           2048
+ #define MAX_MACRO_NAME       48
+@@ -135,7 +149,8 @@ int ch;
+ 
+ static void show_usage()
+ {
+- printf("YAP - Yet Another Preprocessor for ACE BASIC\n");
++ printf("YAP - Yet Another Preprocessor for ACE BASIC %s build %s (%s)\n",
++	YAP_VERSION,ACE_BUILD_NUMBER,ACE_BUILD_DATE);
+  printf("Usage: yap [options] <inputfile> <outputfile>\n");
+  printf("\n");
+  printf("Options:\n");
+@@ -145,6 +160,7 @@ static void show_usage()
+  printf("  -I<path>        Add include search path\n");
+  printf("  -g              Emit #line markers so ace reports positions\n");
+  printf("                  in the original source\n");
++ printf("  -V              Show version and exit\n");
+ }
+ 
+ /*---- macro table ---------------------------------------------------------*/
+@@ -947,6 +963,11 @@ char **argv;
+ 		genLineMarkers = TRUE;
+ 		break;
+ 
++	 case 'V':
++		printf("yap %s build %s (%s)\n",
++		       YAP_VERSION,ACE_BUILD_NUMBER,ACE_BUILD_DATE);
++		exit(0);
++
+ 	 case 'D':
+ 		if (a[2] == '\0')
+ 		   { printf("Error: -D requires a macro name\n"); return(FALSE); }

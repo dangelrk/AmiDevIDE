@@ -1,0 +1,60 @@
+# Makefile.amigaos - Native AmigaOS Einstellungen
+
+#############################################
+# vbcc Paths für AmigaOS
+# HIER ANPASSEN falls dein vbcc woanders liegt!
+#############################################
+
+VBCC_BASE = vbcc:
+SDK_BASE  = SDK:
+
+#############################################
+# Abgeleitete Pfade
+#############################################
+
+VBCC_BIN = $(VBCC_BASE)bin
+VBCC_INC = $(VBCC_BASE)targets/m68k-amigaos/include
+VBCC_LIB = $(VBCC_BASE)targets/m68k-amigaos/lib
+# ACE BASIC cross-compiler SDK
+ACE_HOME = ACE:
+ACE_LIB = ACElib:
+ACE_INC = ACEinclude:
+ACE_BMAPS = ACEbmaps:
+
+
+# SDK Paths - AKTIV (SDKs liegen unter dem eigenen "SDK:" Assign, nicht
+# unter vbcc:sdk/)
+NDK32_ASM_INC = $(SDK_BASE)NDK_3.2/Include_I
+NDK32_INC = $(SDK_BASE)NDK_3.2/Include_H
+NDK32_LIB = $(SDK_BASE)NDK_3.2/lib
+MUI38_INC = $(SDK_BASE)MUI_3.8/Developer/C/Include
+MCC_INC = $(SDK_BASE)MCC/Developer/C/include
+REGEX_INC = $(SDK_BASE)regex/include
+REQTOOLS_INC = $(SDK_BASE)reqtools/include
+TCP_INC = $(SDK_BASE)Roadshow/include
+NET_INC = $(SDK_BASE)Roadshow/netinclude
+AMISSL_INC = $(SDK_BASE)AmiSSL-v5/Developer/include
+AMISSL_LIB = $(SDK_BASE)AmiSSL-v5/Developer/lib/AmigaOS3
+SQLITE_INC = $(SDK_BASE)SQLite3/include
+SQLITE_LIB = $(SDK_BASE)SQLite3/lib
+POSIXLIB_INC = $(SDK_BASE)PosixLib/include
+
+
+#############################################
+# Tools (AmigaOS native commands)
+#############################################
+
+CC = $(VBCC_BIN)/vc
+AS = $(VBCC_BIN)/vasmm68k_mot
+BAS = ACE:bin/bas
+MV = rename
+RM = delete
+MKDIR = makedir
+
+#############################################
+# vbcc Environment
+#############################################
+
+export VBCC := $(VBCC_BASE)
+export VBCCCONF := $(VBCC_BASE)config/aos68k
+export PATH := $(VBCC_BIN):$(PATH)

@@ -1,0 +1,206 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 11:20:16 +0200
+Subject: [PATCH] Install into the vbcc toolchain and document the host build
+
+make -f Makefile-host install lays ACE out the way the other components of
+~/Dev/amiga are laid out: binaries flat in bin/, driver config in
+config/ace68k, everything else as an SDK under sdk/ACE keeping its own
+directory names.  submods/ is installed too, because sources reach their
+objects through the ace: assign and bas maps that onto ACE_HOME.
+
+Changes inside ~/Dev/amiga are not versioned, so the previous contents of
+setenv_*.sh, CROSSCOMPILE.md and makefiles/ were copied to
+~/Dev/amiga/.backup-before-ace first:
+
+  setenv_{mac,lin,win}.sh   ACE_HOME/ACE_LIB/ACE_INC/ACE_BMAPS
+  makefiles/Makefile.*      BAS, MV and the ACE_* paths; the AmigaOS
+                            variant uses the assigns and `rename`
+  makefiles/Makefile.rules  BASIC_SOURCES alongside C_SOURCES and
+                            ASM_SOURCES, with a %.o: %.b rule (bas -m
+                            writes next to the source, so it is moved)
+  CROSSCOMPILE.md           new section 6 on ACE, incl. the first-dot
+                            filename trap when calling ace directly
+
+README.md gains a Host Installation section; AGENTS.md gains a section
+telling future agents to iterate with Makefile-host instead of the
+emulator, and to run amiga-check alongside it - the two builds disagree
+about what LONG is, which is exactly what catches format bugs.
+
+Verified from a clean environment with nothing but setenv_mac.sh sourced:
+all 223 non-error cases build to AmigaOS executables, all 28 errors/ cases
+are rejected, a LIBRARY call still resolves through the bmaps to
+jsr -96(a6), and the Makefile template compiles a .b module via
+BASIC_SOURCES.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ AGENTS.md              | 39 +++++++++++++++++++++++++++++
+ README.md              | 34 +++++++++++++++++++++++++
+ src/make/Makefile-host | 57 ++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 130 insertions(+)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 270514d..b0cf099 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -172,6 +172,45 @@ make -f Makefile-ace clean all # Clean rebuild
+ make -f Makefile-ace V=1       # Verbose output
+ ```
+ 
++### Host Cross-Compiler — use this to iterate
++
++`Makefile-host` builds `ace`, `yap` and `bas` as native host binaries, so the
++whole pipeline runs on macOS/Linux/Windows without the emulator. This is by
++far the fastest way to test compiler changes.
++
++```bash
++cd src/make
++export VBCC=~/Dev/amiga        # supplies vasmm68k_mot and vlink
++make -f Makefile-host          # -> bin/host/<platform>/{ace,yap,bas}
++make -f Makefile-host amiga-check   # cross-build for m68k: does the
++                                    # AmigaOS code path still compile?
++make -f Makefile-host install  # install into $VBCC
++```
++
++**After any change to `src/ace/c/`, run BOTH** `make -f Makefile-host` and
++`make -f Makefile-host amiga-check`. The host build has `-Werror=format`
++because `LONG` is exactly 32 bits there; the amiga-check build catches the
++mirror-image mistake, since `LONG` is `long` under vbcc. Format conversions
++must therefore carry explicit C-type casts — `(long)` with `%ld`,
++`(unsigned long)` with `%lx` — or one of the two compilers will complain.
++
++Host-specific code sits behind `ACE_HOST`:
++- `src/ace/c/hostcompat.h` — exact-width Amiga base types. `LONG` must stay
++  32-bit (`FLOAT_BITS`) and `SHORT` 16-bit (`.bmap` LVO sign extension).
++- `src/ace/c/break.c` — Ctrl-C handling. Separate from `lex.c` because
++  `acedef.h` declares ACE's own `kill()`, which collides with POSIX `kill()`.
++
++`ACE_BMAPS`, `ACE_INC` and `ACE_HOME` override the `ACEbmaps:`,
++`ACEinclude:` and `ACE:` assigns; unset, the assign names are used, so the
++Amiga behaviour is unchanged.
++
++Verification without an Amiga:
++```bash
++utils/yap/tests/run_tests.sh                    # yap vs the BASIC original
++verify/scripts/compare-host-vs-amiga.sh         # emitted .s, host vs m68k
++```
++The second needs `vamos` (`pip install amitools 'machine68k<0.4'`).
++
+ ### Building Runtime Libraries
+ 
+ ```bash
+diff --git a/README.md b/README.md
+index 661964f..8a2436e 100644
+--- a/README.md
++++ b/README.md
+@@ -138,6 +138,40 @@ A manual install is of course also still possible. Just copy the extracted folde
+ On manual install you should set +s flag on the ACE:bin/bas script: `protect ACE:bin/bas +s` so that it is executable.
+ Also make sure the binaries in ACE:bin have the `e` flag set.
+ 
++### Host Installation (Cross-Compiler)
++
++ACE also builds as a native host toolchain, so Amiga executables can be
++produced on macOS, Linux or Windows without an Amiga or an emulator. It slots
++into the vbcc cross-compiler that supplies `vasmm68k_mot` and `vlink`:
++
++```bash
++export VBCC=~/Dev/amiga            # the vbcc toolchain root
++cd src/make
++make -f Makefile-host              # build ace, yap and bas for the host
++make -f Makefile-host install      # install into $VBCC
++```
++
++That puts `ace`, `yap` and `bas` in `$VBCC/bin`, a driver configuration in
++`$VBCC/config/ace68k`, and the runtime libraries, bmaps, headers, icons and
++submodules under `$VBCC/sdk/ACE`. Afterwards:
++
++```bash
++source ~/Dev/amiga/setenv_mac.sh   # or setenv_lin.sh / setenv_win.sh
++bas myprogram.b                    # -> myprogram, an AmigaOS executable
++```
++
++The host `bas` takes the same options as the Amiga script and reads the same
++`REM #using` and `OPTION 2-` directives from the source. AmigaDOS assigns in
++`#using` paths (`ace:`, `acelib:`, `aceinclude:`, `acebmaps:`, `acesubmods:`)
++are mapped onto the installed directories, so existing sources build
++unchanged.
++
++Paths can be overridden with `ACE_HOME`, `ACE_LIB`, `ACE_INC`, `ACE_BMAPS`
++and `ACE_BIN`; `ace` and `yap` honour `ACE_BMAPS` and `ACE_INC` when run
++directly. The native AmigaOS build is unaffected — see
++`make -f Makefile-host amiga-check`, which cross-builds the compiler for m68k
++to confirm that code path still compiles.
++
+ ## Building
+ 
+ ### Building the ACE Compiler
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index 67e21c0..daeb557 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -189,6 +189,63 @@ $(AMIGA_DIR)/%.o: $(ACE_SRC_DIR)/%.c $(ACE_SRC_DIR)/acedef.h
+ 	$(ECHO) "Compiling $< (m68k)..."
+ 	$(Q)VBCC="$(VBCC)" PATH="$(VBCC)/bin:$$PATH" $(VC) $(AMIGA_CFLAGS) $< -o $@
+ 
++################################################################################
++# INSTALL
++################################################################################
++# Slots ACE into the vbcc toolchain the way its other components are laid
++# out: binaries flat in bin/, driver config in config/, everything else as
++# an SDK under sdk/ACE keeping its own directory names.
++#
++#   $(VBCC)/bin/{ace,yap,bas}
++#   $(VBCC)/config/ace68k
++#   $(VBCC)/sdk/ACE/{lib,bmaps,include,icons,submods}
++#
++# submods/ is installed because sources reference their objects through the
++# ace: assign ("REM #using ace:submods/list/list.o"), which bas maps onto
++# $(ACE_HOME).
++
++INSTALL_BIN = $(VBCC)/bin
++INSTALL_CFG = $(VBCC)/config
++INSTALL_SDK = $(VBCC)/sdk/ACE
++
++install: all
++	@echo "Installing into $(VBCC) ..."
++	$(Q)mkdir -p $(INSTALL_BIN) $(INSTALL_CFG)
++	$(Q)mkdir -p $(INSTALL_SDK)/lib $(INSTALL_SDK)/bmaps \
++	             $(INSTALL_SDK)/include $(INSTALL_SDK)/icons \
++	             $(INSTALL_SDK)/submods
++	$(ECHO) "  bin/"
++	$(Q)cp $(ACE_BIN) $(YAP_BIN) $(BAS_BIN) $(INSTALL_BIN)/
++	$(ECHO) "  sdk/ACE/"
++	$(Q)cp -R $(ROOT)/lib/. $(INSTALL_SDK)/lib/
++	$(Q)cp -R $(ROOT)/bmaps/. $(INSTALL_SDK)/bmaps/
++	$(Q)cp -R $(ROOT)/include/. $(INSTALL_SDK)/include/
++	$(Q)cp -R $(ROOT)/icons/. $(INSTALL_SDK)/icons/
++	$(Q)cp -R $(ROOT)/submods/. $(INSTALL_SDK)/submods/
++	$(ECHO) "  config/ace68k"
++	$(Q)printf '%s\n' \
++	  '# ACE BASIC driver configuration, read by bas.' \
++	  '# Generated by src/make/Makefile-host install - edit freely.' \
++	  '#' \
++	  '# Environment variables override these:' \
++	  '#   ACE_HOME ACE_LIB ACE_INC ACE_BMAPS ACE_BIN' \
++	  '' \
++	  'yap     = $(INSTALL_BIN)/yap' \
++	  'ace     = $(INSTALL_BIN)/ace' \
++	  'vasm    = $(INSTALL_BIN)/vasmm68k_mot' \
++	  'vlink   = $(INSTALL_BIN)/vlink' \
++	  '' \
++	  'homedir = $(INSTALL_SDK)' \
++	  'libdir  = $(INSTALL_SDK)/lib' \
++	  'incdir  = $(INSTALL_SDK)/include' \
++	  'bmapdir = $(INSTALL_SDK)/bmaps' \
++	  > $(INSTALL_CFG)/ace68k
++	@echo ""
++	@echo "Installed. To use:"
++	@echo "  export VBCC=$(VBCC)"
++	@echo "  export PATH=\$$VBCC/bin:\$$PATH"
++	@echo "  bas myprog.b"
++
+ ################################################################################
+ # UTILITY TARGETS
+ ################################################################################

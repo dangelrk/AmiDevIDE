@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 10:35:51 +0200
+Subject: [PATCH] Ignore host build artefacts, test output and error logs
+
+---
+ .gitignore | 25 ++++++++++++++++++-------
+ 1 file changed, 18 insertions(+), 7 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index 86ccb60..6023540 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,9 +1,20 @@
+-uaem
+-.uaem
+-*.uaem
+-.svn
+-aos3
++# Build artefacts (Amiga native build)
+ src/ace/obj/
+ src/lib/obj/
+-*.log
+-*.marker
++
++# Build artefacts (host cross build)
++bin/host/
++
++# Compiler error log (written into the CWD by `bas -E` / `ace -E`)
++ace.err
++
++# Test output
++verify/tests/results/
++verify/tests/golden/
++verify/scripts/results/
++
++# FS-UAE filesystem metadata
++*.uaem
++
++# macOS
++.DS_Store

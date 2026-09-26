@@ -1,0 +1,204 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 11:14:32 +0200
+Subject: [PATCH] Add golden-file check: host ace vs m68k ace, byte for byte
+
+The plan was to produce reference .s files by running bas -S on the
+emulator, but this checkout has no bootable Workbench.  vamos (amitools)
+turned out to be a better route anyway: it emulates the AmigaOS API well
+enough to run an m68k ace directly on the host, so both compilers can be
+driven over the same corpus in one script.
+
+The shipped bin/ace cannot be used as the reference - vamos does not
+implement Intuition's AllocRemember, so it dies before compiling anything.
+The script instead builds the reference from the baseline sources with only
+src/ace/c/alloc.c taken from the working tree.  That swaps the allocator
+for the malloc chain vamos can service and changes nothing about code
+generation; every other file is the pre-port compiler.
+
+Result over verify/tests/cases:
+
+  192 identical, byte for byte
+    2 differing - atom and generic_atom, where the reference emits a
+      single corrupt XREF name (binary bytes, "xref Hz\x01\xfeN\xb9")
+      instead of the full list.  The host output is well-formed and
+      assembles and links; this is corruption on the reference side under
+      vamos, not a difference in what the port emits.
+   57 not compared - the reference crashes outright under vamos
+      (InvalidMemoryAccess), which says nothing about the host compiler,
+      so they are counted separately rather than reported as differences.
+
+Those 57 remain genuinely unverified against a real Amiga.  Running the
+same script on hardware or a working emulator would close the gap.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+---
+ verify/scripts/compare-host-vs-amiga.sh | 158 ++++++++++++++++++++++++
+ 1 file changed, 158 insertions(+)
+ create mode 100755 verify/scripts/compare-host-vs-amiga.sh
+
+diff --git a/verify/scripts/compare-host-vs-amiga.sh b/verify/scripts/compare-host-vs-amiga.sh
+new file mode 100755
+index 0000000..84e1f96
+--- /dev/null
++++ b/verify/scripts/compare-host-vs-amiga.sh
+@@ -0,0 +1,158 @@
++#!/bin/sh
++#
++# Golden-file check: does the host ace emit byte-identical assembly to the
++# m68k ace?
++#
++# This is the real proof that the host cross-compiler is a port and not a
++# rewrite.  Every case in verify/tests/cases is compiled twice - once by the
++# host binary, once by an m68k binary running under vamos - and the two .s
++# files are diffed.
++#
++# The m68k reference is built from the sources at the commit given by
++# --baseline (default: the tag/commit named in BASELINE below) with only
++# src/ace/c/alloc.c taken from the working tree.  That one substitution
++# swaps Intuition's AllocRemember for a malloc chain, which vamos can
++# actually service; it does not touch code generation.  Everything else is
++# the pre-port compiler.
++#
++# Requirements:
++#   - $VBCC pointing at the vbcc toolchain (setenv_mac.sh etc.)
++#   - vamos from amitools, either on PATH or given via VAMOS=<path>
++#     (pip install amitools machine68k -- note amitools 0.8.1 needs
++#      machine68k 0.3.x; 0.4.x removed Traps.set_exc_func)
++#   - the host build: cd src/make && make -f Makefile-host
++#
++# Usage:
++#   verify/scripts/compare-host-vs-amiga.sh [--baseline <commit>] [category]
++
++set -u
++
++BASELINE=${BASELINE:-d1fa4d5}
++
++here=$(cd "$(dirname "$0")" && pwd)
++root=$(cd "$here/../.." && pwd)
++
++category=""
++while [ $# -gt 0 ]; do
++    case $1 in
++        --baseline) BASELINE=$2; shift 2 ;;
++        *)          category=$1; shift ;;
++    esac
++done
++
++case $(uname -s) in
++    Darwin) platform=macos ;;
++    Linux)  platform=linux ;;
++    *)      platform=windows ;;
++esac
++
++HOST_ACE=${HOST_ACE:-$root/bin/host/$platform/ace}
++VAMOS=${VAMOS:-$(command -v vamos || true)}
++VBCC=${VBCC:-$HOME/Dev/amiga}
++
++[ -x "$HOST_ACE" ] || {
++    echo "host ace not found at $HOST_ACE"
++    echo "build it: cd src/make && make -f Makefile-host"
++    exit 10
++}
++[ -n "$VAMOS" ] && [ -x "$VAMOS" ] || {
++    echo "vamos not found - set VAMOS=<path to vamos>"
++    echo "install: pip install amitools 'machine68k<0.4'"
++    exit 10
++}
++[ -x "$VBCC/bin/vc" ] || { echo "vbcc not found at $VBCC/bin/vc"; exit 10; }
++
++work=$(mktemp -d) || exit 10
++trap 'rm -rf "$work"' EXIT INT TERM
++
++# ---------------------------------------------------------------- reference
++echo "Building m68k reference compiler from $BASELINE ..."
++ref=$work/refsrc
++mkdir -p "$ref"
++( cd "$root" || exit 10
++  git ls-tree --name-only "$BASELINE" src/ace/c/ | while read -r f; do
++      git show "$BASELINE:$f" > "$ref/$(basename "$f")"
++  done ) || { echo "cannot extract baseline $BASELINE"; exit 10; }
++cp "$root/src/ace/c/alloc.c" "$ref/alloc.c"
++
++inc="-I. -I$VBCC/targets/m68k-amigaos/include -I$VBCC/sdk/NDK_3.2/Include_H"
++( cd "$ref" || exit 10
++  for f in alloc assign basfun codegen control declare event expr factor \
++           file gadget gfx invoke lex libfunc memory menu message misc opt \
++           parse parsevar print screen serial statement sub sym ver window; do
++      VBCC="$VBCC" PATH="$VBCC/bin:$PATH" "$VBCC/bin/vc" +aos68k -c -O2 \
++          -cpu=68000 $inc "$f.c" -o "$f.o" >/dev/null 2>&1 \
++          || { echo "reference build failed on $f.c"; exit 10; }
++  done
++  VBCC="$VBCC" PATH="$VBCC/bin:$PATH" "$VBCC/bin/vc" +aos68k -cpu=68000 \
++      -L"$VBCC/targets/m68k-amigaos/lib" -L"$VBCC/sdk/NDK_3.2/lib" \
++      ./*.o -lmieee -lamiga -o ace-ref >/dev/null 2>&1 \
++      || { echo "reference link failed"; exit 10; }
++) || exit 10
++
++# ---------------------------------------------------------------- run both
++cases=$root/verify/tests/cases
++if [ -n "$category" ]; then cases=$cases/$category; fi
++[ -d "$cases" ] || { echo "no such category: $cases"; exit 10; }
++
++same=0
++differ=0
++skipped=0
++refcrash=0
++
++run=$work/run
++mkdir -p "$run"
++
++for src in $(find "$cases" -name '*.b' | sort); do
++    name=$(basename "$src" .b)
++    rm -f "$run/$name.s" "$run/$name.host.s" "$run/$name.ref.s"
++    cp "$src" "$run/$name.b"
++
++    # host
++    ( cd "$run" && ACE_BMAPS="$root/bmaps" ACE_HOME="$root" \
++        "$HOST_ACE" "$name" >/dev/null 2>&1 )
++    [ -s "$run/$name.s" ] && mv "$run/$name.s" "$run/$name.host.s"
++    rm -f "$run/$name.s"
++
++    # m68k reference under vamos
++    ( cd "$run" && "$VAMOS" -q -V "ACE:$root" -a ACEbmaps:ACE:bmaps -- \
++        "$ref/ace-ref" "$name" >"$run/$name.vamos" 2>&1 )
++    [ -s "$run/$name.s" ] && mv "$run/$name.s" "$run/$name.ref.s"
++    rm -f "$run/$name.s"
++
++    # vamos is an AmigaOS API emulator, not a complete machine; when it
++    # cannot service something the reference run dies without output.  That
++    # says nothing about the host compiler, so count it separately instead
++    # of reporting a difference that was never measured.
++    if grep -q "vamos failed" "$run/$name.vamos" 2>/dev/null; then
++        echo "[REF ] $name (reference crashed under vamos - not compared)"
++        refcrash=$((refcrash + 1))
++        continue
++    fi
++
++    if [ ! -f "$run/$name.host.s" ] && [ ! -f "$run/$name.ref.s" ]; then
++        # both rejected it - expected for cases/errors
++        skipped=$((skipped + 1))
++        continue
++    fi
++    if [ ! -f "$run/$name.host.s" ] || [ ! -f "$run/$name.ref.s" ]; then
++        echo "[DIFF] $name (only one side produced output)"
++        differ=$((differ + 1))
++        continue
++    fi
++
++    if cmp -s "$run/$name.host.s" "$run/$name.ref.s"; then
++        same=$((same + 1))
++    else
++        echo "[DIFF] $name"
++        diff -u "$run/$name.ref.s" "$run/$name.host.s" | head -20 | sed 's/^/       /'
++        differ=$((differ + 1))
++    fi
++done
++
++echo ""
++echo "Results: $same identical, $differ differing"
++echo "         $skipped produced no output on either side (expected for cases/errors)"
++echo "         $refcrash not compared (reference crashed under vamos)"
++[ "$differ" -eq 0 ] || exit 10
++exit 0
