@@ -141,6 +141,14 @@ void TstAutodocIndex::queryFromSelection_data()
     QTest::newRow("synopsis fragment") << "memoryBlock = AllocMem(byteSize," << "memoryBlock";
     QTest::newRow("autodoc header") << "dos.library/Open()" << "Open";
     QTest::newRow("wildcards kept") << "Alloc*" << "Alloc*";
+    QTest::newRow("wildcards alone") << " * ? " << "";
+    QTest::newRow("comment after") << "Open() /* see dos */" << "Open";
+    QTest::newRow("comment opened") << "AllocMem /* x" << "AllocMem";
+    // What QTextCursor::selectedText() puts at a line break; it must not
+    // turn into a '?' wildcard on the way to the core.
+    QTest::newRow("paragraph separator")
+        << (QStringLiteral("AllocMem") + QChar(QChar::ParagraphSeparator)) << "AllocMem";
+    QTest::newRow("non-ASCII") << QStringLiteral("Gr\u00F6\u00DFe") << "Gr";
     QTest::newRow("punctuation only") << " (), " << "";
     QTest::newRow("empty") << "" << "";
 }
@@ -150,9 +158,10 @@ void TstAutodocIndex::queryFromSelection()
     QFETCH(QString, selection);
     QFETCH(QString, query);
 
+    // UTF-8, as HelpDock passes it.
     char out[64];
-    const QByteArray latin1 = selection.toLatin1();
-    const int ok = aide_autodoc_query_from_selection(latin1.constData(), out, sizeof(out));
+    const QByteArray utf8 = selection.toUtf8();
+    const int ok = aide_autodoc_query_from_selection(utf8.constData(), out, sizeof(out));
     QCOMPARE(ok != 0, !query.isEmpty());
     QCOMPARE(QString::fromLatin1(out), query);
 

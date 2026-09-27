@@ -32,6 +32,7 @@ static Object *g_backBtn, *g_forwardBtn, *g_searchSelBtn;
 
 static AideAutodocIndex g_index;
 static int g_indexReady;
+static void (*g_ensureIndex)(void);
 
 /* Back/Forward history of function names shown via helpwindow_show_function
  * (wildcard search results and helpwindow_show_text() don't participate --
@@ -113,9 +114,10 @@ static void history_push(const char *functionName)
     g_historyPos = g_historyLen - 1;
 }
 
-void helpwindow_init(Object *app, const char *cacheDir)
+void helpwindow_init(Object *app, const char *cacheDir, void (*ensureIndex)(void))
 {
     g_app = app;
+    g_ensureIndex = ensureIndex;
     aide_autodocindex_init(&g_index, cacheDir);
     g_indexReady = 0;
     g_historyLen = 0;
@@ -258,6 +260,8 @@ static void search_selection(void)
         return;
     }
 
+    if (g_ensureIndex)
+        g_ensureIndex();
     if (strchr(query, '*') || strchr(query, '?'))
         helpwindow_search_wildcard(query);
     else

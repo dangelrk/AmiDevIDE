@@ -3,15 +3,15 @@
 
 /* Hothelp/Autodoc window (F1 exact lookup, F2 wildcard search, and
  * Shift+F1 struct-layout display reuses its text pane): read-only
- * TextEditor, NList of candidates, back/forward, a button that looks up
- * the text marked in the pane (the search
- * field is F2's ask_string() input dialog instead of a BetterString for
- * v1, same reasoning as the rest of this app's input handling).
+ * TextEditor, NList of candidates, back/forward, and a button that
+ * looks up the text marked in the pane (the search field is F2's
+ * ask_string() input dialog instead of a BetterString for v1, same
+ * reasoning as the rest of this app's input handling).
  *
  * Owns a private MUI sub-window registered into `app` on init, hidden
- * until first shown. Candidate double-click and Back/Forward route
- * through the same MUIM_Application_ReturnID loop as the rest of the
- * app; helpwindow_handle_id() must be called from mainwindow's
+ * until first shown. Candidate double-click, Back/Forward and the
+ * search-selection button route through the same
+ * MUIM_Application_ReturnID loop as the rest of the app; helpwindow_handle_id() must be called from mainwindow's
  * MUIM_Application_Input switch's default case. */
 
 #include <libraries/mui.h>
@@ -19,7 +19,12 @@
 #include "aide/aide_sdk.h"
 #include "aide/aide_autodoc.h"
 
-void helpwindow_init(Object *app, const char *cacheDir);
+/* `ensureIndex` is mainwindow.c's ensure_help_index_current(): the
+ * window's own "Markierung suchen" button calls it before looking
+ * anything up, since it can be pressed with no F1/F2 before it (the
+ * window may have been opened by Shift+F1) or after the SDK selection
+ * changed. */
+void helpwindow_init(Object *app, const char *cacheDir, void (*ensureIndex)(void));
 void helpwindow_free(void);
 
 /* Rescans every active SDK's autodocs (see aide_autodocindex_reload) --
@@ -36,8 +41,9 @@ void helpwindow_reload_index(const AideSdkDescriptor *activeSdks, size_t sdkCoun
 void helpwindow_show_function(const char *functionName);
 
 /* F2: shows the window with every indexed name matching the "*"/"?"
- * wildcard `pattern` as candidates. Does not auto-select one (multiple
- * libraries may share a name) -- double-click a candidate to display it. */
+ * wildcard `pattern` as candidates and displays the first one; a
+ * double-click on another candidate displays that one instead. Does not
+ * touch Back/Forward history. */
 void helpwindow_search_wildcard(const char *pattern);
 
 /* Shift+F1 and similar: shows arbitrary plain text (not from the autodoc

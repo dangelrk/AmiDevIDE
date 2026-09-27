@@ -7,6 +7,8 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QScrollBar>
+#include <QTextDocumentFragment>
 #include <QTextCursor>
 #include <QTextBrowser>
 #include <QToolButton>
@@ -85,15 +87,19 @@ void HelpDock::prefillAndSearch(const QString &word)
 
 QString HelpDock::queryAt(const QPoint *pos) const
 {
-    QString text = m_browser->textCursor().selectedText();
+    // selection().toPlainText(), not selectedText(): the latter marks each
+    // line break with U+2029, which any 8-bit conversion turns into '?' --
+    // a wildcard to the core. UTF-8 keeps every non-ASCII character at
+    // 0x80 and above, where the core never takes it for part of a name.
+    QString text = m_browser->textCursor().selection().toPlainText();
     if (text.isEmpty() && pos) {
         QTextCursor cursor = m_browser->cursorForPosition(*pos);
         cursor.select(QTextCursor::WordUnderCursor);
-        text = cursor.selectedText();
+        text = cursor.selection().toPlainText();
     }
 
     char query[128];
-    if (!aide_autodoc_query_from_selection(text.toLatin1().constData(), query, sizeof(query)))
+    if (!aide_autodoc_query_from_selection(text.toUtf8().constData(), query, sizeof(query)))
         return QString();
     return QString::fromLatin1(query);
 }
@@ -113,7 +119,11 @@ void HelpDock::searchSelection()
 
 void HelpDock::showBrowserContextMenu(const QPoint &pos)
 {
-    QMenu *menu = m_browser->createStandardContextMenu(pos);
+    // The standard menu wants document coordinates (for "Copy Link
+    // Location"); pos is in viewport coordinates, like everything else here.
+    const QPoint docPos = pos + QPoint(m_browser->horizontalScrollBar()->value(),
+                                       m_browser->verticalScrollBar()->value());
+    QMenu *menu = m_browser->createStandardContextMenu(docPos);
     const QString query = queryAt(&pos);
     if (!query.isEmpty()) {
         menu->addSeparator();

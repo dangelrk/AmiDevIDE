@@ -3126,7 +3126,7 @@ int mainwindow_run(void)
      * RAM-backed and wiped on reboot) so the autodoc index survives
      * across program runs -- see ensure_help_index_current(): the first
      * build per SDK is the only slow one. */
-    helpwindow_init(g_app, "PROGDIR:cache");
+    helpwindow_init(g_app, "PROGDIR:cache", ensure_help_index_current);
     disasmwindow_init(g_app);
     settingswindow_init(g_app);
     prefswindow_init(g_app);

@@ -535,11 +535,18 @@ static int is_query_char(char c)
         || c == '_' || c == '*' || c == '?';
 }
 
+static int is_ident_start(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
 int aide_autodoc_query_from_selection(const char *selection, char *out, size_t outsz)
 {
     const char *p;
-    const char *slash;
+    const char *q;
     size_t len = 0;
+    size_t i;
+    int hasName = 0;
 
     if (outsz == 0)
         return 0;
@@ -547,17 +554,28 @@ int aide_autodoc_query_from_selection(const char *selection, char *out, size_t o
     if (!selection)
         return 0;
 
+    /* Only a '/' that starts a name splits: "dos.library/Open" does,
+     * the '/' of a comment marker does not. */
     p = selection;
-    slash = strrchr(selection, '/');
-    if (slash)
-        p = slash + 1;
+    for (q = selection; *q; ++q) {
+        if (*q == '/' && is_ident_start(q[1]))
+            p = q + 1;
+    }
 
     while (*p && !is_query_char(*p))
         ++p;
     while (p[len] && is_query_char(p[len]) && len < outsz - 1)
         ++len;
 
+    /* Wildcards alone would list every name in the index. */
+    for (i = 0; i < len; ++i) {
+        if (p[i] != '*' && p[i] != '?')
+            hasName = 1;
+    }
+    if (!hasName)
+        return 0;
+
     memcpy(out, p, len);
     out[len] = '\0';
-    return len > 0;
+    return 1;
 }
