@@ -20,6 +20,7 @@
 #define ID_HELP_CANDIDATE_DCLICK 2001
 #define ID_HELP_BACK             2002
 #define ID_HELP_FORWARD          2003
+#define ID_HELP_SEARCH_SELECTION 2004
 
 #define HELP_HISTORY_MAX 64
 
@@ -27,7 +28,7 @@ static Object *g_app;
 static Object *g_window;
 static Object *g_candidates, *g_candidatesView;
 static Object *g_text;
-static Object *g_backBtn, *g_forwardBtn;
+static Object *g_backBtn, *g_forwardBtn, *g_searchSelBtn;
 
 static AideAutodocIndex g_index;
 static int g_indexReady;
@@ -134,6 +135,7 @@ void helpwindow_init(Object *app, const char *cacheDir)
 
     g_backBtn    = SimpleButton("_Zurueck");
     g_forwardBtn = SimpleButton("_Vor");
+    g_searchSelBtn = SimpleButton("Markierung _suchen");
 
     g_window = WindowObject,
         MUIA_Window_ID,    MAKE_ID('H','E','L','P'),
@@ -143,6 +145,7 @@ void helpwindow_init(Object *app, const char *cacheDir)
             Child, HGroup,
                 Child, g_backBtn,
                 Child, g_forwardBtn,
+                Child, g_searchSelBtn,
             End,
             Child, HGroup,
                 Child, VGroup,
@@ -170,6 +173,8 @@ void helpwindow_init(Object *app, const char *cacheDir)
             g_app, 2, MUIM_Application_ReturnID, ID_HELP_BACK);
     DoMethod(g_forwardBtn, MUIM_Notify, MUIA_Pressed, FALSE,
             g_app, 2, MUIM_Application_ReturnID, ID_HELP_FORWARD);
+    DoMethod(g_searchSelBtn, MUIM_Notify, MUIA_Pressed, FALSE,
+            g_app, 2, MUIM_Application_ReturnID, ID_HELP_SEARCH_SELECTION);
 }
 
 void helpwindow_free(void)
@@ -226,6 +231,39 @@ void helpwindow_show_text(const char *title, const char *text)
     set(g_window, MUIA_Window_Title, "AmigaIDE - Hilfe");
 }
 
+/* Looks up whatever is marked in the text pane, reduced to a query by
+ * aide_autodoc_query_from_selection() -- the same rule the Qt help dock
+ * uses. Nothing marked, or nothing usable in it: a beep, and the pane
+ * keeps showing what it showed. */
+static void search_selection(void)
+{
+    LONG x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+    STRPTR block;
+    char query[128];
+    int ok;
+
+    if (!DoMethod(g_text, MUIM_TextEditor_BlockInfo, &x1, &y1, &x2, &y2)) {
+        DisplayBeep(NULL);
+        return;
+    }
+    block = (STRPTR)DoMethod(g_text, MUIM_TextEditor_ExportBlock, 0UL, x1, y1, x2, y2);
+    if (!block) {
+        DisplayBeep(NULL);
+        return;
+    }
+    ok = aide_autodoc_query_from_selection((const char *)block, query, sizeof(query));
+    FreeVec(block);
+    if (!ok) {
+        DisplayBeep(NULL);
+        return;
+    }
+
+    if (strchr(query, '*') || strchr(query, '?'))
+        helpwindow_search_wildcard(query);
+    else
+        helpwindow_show_function(query);
+}
+
 int helpwindow_handle_id(long id)
 {
     switch (id) {
@@ -256,6 +294,9 @@ int helpwindow_handle_id(long id)
             g_historyPos--;
             lookup_and_show(g_history[g_historyPos]);
         }
+        return 1;
+    case ID_HELP_SEARCH_SELECTION:
+        search_selection();
         return 1;
     case ID_HELP_FORWARD:
         if (g_historyPos < g_historyLen - 1) {

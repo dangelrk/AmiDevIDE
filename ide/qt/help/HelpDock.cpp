@@ -1,9 +1,13 @@
 #include "HelpDock.h"
 
+#include "aide/aide_autodoc.h"
+
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QRegularExpression>
+#include <QTextCursor>
 #include <QTextBrowser>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -22,6 +26,7 @@ HelpDock::HelpDock(QWidget *parent)
     , m_browser(new QTextBrowser(this))
     , m_backButton(new QToolButton(this))
     , m_forwardButton(new QToolButton(this))
+    , m_searchSelectionButton(new QToolButton(this))
 {
     m_search->setPlaceholderText(tr("Search autodocs... (* and ? wildcards)"));
     connect(m_search, &QLineEdit::returnPressed, this, &HelpDock::onSearchSubmitted);
@@ -33,6 +38,8 @@ HelpDock::HelpDock(QWidget *parent)
     m_browser->setOpenLinks(false);
     m_browser->setOpenExternalLinks(false);
     connect(m_browser, &QTextBrowser::anchorClicked, this, &HelpDock::onAnchorClicked);
+    m_browser->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_browser, &QWidget::customContextMenuRequested, this, &HelpDock::showBrowserContextMenu);
 
     m_backButton->setText(QStringLiteral("←"));
     m_backButton->setToolTip(tr("Back"));
@@ -44,12 +51,19 @@ HelpDock::HelpDock(QWidget *parent)
     m_forwardButton->setEnabled(false);
     connect(m_forwardButton, &QToolButton::clicked, this, &HelpDock::goForward);
 
+    m_searchSelectionButton->setText(tr("Search Selection"));
+    m_searchSelectionButton->setToolTip(tr("Look up the selected word in the help"));
+    m_searchSelectionButton->setEnabled(false);
+    connect(m_searchSelectionButton, &QToolButton::clicked, this, &HelpDock::searchSelection);
+    connect(m_browser, &QTextBrowser::copyAvailable, m_searchSelectionButton, &QToolButton::setEnabled);
+
     auto *toolRow = new QWidget(this);
     auto *toolLayout = new QHBoxLayout(toolRow);
     toolLayout->setContentsMargins(0, 0, 0, 0);
     toolLayout->addWidget(m_backButton);
     toolLayout->addWidget(m_forwardButton);
     toolLayout->addWidget(m_search);
+    toolLayout->addWidget(m_searchSelectionButton);
 
     auto *layout = new QVBoxLayout(this);
     layout->addWidget(toolRow);
@@ -67,6 +81,46 @@ void HelpDock::prefillAndSearch(const QString &word)
 {
     m_search->setText(word);
     onSearchSubmitted();
+}
+
+QString HelpDock::queryAt(const QPoint *pos) const
+{
+    QString text = m_browser->textCursor().selectedText();
+    if (text.isEmpty() && pos) {
+        QTextCursor cursor = m_browser->cursorForPosition(*pos);
+        cursor.select(QTextCursor::WordUnderCursor);
+        text = cursor.selectedText();
+    }
+
+    char query[128];
+    if (!aide_autodoc_query_from_selection(text.toLatin1().constData(), query, sizeof(query)))
+        return QString();
+    return QString::fromLatin1(query);
+}
+
+void HelpDock::searchFor(const QString &query)
+{
+    if (query.isEmpty())
+        return;
+    m_search->setText(query);
+    onSearchSubmitted();
+}
+
+void HelpDock::searchSelection()
+{
+    searchFor(queryAt(nullptr));
+}
+
+void HelpDock::showBrowserContextMenu(const QPoint &pos)
+{
+    QMenu *menu = m_browser->createStandardContextMenu(pos);
+    const QString query = queryAt(&pos);
+    if (!query.isEmpty()) {
+        menu->addSeparator();
+        menu->addAction(tr("Search Help for \"%1\"").arg(query), this, [this, query] { searchFor(query); });
+    }
+    menu->exec(m_browser->viewport()->mapToGlobal(pos));
+    delete menu;
 }
 
 void HelpDock::showCandidateList(const QStringList &names)

@@ -63,6 +63,13 @@ void aide_autodocindex_find_wildcard_names(const AideAutodocIndex *idx, const ch
  * "" if the file can't be read. */
 char *aide_autodocindex_read_entry_text(const AideAutodocEntry *entry);
 
+/* Turns text the user marked in the help pane into a help query: the
+ * first run of identifier or `*`/`?` wildcard characters after the last
+ * '/' ("dos.library/Open()" -> "Open", " AllocMem(size," -> "AllocMem").
+ * Writes at most outsz-1 chars plus NUL to `out`; returns 0 (and an
+ * empty `out`) when the selection holds no such run. */
+int aide_autodoc_query_from_selection(const char *selection, char *out, size_t outsz);
+
 #ifdef __cplusplus
 }
 #endif

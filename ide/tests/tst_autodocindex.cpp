@@ -1,5 +1,7 @@
 #include "help/AutodocIndex.h"
 
+#include "aide/aide_autodoc.h"
+
 #include <QFile>
 #include <QTest>
 
@@ -13,6 +15,8 @@ private slots:
     void tagListHeuristicMatchesRealEntry();
     void caseInsensitiveFallback();
     void wildcardMatchesMultipleRealEntries();
+    void queryFromSelection_data();
+    void queryFromSelection();
 };
 
 namespace {
@@ -123,6 +127,39 @@ void TstAutodocIndex::wildcardMatchesMultipleRealEntries()
     QVERIFY(!singleCharMatches.contains(QStringLiteral("AllocMemH"))); // wrong length, must not match
 
     QVERIFY(index.findWildcardNames(QStringLiteral("NoSuchPrefix*")).isEmpty());
+}
+
+
+void TstAutodocIndex::queryFromSelection_data()
+{
+    QTest::addColumn<QString>("selection");
+    QTest::addColumn<QString>("query");
+
+    QTest::newRow("plain word") << "AllocMem" << "AllocMem";
+    QTest::newRow("surrounding space") << "  AllocMem \n" << "AllocMem";
+    QTest::newRow("call parentheses") << "OpenWindow()" << "OpenWindow";
+    QTest::newRow("synopsis fragment") << "memoryBlock = AllocMem(byteSize," << "memoryBlock";
+    QTest::newRow("autodoc header") << "dos.library/Open()" << "Open";
+    QTest::newRow("wildcards kept") << "Alloc*" << "Alloc*";
+    QTest::newRow("punctuation only") << " (), " << "";
+    QTest::newRow("empty") << "" << "";
+}
+
+void TstAutodocIndex::queryFromSelection()
+{
+    QFETCH(QString, selection);
+    QFETCH(QString, query);
+
+    char out[64];
+    const QByteArray latin1 = selection.toLatin1();
+    const int ok = aide_autodoc_query_from_selection(latin1.constData(), out, sizeof(out));
+    QCOMPARE(ok != 0, !query.isEmpty());
+    QCOMPARE(QString::fromLatin1(out), query);
+
+    // Truncates to the buffer instead of overrunning it.
+    char small[4];
+    aide_autodoc_query_from_selection("AllocMem", small, sizeof(small));
+    QCOMPARE(QString::fromLatin1(small), QStringLiteral("All"));
 }
 
 QTEST_APPLESS_MAIN(TstAutodocIndex)

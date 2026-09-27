@@ -528,3 +528,36 @@ char *aide_autodocindex_read_entry_text(const AideAutodocEntry *entry)
     free(text);
     return result;
 }
+
+static int is_query_char(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+        || c == '_' || c == '*' || c == '?';
+}
+
+int aide_autodoc_query_from_selection(const char *selection, char *out, size_t outsz)
+{
+    const char *p;
+    const char *slash;
+    size_t len = 0;
+
+    if (outsz == 0)
+        return 0;
+    out[0] = '\0';
+    if (!selection)
+        return 0;
+
+    p = selection;
+    slash = strrchr(selection, '/');
+    if (slash)
+        p = slash + 1;
+
+    while (*p && !is_query_char(*p))
+        ++p;
+    while (p[len] && is_query_char(p[len]) && len < outsz - 1)
+        ++len;
+
+    memcpy(out, p, len);
+    out[len] = '\0';
+    return len > 0;
+}

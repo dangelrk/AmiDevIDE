@@ -48,8 +48,15 @@ private slots:
     void onCandidateActivated(QListWidgetItem *item);
     void goBack();
     void goForward();
+    void searchSelection();
+    void showBrowserContextMenu(const QPoint &pos);
 
 private:
+    // Help query for the browser's selection, or for the word at `pos`
+    // (viewport coordinates) when nothing is selected and `pos` is given.
+    QString queryAt(const QPoint *pos) const;
+    void searchFor(const QString &query);
+
     QString linkify(const QString &escapedHtml) const;
     void pushHistory(const QString &title, const QString &html);
     void renderHtml(const QString &html);
@@ -59,6 +66,7 @@ private:
     QTextBrowser *m_browser;
     QToolButton *m_backButton;
     QToolButton *m_forwardButton;
+    QToolButton *m_searchSelectionButton;
 
     QList<QPair<QString, QString>> m_history; // {title, html}
     int m_historyIndex = -1;

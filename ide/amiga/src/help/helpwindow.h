@@ -3,7 +3,8 @@
 
 /* Hothelp/Autodoc window (F1 exact lookup, F2 wildcard search, and
  * Shift+F1 struct-layout display reuses its text pane): read-only
- * TextEditor, NList of candidates, back/forward (the search
+ * TextEditor, NList of candidates, back/forward, a button that looks up
+ * the text marked in the pane (the search
  * field is F2's ask_string() input dialog instead of a BetterString for
  * v1, same reasoning as the rest of this app's input handling).
  *
@@ -45,7 +46,7 @@ void helpwindow_search_wildcard(const char *pattern);
 void helpwindow_show_text(const char *title, const char *text);
 
 /* Returns 1 and performs the action if `id` belongs to this window
- * (candidate double-click, Back, Forward); 0 otherwise. */
+ * (candidate double-click, Back, Forward, search selection); 0 otherwise. */
 int helpwindow_handle_id(long id);
 
 #endif /* AIDE_MUI_HELPWINDOW_H */
