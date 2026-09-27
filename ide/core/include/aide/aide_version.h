@@ -18,7 +18,7 @@
  * dirty the repository; outside a git checkout they degrade to "0" and
  * the compiler's own __DATE__. */
 
-#define AMIGAIDE_VERSION_STRING "0.2.0"
+#define AMIGAIDE_VERSION_STRING "0.1.0"
 #define AMIGAIDE_COPYRIGHT_STRING "Copyright \xC2\xA9 2026 Ronny Kr\xC3\xBCger"
 
 #ifndef AMIGAIDE_BUILD_NUMBER

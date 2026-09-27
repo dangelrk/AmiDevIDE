@@ -151,6 +151,8 @@ typedef ULONG IPTR;
 
 #define AIDE_MAX_PATH 256
 
+extern const char amiga_ver[]; /* main.c */
+
 static Object *g_app;
 static Object *g_window;
 static Object *g_editor;
@@ -3050,7 +3052,7 @@ int mainwindow_run(void)
 
     g_app = ApplicationObject,
         MUIA_Application_Title,       "AmigaIDE",
-        MUIA_Application_Version,     "$VER: AmigaIDE 0.1 (unverified)",
+        MUIA_Application_Version,     amiga_ver,
         MUIA_Application_Copyright,   "AmigaIDE",
         MUIA_Application_Author,      "AmigaIDE",
         MUIA_Application_Description, "vbcc/vasm/vlink IDE for AmigaOS",
