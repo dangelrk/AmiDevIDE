@@ -525,6 +525,7 @@ Die MUI-IDE speichert ihre Einstellungen in `ENVARC:AmigaIDE/`:
 | Meldung | Ursache |
 |---|---|
 | `No config file!` von `vc` | `$VBCC` nicht gesetzt → `source toolchain/setenv.sh` |
+| `cmake -B build`: „No LHA extractor found“ | kein `lha`/`lhasa`/`7z`/`7zz` im `PATH` und kein `lhafile` für CMakes Python → `brew install lhasa` bzw. `apt install lhasa`, dann `cmake` erneut. Sind die SDKs schon installiert, ist es nur eine Warnung |
 | `no working LHA extractor` | `pip3 install lhafile` oder `lhasa`/`7z` installieren |
 | `make: …/vc: No such file or directory` in der IDE | Toolchain verschoben; IDE-Einstellungen zeigen ins Leere (werden beim Start repariert, sonst in den Einstellungen korrigieren) |
 | macOS: `Library not loaded: @rpath/QtWidgets.framework` | nacktes `amigaide`-Binary kopiert — immer über `toolchain/bin/amigaide` (Startskript) bzw. die `.app` starten |

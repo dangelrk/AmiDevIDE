@@ -51,6 +51,34 @@ function(acd_script_target name script)
     endif()
 endfunction()
 
+# acd-sdk unpacks .lha archives, and nothing ships a reader for them. Without
+# this check the gap shows only after the download and the vbcc build. Once
+# the SDKs are installed no extractor is needed, so that case only warns.
+find_program(ACD_LHA NAMES lha lhasa 7z 7zz)
+if(NOT ACD_LHA)
+    execute_process(COMMAND ${ACD_PY} -c "import lhafile"
+        RESULT_VARIABLE _acd_lhafile OUTPUT_QUIET ERROR_QUIET)
+    if(NOT _acd_lhafile EQUAL 0)
+        set(_acd_lha_hint
+            "No LHA extractor found (lha, lhasa, 7z, 7zz or the Python module "
+            "lhafile for ${ACD_PY}). Install one of:\n"
+            "  brew install lhasa                 (macOS)\n"
+            "  sudo apt install lhasa             (Debian/Ubuntu)\n"
+            "  pacman -S mingw-w64-x86_64-p7zip   (MSYS2)\n"
+            "  ${ACD_PY} -m pip install lhafile\n"
+            "then run cmake again.")
+        if(EXISTS "${ACD_TOOLCHAIN_PREFIX}/targets/m68k-amigaos/lib"
+           AND EXISTS "${ACD_TOOLCHAIN_PREFIX}/sdk/NDK_3.2"
+           AND EXISTS "${ACD_TOOLCHAIN_PREFIX}/sdk/MUI_3.8")
+            message(WARNING ${_acd_lha_hint}
+                "\nThe SDKs are already installed, so this only matters for "
+                "acd-sdk --force.")
+        else()
+            message(FATAL_ERROR ${_acd_lha_hint})
+        endif()
+    endif()
+endif()
+
 # ------------------------------------------------------------- bootstrap
 
 if(ACD_OFFLINE)
