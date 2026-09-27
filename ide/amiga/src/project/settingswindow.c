@@ -260,6 +260,16 @@ static void populate_widgets(void)
     }
 }
 
+static int is_builtin_sdk_id(const char *id)
+{
+    int i;
+    for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
+        if (strcmp(id, g_extraSdkDefs[i].id) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static void apply_widgets(void)
 {
     char *s;
@@ -302,10 +312,29 @@ static void apply_widgets(void)
     g_editing.linker.strip = get_check(g_stripCheck);
     editor_to_strlist(g_extraLdFlagsEditor, &g_editing.linker.extraLdFlags);
 
-    aide_strlist_clear(&g_editing.sdks.selected);
-    for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
-        if (get_check(g_extraSdkChecks[i]))
-            aide_strlist_push(&g_editing.sdks.selected, g_extraSdkDefs[i].id);
+    /* Built-ins in checkbox order, then every id this window has no
+     * checkbox for -- a user SDK added in the Qt IDE -- unchanged and in
+     * its old order, the way the Qt dialog lists user SDKs after the
+     * built-ins. This side cannot use them (the Makefile skips ids the
+     * registry does not know), but dropping them would lose them for the
+     * Qt IDE the next time the project is opened there. */
+    {
+        AideStrList others;
+        size_t j;
+
+        aide_strlist_init(&others);
+        for (j = 0; j < g_editing.sdks.selected.count; ++j) {
+            if (!is_builtin_sdk_id(g_editing.sdks.selected.items[j]))
+                aide_strlist_push(&others, g_editing.sdks.selected.items[j]);
+        }
+        aide_strlist_clear(&g_editing.sdks.selected);
+        for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
+            if (get_check(g_extraSdkChecks[i]))
+                aide_strlist_push(&g_editing.sdks.selected, g_extraSdkDefs[i].id);
+        }
+        for (j = 0; j < others.count; ++j)
+            aide_strlist_push(&g_editing.sdks.selected, others.items[j]);
+        aide_strlist_free(&others);
     }
 }
 

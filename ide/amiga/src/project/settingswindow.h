@@ -11,7 +11,8 @@
  *
  * SDKs tab lists the 9 built-in SDK ids (ndk-3.2 through posixlib, see
  * aide_sdk_append_builtins()) as checkboxes -- user-defined SDK
- * registration (Qt's "Add User SDK...") isn't implemented on this side. */
+ * registration (Qt's "Add User SDK...") isn't implemented on this side,
+ * but a user SDK's id already in the project survives OK unchanged. */
 
 #include <libraries/mui.h>
 
