@@ -10,13 +10,15 @@
  * Raise AMIGAIDE_VERSION_STRING by hand: the patch level for fixes, the
  * minor for a larger feature.
  *
- * The build number and date come from the build system as -D defines --
- * cmake/BuildStamp.cmake for the Qt build (via a generated header),
- * amiga/Makefile.amiga-cross for the MUI one. Both are the git commit
- * count with a trailing '+' when the working tree is dirty, and today's
- * date. Nothing is written into the source tree, so a rebuild can never
- * dirty the repository; outside a git checkout they degrade to "0" and
- * the compiler's own __DATE__. */
+ * The build number and date come from a header the build system writes,
+ * AmigaIDEBuildStamp.h -- cmake/BuildStamp.cmake for the Qt build,
+ * amiga/Makefile.amiga-cross and amiga/Makefile.amiga for the MUI one. Not
+ * -D defines: vc drops the quotes around a -D string value. The number is
+ * the git commit count with a trailing '+' when the working tree is dirty,
+ * the date today's, as dd.mm.yyyy. The header goes into the build tree,
+ * never the source tree, so a rebuild can never dirty the repository.
+ * Without git the number is "0"; a missing date falls back to the
+ * compiler's own __DATE__. */
 
 #define AMIGAIDE_VERSION_STRING "0.1.0"
 #define AMIGAIDE_COPYRIGHT_STRING "Copyright \xC2\xA9 2026 Ronny Kr\xC3\xBCger"

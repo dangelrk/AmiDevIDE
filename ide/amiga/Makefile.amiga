@@ -16,6 +16,14 @@
 #   make -f amiga/Makefile.amiga app            # full amigaide executable
 #   make -f amiga/Makefile.amiga clean          # remove obj/ and the binary
 #
+# The build stamp (AmigaIDEBuildStamp.h, see core/include/aide/aide_version.h)
+# is written into obj/ with Echo. There is no git on the Amiga, so the build
+# number is always 0, and AmigaDOS has no locale-independent way to print
+# the date as dd.mm.yyyy -- pass it for a release build:
+#   make -f amiga/Makefile.amiga app BUILD_DATE=27.09.2026
+# Without it the compiler's __DATE__ is used. The stamp is only written when
+# obj/ has none, so run "clean" after changing BUILD_DATE.
+#
 # Every object file has its own target: prerequisite line below (deliberately
 # NOT pattern/suffix rules -- explicit per-file rules avoid gnu_make_amiga's
 # one real prerequisite-side gotcha, no wildcard expansion in prerequisites;
@@ -45,6 +53,8 @@ CORE_INC    = $(ROOT)/core/include
 AMIGA_SRC   = $(ROOT)/amiga/src
 OBJDIR      = $(ROOT)/amiga/obj
 BINDIR      = $(ROOT)/amiga/bin
+BUILDSTAMP  = $(OBJDIR)/AmigaIDEBuildStamp.h
+BUILD_DATE  =
 
 RUNTIME_INC = $(VBCC)targets/m68k-amigaos/include
 RUNTIME_LIB = $(VBCC)targets/m68k-amigaos/lib
@@ -57,7 +67,7 @@ REQTOOLS_INC= $(SDK)reqtools/include
 
 CORE_CFLAGS = -c99 -cpu=$(CPU) -O2 -I$(RUNTIME_INC) -I$(CORE_INC) -I$(CORE_VENDOR)
 APP_CFLAGS  = +aos68k -O2 -cpu=$(CPU) \
-              -I$(AMIGA_SRC) -I$(CORE_INC) -I$(CORE_VENDOR) \
+              -I$(OBJDIR) -I$(AMIGA_SRC) -I$(CORE_INC) -I$(CORE_VENDOR) \
               -I$(MCC_INC) -I$(REGEX_INC) -I$(REQTOOLS_INC) -I$(MUI_INC) -I$(NDK_INC) -I$(RUNTIME_INC)
 
 LDFLAGS  = +aos68k -L$(RUNTIME_LIB) -L$(NDK_LIB) -lmieee
@@ -92,10 +102,18 @@ $(OBJDIR):
 $(BINDIR):
 	-makedir $(BINDIR)
 
-$(OBJDIR)/main.o: $(AMIGA_SRC)/app/main.c
+# *" is AmigaDOS's escape for a quote inside a quoted Echo argument.
+$(BUILDSTAMP): | $(OBJDIR)
+	Echo >$(BUILDSTAMP) "#define AMIGAIDE_BUILD_NUMBER *"0*""
+ifneq ($(BUILD_DATE),)
+	Echo >>$(BUILDSTAMP) "#define AMIGAIDE_BUILD_DATE *"$(BUILD_DATE)*""
+endif
+
+# main.c puts the build date into $VER, mainwindow.c into the About box.
+$(OBJDIR)/main.o: $(AMIGA_SRC)/app/main.c $(BUILDSTAMP)
 	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/main.c -o $(OBJDIR)/main.o
 
-$(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c
+$(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c $(BUILDSTAMP)
 	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/mainwindow.c -o $(OBJDIR)/mainwindow.o
 
 $(OBJDIR)/prefswindow.o: $(AMIGA_SRC)/app/prefswindow.c
