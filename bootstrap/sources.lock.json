@@ -6,6 +6,20 @@
     "url": "https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz",
     "version": "3.0.1"
   },
+  "mcc_nlist": {
+    "filename": "MCC_NList-0.128.lha",
+    "resolved": "2026-09-27",
+    "sha256": "639e54660e1c8a83f3c030e2b383b575534a155c9087909b59300177e8adb0e7",
+    "url": "https://github.com/amiga-mui/nlist/releases/download/0.128/MCC_NList-0.128.lha",
+    "version": "0.128"
+  },
+  "mcc_texteditor": {
+    "filename": "MCC_TextEditor-15.56.lha",
+    "resolved": "2026-09-27",
+    "sha256": "d239a8324684233c09999354399f25595996c7ba52b2f44627263eb9676abfe9",
+    "url": "https://github.com/amiga-mui/texteditor/releases/download/15.56/MCC_TextEditor-15.56.lha",
+    "version": "15.56"
+  },
   "mui38": {
     "filename": "mui38dev.lha",
     "resolved": "2026-09-27",
@@ -19,6 +33,13 @@
     "sha256": "96cabd4ad683dced632e147bf86dee0f50dcb1254386216c25c362916a6409bb",
     "url": "https://aminet.net/dev/misc/NDK3.2.lha",
     "version": ""
+  },
+  "reqtools_dev": {
+    "filename": "ReqToolsDev.lha",
+    "resolved": "2026-09-27",
+    "sha256": "c7fb73ef360ab3337c888ce749a2910dc2dabd72c4ad9d8ce4ffc1ea4bddc575",
+    "url": "https://aminet.net/util/libs/ReqToolsDev.lha",
+    "version": "2.9"
   },
   "vasm": {
     "filename": "vasm.tar.gz",

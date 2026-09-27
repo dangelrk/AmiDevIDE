@@ -79,6 +79,42 @@ homepage    = "https://aminet.net/package/dev/mui/mui38dev"
 notes       = "Archive root is MUI/, installed as sdk/MUI_3.8/."
 
 [[source]]
+id          = "mcc_nlist"
+name        = "MCC NList"
+description = "MUI custom classes NList, NListview, NListtree, NFloattext: includes and autodocs."
+resolver    = "static"
+url         = "https://github.com/amiga-mui/nlist/releases/download/0.128/MCC_NList-0.128.lha"
+filename    = "MCC_NList-0.128.lha"
+version     = "0.128"
+patterns    = ["MCC_NList-*.lha"]
+homepage    = "https://github.com/amiga-mui/nlist"
+notes       = "LGPL 2.1. Developer/ is merged into sdk/MCC/ together with TextEditor."
+
+[[source]]
+id          = "mcc_texteditor"
+name        = "MCC TextEditor"
+description = "MUI custom class TextEditor: include and autodoc."
+resolver    = "static"
+url         = "https://github.com/amiga-mui/texteditor/releases/download/15.56/MCC_TextEditor-15.56.lha"
+filename    = "MCC_TextEditor-15.56.lha"
+version     = "15.56"
+patterns    = ["MCC_TextEditor-*.lha"]
+homepage    = "https://github.com/amiga-mui/texteditor"
+notes       = "LGPL 2.1. Developer/ is merged into sdk/MCC/ together with NList."
+
+[[source]]
+id          = "reqtools_dev"
+name        = "ReqTools developer"
+description = "reqtools.library 2.9 developer files: includes, FD, autodoc."
+resolver    = "static"
+url         = "https://aminet.net/util/libs/ReqToolsDev.lha"
+filename    = "ReqToolsDev.lha"
+version     = "2.9"
+patterns    = ["ReqToolsDev*.lha"]
+homepage    = "https://aminet.net/package/util/libs/ReqToolsDev"
+notes       = "Archive root is ReqTools/; include/, fd/ and doc/ are installed as sdk/reqtools/."
+
+[[source]]
 id          = "acebasic"
 name        = "ACE BASIC"
 description = "ACE BASIC compiler, upstream release the AmiDevIDE patch series applies to."

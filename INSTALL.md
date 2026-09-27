@@ -37,7 +37,10 @@ herauszufinden, ob etwas fehlt.
 | NDK 3.2 (Release 4) | R4 | `https://aminet.net/dev/misc/NDK3.2.lha` | automatisch, entpackt | `toolchain/sdk/NDK_3.2/` |
 | MUI 3.8 Developer | 3.8 | `https://aminet.net/dev/mui/mui38dev.lha` | automatisch, entpackt | `toolchain/sdk/MUI_3.8/` |
 | ACE BASIC | 3.0.1 (fest) | `https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz` | automatisch, entpackt nach `var/src/acebasic/`, mit `compilers/acebasic/patches/` gepatcht, aus Quelltext gebaut (§4) | `toolchain/bin/{ace,yap,bas}`, `toolchain/sdk/ACE/` |
-| MCC, regex, reqtools, Roadshow, AmiSSL, SQLite3, PosixLib | – | keine feste Download-Adresse im Code | **manuell** (§5) | `toolchain/sdk/<Name>/` |
+| MCC NList | 0.128 | `https://github.com/amiga-mui/nlist/releases/download/0.128/MCC_NList-0.128.lha` | automatisch, entpackt (nur `Developer/C/include`, `Developer/Autodocs`) | `toolchain/sdk/MCC/` |
+| MCC TextEditor | 15.56 | `https://github.com/amiga-mui/texteditor/releases/download/15.56/MCC_TextEditor-15.56.lha` | automatisch, entpackt, mit NList zusammengeführt | `toolchain/sdk/MCC/` |
+| ReqTools Developer | 2.9 | `https://aminet.net/util/libs/ReqToolsDev.lha` | automatisch, entpackt (`include`, `fd`, `doc`) | `toolchain/sdk/reqtools/` |
+| regex, Roadshow, AmiSSL, SQLite3, PosixLib | – | keine feste Download-Adresse im Code | **manuell** (§5) | `toolchain/sdk/<Name>/` |
 | Kickstart-ROM, Workbench-HDF | – | **nur du selbst** (z. B. Amiga Forever) | **manuell** (§7) | `var/emu/...` |
 | FS-UAE | – | `https://fs-uae.net/download/` | manuell, optional | Systeminstallation |
 | Qt 6 | 6.11.1 auf macOS verifiziert | `https://www.qt.io/download-qt-installer-oss` oder Paketmanager | manuell, nur für die IDE | beliebig, per `CMAKE_PREFIX_PATH` |
@@ -57,6 +60,9 @@ Versionen und SHA-256 der automatisch geladenen Archive stehen in
 - **NDK 3.2**: © Hyperion Entertainment CVBA, über Aminet verteilt.
 - **MUI 3.8 Developer**: © 1992–97 Stefan Stuntz; frei weitergebbar, solange
   die Copyrights erhalten bleiben, nicht gewinnorientiert verkaufbar.
+- **MCC NList, MCC TextEditor**: LGPL 2.1 (amiga-mui-Projekt).
+- **ReqTools 2.9**: © 1991–94 Nico François, 1995–97 Magnus Holmgren;
+  frei weitergebbar.
 - **ACE BASIC**: GPL (Original 1998 GPL v2 von David Benn; das aktuelle
   Upstream-Repository `mdbergmann/ACEBasic` enthält seit 06/2026 eine GPL-v3-`LICENSE`).
 - **Kickstart/Workbench**: urheberrechtlich geschützt, **niemals** weitergeben.
@@ -102,7 +108,9 @@ AmiDevIDE/
     │   ├── NDK_3.2/      Include_H Include_I lib FD SFD Autodocs …
     │   ├── MUI_3.8/      Developer/{C/Include,FD,Autodocs,…}
     │   ├── ACE/          lib bmaps include icons submods quickref.txt
-    │   └── MCC/ regex/ reqtools/ Roadshow/ AmiSSL-v5/ SQLite3/ PosixLib/   (manuell, §5)
+    │   ├── MCC/          Developer/{C/include/mui,Autodocs/MCC}   (NList + TextEditor)
+    │   ├── reqtools/     include fd doc
+    │   └── regex/ Roadshow/ AmiSSL-v5/ SQLite3/ PosixLib/   (manuell, §5)
     ├── fs-uae/development.fs-uae
     ├── project-template/ Makefile*
     ├── shared/           wird in FS-UAE als SHARED: gemountet
@@ -215,17 +223,16 @@ IDE und die Tools `ace`, `yap`, `bas` fehlen dann (`acd-doctor` meldet das).
 
 ## 5. SDKs ohne automatischen Download (manuell)
 
-`bootstrap/acd_install_sdk.py` installiert nur NDK 3.2 und MUI 3.8. Die
-folgenden SDKs brauchst du nur, wenn du sie nutzt — **MCC, regex und reqtools
-sind aber Pflicht für die MUI-IDE (`amigaide-m68k`)**. Lege sie so ab, wie in
-der Spalte „Erwartetes Layout“ angegeben (geprüft wird der jeweils erste
-Pfad durch `acd-doctor`):
+`bootstrap/acd_install_sdk.py` installiert NDK 3.2, MUI 3.8, MCC (NList und
+TextEditor) und reqtools — alles, was die MUI-IDE (`amigaide-m68k`) zum
+Übersetzen braucht. Die folgenden SDKs brauchst du nur, wenn du sie nutzt.
+Lege sie so ab, wie in der Spalte „Erwartetes Layout“ angegeben (geprüft wird
+der jeweils erste Pfad durch `acd-doctor`):
 
 | Verzeichnis unter `toolchain/sdk/` | Erwartetes Layout | Mögliche Quelle |
 |---|---|---|
-| `MCC/` | `Developer/C/include/mui/*.h` (NList, NListview, NListtree, TextEditor, BetterString, TheBar …), `Developer/Autodocs/MCC/*.doc` | GitHub `amiga-mui`: `https://github.com/amiga-mui/nlist/releases/download/0.128/MCC_NList-0.128.lha`, `https://github.com/amiga-mui/texteditor/releases/download/15.56/MCC_TextEditor-15.56.lha`, `https://github.com/amiga-mui/betterstring/releases/download/11.36/MCC_BetterString-11.36.lha`, `https://github.com/amiga-mui/thebar/releases/download/26.22/MCC_TheBar-26.22.lha` — die `Developer/`-Bäume der Archive zusammenführen (Layout der Archive ungeprüft) |
-| `regex/` | `include/{clib,libraries,pragmas,proto}/…`, `fd/regex_lib.fd` | Aminet, z. B. `util/libs/regex_ranieri` (ungeprüft, welches Paket das Original ist) |
-| `reqtools/` | `include/…` (`libraries/reqtools.h`), `fd/reqtools_lib.fd` | Aminet `util/libs/ReqToolsUsr.lha` bzw. ReqTools-Developer-Paket (ungeprüft) |
+| `MCC/` (weitere Klassen) | `Developer/C/include/mui/*.h`, `Developer/Autodocs/MCC/*.doc` | BetterString, TheBar usw. installiert der Bootstrap nicht; ihre `Developer/`-Bäume von GitHub `amiga-mui` hineinkopieren |
+| `regex/` | `include/{clib,libraries,pragmas,proto}/…`, `fd/regex_lib.fd` | Aminet, z. B. `util/libs/regex_ranieri` (ungeprüft, welches Paket das Original ist). Die MUI-IDE ruft `regex.library` über eigene Stubs auf und braucht die Header zum Übersetzen nicht |
 | `Roadshow/` | `include/`, `netinclude/`, `sfd/` | Roadshow-SDK (ungeprüft); NDK 3.2 enthält unter `SANA+RoadshowTCP-IP/` ebenfalls `netinclude` |
 | `AmiSSL-v5/` | `Developer/include/`, `Developer/lib/AmigaOS3/` | `https://github.com/jens-maus/amissl/releases/download/5.27/AmiSSL-5.27-SDK.lha` (Layout ungeprüft) |
 | `SQLite3/` | `include/`, `lib/` | Aminet `biz/dbase/sqlite3` (ungeprüft) |
@@ -275,9 +282,9 @@ cmake --build build --target acd-toolchain
 
 Das führt der Reihe nach aus:
 
-1. `acd-fetch` — lädt die sieben Archive aus §1 nach `var/downloads/`
+1. `acd-fetch` — lädt die zehn Archive aus §1 nach `var/downloads/`
 2. `acd-tools` — baut vbcc (inkl. automatisch beantwortetem `dtgen`), vasm, vlink → `toolchain/bin/`
-3. `acd-sdk` — entpackt vbcc-Target, NDK 3.2, MUI 3.8 → `toolchain/targets/`, `toolchain/sdk/`
+3. `acd-sdk` — entpackt vbcc-Target, NDK 3.2, MUI 3.8, MCC, reqtools → `toolchain/targets/`, `toolchain/sdk/`
 4. `acd-ace-src` — ACE 3.0.1 prüfen, nach `var/src/acebasic/` entpacken, Patches anwenden
 5. `acd-ace` — `make -f Makefile-host` und `install` in `var/src/acebasic/src/make` → `toolchain/bin/{ace,yap,bas}`, `toolchain/config/ace68k`, `toolchain/sdk/ACE/`
 6. `acd-config` — erzeugt `toolchain/config/aos68k*`, `setenv.sh/.ps1`, `fs-uae/development.fs-uae`, `project-template/`
@@ -345,7 +352,8 @@ Startskript dafür. Die IDE findet die Toolchain über ihren eigenen Ort.
 
 ### 6.8 MUI-IDE für den Amiga cross-kompilieren (optional)
 
-Braucht NDK 3.2, MUI 3.8 **und** `sdk/MCC`, `sdk/regex`, `sdk/reqtools` (§5).
+Braucht NDK 3.2, MUI 3.8, `sdk/MCC` und `sdk/reqtools`; alle vier installiert
+`acd-toolchain` (§6.3).
 
 ```sh
 cmake -B build -DACD_BUILD_IDE_AMIGA=ON
@@ -414,9 +422,9 @@ python3 emulator/acd_emu.py --serial
 | NDK 3.2 R4 | `https://aminet.net/dev/misc/NDK3.2.lha` | `SDK:NDK_3.2/` (mit `Include_H`, `Include_I`, `lib`, `FD`, `SFD`, `Autodocs`) |
 | MUI 3.8 Developer | `https://aminet.net/dev/mui/mui38dev.lha` | Inhalt von `MUI/` nach `SDK:MUI_3.8/` (→ `SDK:MUI_3.8/Developer/C/Include`) |
 | MUI 3.8 User (Runtime) | `https://aminet.net/util/libs/mui38usr.lha` | per Installer, `MUI:` |
-| MCCs Developer + Runtime | siehe §5 (GitHub `amiga-mui`) | Header nach `SDK:MCC/Developer/C/include/mui/`, Klassen nach `MUI:Libs/mui/` |
+| MCCs Developer + Runtime | siehe §1 (GitHub `amiga-mui`) | Header nach `SDK:MCC/Developer/C/include/mui/`, Klassen nach `MUI:Libs/mui/` |
 | regex.library | siehe §5 (ungeprüft) | Header nach `SDK:regex/include/`, Library nach `LIBS:` |
-| reqtools | siehe §5 | Header nach `SDK:reqtools/include/`, Library nach `LIBS:` |
+| reqtools | `https://aminet.net/util/libs/ReqToolsDev.lha` (Header), `https://aminet.net/util/libs/ReqToolsUsr.lha` (Library) | Header nach `SDK:reqtools/include/`, Library nach `LIBS:` |
 | GNU make | `https://github.com/dmcoles/gnu_make_amiga/releases/download/4.4.1-26022026/make441-26022026.lha` oder `https://aminet.net/dev/c/make-4.4.1.lha` | `make` nach `C:` oder in einen Pfad im `PATH` |
 | ACE BASIC 3.0.1 (Original, **ungepatcht**) | `https://aminet.net/dev/basic/ace-basic.lha` | z. B. `Work:ACE`, mit den Assigns `ACE:`, `ACElib:`, `ACEinclude:`, `ACEbmaps:` (§8.3) |
 

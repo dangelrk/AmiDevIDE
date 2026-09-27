@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Install the downloadable SDKs into toolchain/sdk/.
 
-Two of the SDKs have an authoritative download (NDK 3.2 and MUI 3.8); this
-script unpacks those and normalises their directory names to what the IDE's SDK
-registry expects.  The rest -- MCC, regex, reqtools, Roadshow, AmiSSL, SQLite3,
-PosixLib -- have no stable upstream URL and come from acd_seed_from_legacy.py.
+NDK 3.2, MUI 3.8, MCC (NList and TextEditor) and reqtools have an
+authoritative download; this script unpacks those and normalises their
+directory names to what the IDE's SDK registry expects.  The rest -- regex,
+Roadshow, AmiSSL, SQLite3, PosixLib -- have no stable upstream URL and come
+from acd_seed_from_legacy.py.
 
     acd_install_sdk.py [--force]
 """
@@ -19,28 +20,51 @@ from acd_common import (
 )
 from acd_extract import extract
 
-#: id -> (installed directory, archive root to strip, prune list)
+#: key -> how one SDK under toolchain/sdk/ is assembled.
 #:
-#: "archive root to strip" is the single folder some archives wrap everything
-#: in; NDK 3.2 has none, MUI 3.8 wraps in MUI/.
+#: "parts" lists the archives it is unpacked from, as (source id in
+#: sources.toml, glob patterns in var/downloads/, archive root to strip): the
+#: single folder some archives wrap everything in.  Several parts are merged
+#: into one tree.  "keep", if given, is what survives of each part; the MCC
+#: archives also carry binaries for six platforms, demos and catalogs.
 SDKS = {
     "ndk32": {
         "dir": "NDK_3.2",
-        "strip": None,
+        "parts": [("ndk32", ["NDK3.2*.lha", "NDK_3.2*.lha"], None)],
         # 12 MB of wget/tcpdump sources that no build here ever touches
         "prune": ["SANA+RoadshowTCP-IP/source_code"],
         "expect": ["Include_H", "Include_I", "lib", "FD", "SFD", "Autodocs"],
     },
     "mui38": {
         "dir": "MUI_3.8",
-        "strip": "MUI",
+        "parts": [("mui38", ["mui38dev*.lha"], "MUI")],
         "prune": [],
         "expect": ["Developer/C/Include", "Developer/FD", "Developer/Autodocs"],
+    },
+    # The MUI IDE includes NList, NListview, NListtree and TextEditor.
+    "mcc": {
+        "dir": "MCC",
+        "parts": [("mcc_nlist", ["MCC_NList-*.lha"], "MCC_NList"),
+                  ("mcc_texteditor", ["MCC_TextEditor-*.lha"], "MCC_TextEditor")],
+        "keep": ["Developer/C/include", "Developer/Autodocs"],
+        "prune": [],
+        "expect": ["Developer/C/include/mui/NList_mcc.h",
+                   "Developer/C/include/mui/NListview_mcc.h",
+                   "Developer/C/include/mui/NListtree_mcc.h",
+                   "Developer/C/include/mui/TextEditor_mcc.h",
+                   "Developer/Autodocs/MCC"],
+    },
+    "reqtools": {
+        "dir": "reqtools",
+        "parts": [("reqtools_dev", ["ReqToolsDev*.lha"], "ReqTools")],
+        "keep": ["include", "fd", "doc"],
+        "prune": [],
+        "expect": ["include/libraries/reqtools.h", "fd/reqtools_lib.fd"],
     },
 }
 
 #: SDKs with no download; acd_seed_from_legacy.py provides them.
-SEEDED = ["MCC", "regex", "reqtools", "Roadshow", "AmiSSL-v5", "SQLite3", "PosixLib"]
+SEEDED = ["regex", "Roadshow", "AmiSSL-v5", "SQLite3", "PosixLib"]
 
 
 def _find_archive(source_id: str, patterns: list[str]) -> Path | None:
@@ -61,34 +85,51 @@ def _drop_amiga_icons(root: Path) -> int:
     return n
 
 
-def install_sdk(source_id: str, spec: dict, force: bool) -> bool:
+def _unpack_part(label: str, source_id: str, patterns: list[str],
+                 strip: str | None, keep: list[str] | None,
+                 staging: Path) -> Path | None:
+    """Unpack one archive into staging and return the root of its payload."""
+    archive = _find_archive(source_id, patterns)
+    if not archive:
+        return None
+    wanted = None
+    if keep:
+        prefixes = [f"{strip}/{k}/" if strip else f"{k}/" for k in keep]
+        def wanted(rel: str) -> bool:
+            return any(rel.startswith(p) for p in prefixes)
+    info(f"{label:12s} unpacking {archive.name}")
+    extract(archive, staging, wanted=wanted)
+    if not strip:
+        return staging
+    inner = staging / strip
+    if not inner.is_dir():
+        fail(f"{archive.name}: expected a top-level {strip}/ directory")
+    return inner
+
+
+def install_sdk(key: str, spec: dict, force: bool) -> bool:
     target = TOOLCHAIN_SDK / spec["dir"]
     if target.exists() and not force:
         info(f"{spec['dir']:12s} already installed: {rel(target)}")
         return True
 
-    patterns = {
-        "ndk32": ["NDK3.2*.lha", "NDK_3.2*.lha"],
-        "mui38": ["mui38dev*.lha"],
-    }[source_id]
-    archive = _find_archive(source_id, patterns)
-    if not archive:
-        warn(f"{spec['dir']:12s} no archive in {rel(DOWNLOADS)} -- run acd_fetch.py")
-        return False
-
-    staging = VAR / "stage" / source_id
+    staging = VAR / "stage" / key
     if staging.exists():
         shutil.rmtree(staging)
-    info(f"{spec['dir']:12s} unpacking {archive.name}")
-    extract(archive, staging)
-    icons = _drop_amiga_icons(staging)
-
-    root = staging
-    if spec["strip"]:
-        inner = staging / spec["strip"]
-        if not inner.is_dir():
-            fail(f"{archive.name}: expected a top-level {spec['strip']}/ directory")
-        root = inner
+    root = staging / "merged"
+    ensure_dirs(root)
+    for source_id, patterns, strip in spec["parts"]:
+        part = _unpack_part(spec["dir"], source_id, patterns, strip,
+                            spec.get("keep"), staging / source_id)
+        if part is None:
+            warn(f"{spec['dir']:12s} no {source_id} archive in {rel(DOWNLOADS)} "
+                 "-- run acd_fetch.py")
+            shutil.rmtree(staging, ignore_errors=True)
+            return False
+        for sub in spec.get("keep") or ["."]:
+            if (part / sub).is_dir():
+                shutil.copytree(part / sub, root / sub, dirs_exist_ok=True)
+    icons = _drop_amiga_icons(root)
 
     for pruned in spec["prune"]:
         victim = root / pruned
@@ -102,7 +143,7 @@ def install_sdk(source_id: str, spec: dict, force: bool) -> bool:
 
     missing = [d for d in spec["expect"] if not (root / d).exists()]
     if missing:
-        fail(f"{archive.name}: unexpected layout, missing {', '.join(missing)}")
+        fail(f"{spec['dir']}: unexpected archive layout, missing {', '.join(missing)}")
 
     if target.exists():
         shutil.rmtree(target)
@@ -165,8 +206,8 @@ def main() -> int:
     step("Installing SDKs")
     good = True
     good &= install_vbcc_target(args.force)
-    for sid, spec in SDKS.items():
-        good &= install_sdk(sid, spec, args.force)
+    for key, spec in SDKS.items():
+        good &= install_sdk(key, spec, args.force)
 
     missing_seeded = [d for d in SEEDED if not (TOOLCHAIN_SDK / d).exists()]
     if missing_seeded:

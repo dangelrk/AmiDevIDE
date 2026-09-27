@@ -30,8 +30,9 @@ Ein Cross-Compiler für AmigaOS/m68k auf Basis von **vbcc** (Compiler),
   **Achtung: 3.2 ist NEUER als 3.9.** NDK 3.9 ist entfallen.
 - `sdk/MUI_3.8` — MUI GUI-Toolkit. MUI 5.0 ist entfallen: es liefert nur
   GCC-`.a`-Libraries, die vlink nicht linken kann.
-- `sdk/MCC`, `sdk/regex`, `sdk/reqtools` — MUI-Zusatzklassen und die beiden
-  Libraries, gegen die die MUI-Variante der IDE linkt
+- `sdk/MCC`, `sdk/reqtools` — MUI-Zusatzklassen (NList, TextEditor) und
+  reqtools; beide installiert der Bootstrap. `sdk/regex` kommt von Hand (§5
+  in INSTALL.md); die MUI-IDE ruft `regex.library` über eigene Stubs auf
 - `sdk/Roadshow` — TCP/IP-Stack-Header (`bsdsocket`, `netinclude`)
 - `sdk/AmiSSL-v5` — TLS/SSL
 - `sdk/SQLite3`, `sdk/PosixLib`

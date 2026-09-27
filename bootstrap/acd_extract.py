@@ -83,32 +83,44 @@ def _lhafile_extract(archive: Path, dest: Path) -> bool:
     return True
 
 
-def _only_empty_dirs_failed(output: str, dest: Path) -> bool:
-    """Forgive lhasa for the empty directories it cannot create.
+def _lhasa_failures_harmless(output: str, dest: Path, wanted) -> int | None:
+    """Decide whether lhasa's "Failure" entries can be forgiven.
 
-    Some archives (mui38dev.lha) store an empty directory as an ordinary -lh0-
-    entry whose name ends in "/" rather than as an -lhd- entry.  lhasa tries
-    to create a file of that name, reports "Failure" and exits 1, although
-    every real file was extracted.  If those are the only failures, create the
-    directories ourselves and accept the result.
+    lhasa exits 1 if any entry fails, although it extracts everything else.
+    Two kinds of failure are harmless:
+
+    - an empty directory stored as an ordinary -lh0- entry whose name ends in
+      "/" (mui38dev.lha) instead of as an -lhd- entry: lhasa tries to create a
+      file of that name.  We create the directory instead.
+    - a file the caller does not want, for example a catalog source whose
+      Latin-1 name the host filesystem refuses (ReqToolsDev.lha).  wanted(rel)
+      says which archive paths matter; without it, every file does.
+
+    Returns the number of skipped files, or None if a failure matters.
     """
     failed = []
     for line in output.replace("\r", "\n").splitlines():
         name, sep, status = line.rpartition("\t- ")
         if sep and status.strip() == "Failure":
             failed.append(name.strip())
-    if not failed or not all(name.endswith("/") for name in failed):
-        return False
+    if not failed:
+        return None
     root = dest.resolve()
+    skipped = 0
     for name in failed:
         path = (dest / name).resolve()
         if not path.is_relative_to(root):
-            return False
-        path.mkdir(parents=True, exist_ok=True)
-    return True
+            return None
+        if name.endswith("/"):
+            path.mkdir(parents=True, exist_ok=True)
+        elif wanted is not None and not wanted(path.relative_to(root).as_posix()):
+            skipped += 1
+        else:
+            return None
+    return skipped
 
 
-def extract_lha(archive: Path, dest: Path) -> None:
+def extract_lha(archive: Path, dest: Path, wanted=None) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     archive = archive.resolve()
 
@@ -124,10 +136,13 @@ def extract_lha(archive: Path, dest: Path) -> None:
         if proc.returncode == 0:
             info(f"extracted with {tool}")
             return
-        if tool in ("lha", "lhasa") and _only_empty_dirs_failed(
-                proc.stdout + proc.stderr, dest):
-            info(f"extracted with {tool} (created its empty directories)")
-            return
+        if tool in ("lha", "lhasa"):
+            skipped = _lhasa_failures_harmless(proc.stdout + proc.stderr, dest, wanted)
+            if skipped is not None:
+                note = f"skipped {skipped} unused file(s)" if skipped else \
+                       "created its empty directories"
+                info(f"extracted with {tool} ({note})")
+                return
         info(f"{tool} could not read {archive.name}, trying the next option")
 
     if _lhafile_extract(archive, dest):
@@ -137,8 +152,13 @@ def extract_lha(archive: Path, dest: Path) -> None:
     fail(f"no working LHA extractor for {archive.name}", LHA_HINT)
 
 
-def extract(archive: Path, dest: Path, strip_prefix: bool = False) -> Path:
-    """Extract into dest (created if needed) and return dest."""
+def extract(archive: Path, dest: Path, strip_prefix: bool = False,
+            wanted=None) -> Path:
+    """Extract into dest (created if needed) and return dest.
+
+    wanted(rel), if given, says which archive paths the caller uses; an .lha
+    entry outside them may fail to extract without failing the extraction.
+    """
     archive = Path(archive)
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
@@ -149,7 +169,7 @@ def extract(archive: Path, dest: Path, strip_prefix: bool = False) -> Path:
     elif name.endswith(".zip"):
         extract_zip(archive, dest)
     elif name.endswith((".lha", ".lzh")):
-        extract_lha(archive, dest)
+        extract_lha(archive, dest, wanted)
     else:
         fail(f"do not know how to extract {archive.name}")
 

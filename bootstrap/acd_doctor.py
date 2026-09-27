@@ -40,12 +40,12 @@ TOOLS = {
 REQUIRED_SDKS = {
     "NDK_3.2": "Include_H",
     "MUI_3.8": "Developer/C/Include",
+    "MCC": "Developer/C/include",
+    "reqtools": "include",
 }
 
 SEEDED_SDKS = {
-    "MCC": "Developer/C/include",
     "regex": "include",
-    "reqtools": "include",
     "Roadshow": "netinclude",
     "AmiSSL-v5": "Developer/include",
     "SQLite3": "include",
