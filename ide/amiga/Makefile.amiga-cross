@@ -128,12 +128,13 @@ $(OBJDIR)/core_%.o: $(CORE_SRC)/%.c | $(OBJDIR)
 $(OBJDIR)/core_parson.o: $(CORE_VENDOR)/parson.c | $(OBJDIR)
 	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
 
-$(OBJDIR)/main.o: $(AMIGA_SRC)/app/main.c | $(OBJDIR)
-	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
-
 # $(BUILDSTAMP) is a real prerequisite, not order-only: the phony
 # buildstamp target refreshes it first, and because it is only rewritten
 # when the stamp actually changed, this rebuilds exactly when it must.
+# main.c puts the build date into $VER, mainwindow.c into the About box.
+$(OBJDIR)/main.o: $(AMIGA_SRC)/app/main.c $(BUILDSTAMP) | $(OBJDIR) buildstamp
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
 $(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c $(BUILDSTAMP) | $(OBJDIR) buildstamp
 	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
 
