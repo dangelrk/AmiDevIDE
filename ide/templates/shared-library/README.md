@@ -21,7 +21,7 @@ no bootable one.
 
 ## Why not SDI
 
-`NDK_3.9/Examples/SDI/libraries/example_lib.c` is the obvious starting
+The SDI headers' own `libraries/example_lib.c` is the obvious starting
 point and `SDI_compiler.h` does support vbcc. But the example itself is
 OS3/OS4/MorphOS-portable and uses `LIBPROTOVA`, whose varargs form vbcc
 rejects ("declaration expected" at the `SPrintf` prototype). Rather than

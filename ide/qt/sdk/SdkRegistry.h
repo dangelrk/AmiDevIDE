@@ -9,7 +9,7 @@
 // setenv_mac.sh, the toolchain maintainers' own ground truth) plus
 // user-defined SDKs persisted in sdks.json under AppDataLocation.
 //
-// Note (verified on disk): AmiSSL, MUI 5.0 and SQLite3 ship their libraries
+// Note (verified on disk): AmiSSL and SQLite3 ship their libraries
 // as GCC .a archives (bebbo-gcc format), not Amiga-hunk .lib files, so they
 // are not directly usable as vlink link inputs. Their include/autodoc/sfd
 // data is still valid and indexed; libDirs are still exposed (matching

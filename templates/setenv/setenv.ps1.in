@@ -10,7 +10,7 @@ $env:PATH = "$env:VBCC\bin;$env:PATH"
 $env:VBCC_INC = "$env:VBCC\targets\m68k-amigaos\include"
 $env:VBCC_LIB = "$env:VBCC\targets\m68k-amigaos\lib"
 
-# Amiga NDK 3.2 (note: 3.2 is NEWER than 3.9 -- NDK 3.9 is not used here)
+# Amiga NDK 3.2
 $env:NDK32_INC     = "$env:VBCC\sdk\NDK_3.2\Include_H"
 $env:NDK32_ASM_INC = "$env:VBCC\sdk\NDK_3.2\Include_I"
 $env:NDK32_LIB     = "$env:VBCC\sdk\NDK_3.2\lib"

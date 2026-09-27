@@ -336,7 +336,7 @@ void aide_sdk_append_builtins(const char *sdk_root, AideSdkList *out)
     aide_str_clear(&path);
     aide_str_append(&path, sdk_root);
     aide_str_append_path(&path, "/NDK_3.2");
-    add_builtin(out, "ndk-3.2", "NDK 3.2 (newer!)", AIDE_SDK_NDK, "3.2", path.data);
+    add_builtin(out, "ndk-3.2", "NDK 3.2", AIDE_SDK_NDK, "3.2", path.data);
     {
         AideSdkDescriptor *d = last(out);
         AideStr s;

@@ -11,7 +11,7 @@ enum class SdkKind { Ndk, Mui, Other };
 // can add more without any code change (SdkEditDialog -> sdks.json).
 struct SdkDescriptor {
     QString id;            // stable key, e.g. "ndk-3.2", used in .aproj
-    QString displayName;   // e.g. "NDK 3.2 (newer!)"
+    QString displayName;   // e.g. "NDK 3.2"
     SdkKind kind = SdkKind::Other;
     QString version;
     QString rootDir;

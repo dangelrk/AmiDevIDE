@@ -130,11 +130,6 @@ copied in and you restart it from the Amiga shell.
 
 ## Notes
 
-**NDK 3.2 is newer than NDK 3.9.** The version numbers invert the usual
-ordering. 3.9 has been dropped, along with MUI 5.0 — which only ever shipped
-GCC `.a` libraries that vlink cannot link. Projects naming either are migrated
-on load.
-
 **vbcc's `dtgen` is interactive.** It asks nine questions about the host's
 integer widths before vbcc can be compiled at all, which is why upstream ships
 no build script. `bootstrap/acd_build_tools.py` answers them with the defaults

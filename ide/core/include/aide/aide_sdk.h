@@ -64,9 +64,8 @@ const AideSdkDescriptor *aide_sdk_list_find(const AideSdkList *l, const char *id
  * regex, reqtools, roadshow, amissl, sqlite3, posixlib. Does not clear *out
  * first, so callers can append built-ins after/before user SDKs.
  *
- * NDK 3.9 and MUI 5.0 used to be here and are gone on purpose: NDK 3.2 is the
- * newer kit despite the version number, and MUI 5.0 only ships GCC .a
- * libraries that vlink cannot link.
+ * There is one NDK (3.2) and one MUI (3.8), on purpose: tst_sdkregistry
+ * asserts that no other version comes back.
  *
  * `sdk_root` is the directory that directly contains NDK_3.2/, MUI_3.8/,
  * etc. -- NOT the toolchain root. On the Qt/host side that is

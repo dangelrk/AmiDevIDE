@@ -65,7 +65,6 @@ url         = "https://aminet.net/dev/misc/NDK3.2.lha"
 filename    = "NDK3.2.lha"
 patterns    = ["NDK3.2*.lha", "NDK_3.2*.lha"]
 homepage    = "https://aminet.net/package/dev/misc/NDK3.2"
-notes       = "NDK 3.2 is NEWER than NDK 3.9, counter-intuitive as that reads."
 
 [[source]]
 id          = "mui38"

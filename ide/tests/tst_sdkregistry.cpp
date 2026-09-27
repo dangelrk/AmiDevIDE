@@ -65,13 +65,11 @@ void TstSdkRegistry::roadshowAutodocFile()
 
 void TstSdkRegistry::ndkVersionOrderIsNotAlphabetical()
 {
-    // Counterintuitive but verified fact: NDK 3.2 is NEWER than NDK 3.9, which
-    // is why 3.9 was the one dropped. Guard the display name so a refactor
-    // cannot quietly reintroduce "3.9 = newer", and guard the absence of the
-    // retired ids so they cannot creep back into the registry either.
+    // NDK 3.2 is the only NDK, MUI 3.8 the only MUI. Guard the absence of
+    // the retired ids so they cannot creep back into the registry.
     SdkRegistry &reg = SdkRegistry::instance();
     reg.reload(QStringLiteral("/tc"));
-    QCOMPARE(reg.find(QStringLiteral("ndk-3.2"))->displayName, QStringLiteral("NDK 3.2 (newer!)"));
+    QCOMPARE(reg.find(QStringLiteral("ndk-3.2"))->displayName, QStringLiteral("NDK 3.2"));
     QVERIFY(reg.find(QStringLiteral("ndk-3.9")) == nullptr);
     QVERIFY(reg.find(QStringLiteral("mui-5.0")) == nullptr);
 }

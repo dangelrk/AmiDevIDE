@@ -56,7 +56,7 @@ typedef struct { const char *id; const char *label; } ExtraSdkDef;
    cycle gadgets from when there were two of each; there is one of each now
    and neither is compulsory, so they are checkmarks like everything else. */
 static const ExtraSdkDef g_extraSdkDefs[EXTRA_SDK_COUNT] = {
-    { "ndk-3.2",  "NDK 3.2 (neuer als 3.9!)" },
+    { "ndk-3.2",  "NDK 3.2" },
     { "mui-3.8",  "MUI 3.8" },
     { "mcc",      "MUI-Zusatzklassen (MCC)" },
     { "regex",    "regex.library" },

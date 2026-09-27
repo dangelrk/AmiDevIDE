@@ -10,7 +10,7 @@ export PATH="$VBCC/bin:$PATH"
 export VBCC_INC=$VBCC/targets/m68k-amigaos/include
 export VBCC_LIB=$VBCC/targets/m68k-amigaos/lib
 
-# Amiga NDK 3.2 (note: 3.2 is NEWER than 3.9 -- NDK 3.9 is not used here)
+# Amiga NDK 3.2
 export NDK32_INC=$VBCC/sdk/NDK_3.2/Include_H
 export NDK32_ASM_INC=$VBCC/sdk/NDK_3.2/Include_I
 export NDK32_LIB=$VBCC/sdk/NDK_3.2/lib

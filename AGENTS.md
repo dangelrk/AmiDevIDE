@@ -29,16 +29,14 @@ enum. Follow that pattern rather than inventing another.
 
 ## Things that will bite you
 
-**NDK 3.2 is newer than NDK 3.9.** The numbers invert the usual ordering.
-NDK 3.9 and MUI 5.0 have been removed; `aide_project_migrate_sdk_ids()` maps
-projects that still name them. Don't reintroduce either — `tst_sdkregistry`
-asserts their absence.
+**There is one NDK and one MUI: NDK 3.2 and MUI 3.8.** Don't add another
+version of either, not in the registry, the UI or the docs.
+`tst_sdkregistry` asserts that the retired ids stay out of the registry, and
+`acd-doctor` flags their directories if an old toolchain still has them.
 
 **SDK selection is one list, and every entry is optional.** `sdks.selected`
-holds registry ids in include-search order. It was three fields (`ndk`, `mui`,
-`extra`) from when there were two of each to choose between; reading an .aproj
-in that shape folds them into the list in the same order, so the generated
-Makefile does not change — `tst_project` pins that. Not even the NDK is
+holds registry ids in include-search order. An id the registry does not
+know is skipped when the Makefile is generated. Not even the NDK is
 mandatory: a program that drives the hardware directly needs no system
 headers.
 

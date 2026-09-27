@@ -308,11 +308,8 @@ QWidget *ProjectSettingsDialog::createSdksTab()
     for (const SdkDescriptor &d : SdkRegistry::instance().allSdks()) {
         auto *check = new QCheckBox(d.displayName, m_extraSdksContainer);
         check->setChecked(m_project.sdks.selected.contains(d.id));
-        // The version numbers invert the usual ordering and everyone reads it
-        // wrong once, so say it where it is needed rather than in the manual.
         if (d.id == QStringLiteral("ndk-3.2"))
-            check->setToolTip(tr("The Amiga system headers. Newer than NDK 3.9, "
-                                 "despite the number."));
+            check->setToolTip(tr("The Amiga system headers."));
         checksLayout->addWidget(check);
         m_extraSdkChecks << check;
         m_extraSdkIds << d.id;
