@@ -5,7 +5,7 @@
 # is generated from this file -- and the fetcher will use them as they are.
 #
 # resolver:
-#   static        url is fixed.  version, if given, is read off version_page.
+#   static        url is fixed.  version is given, or read off version_page.
 #   vbcc_tag      scrape the vbcc page for the highest vbccX_Ytag source archive
 #   vbcc_target   scrape the vbcc page for the newest dated target archive
 
@@ -85,6 +85,7 @@ description = "ACE BASIC compiler, upstream release the AmiDevIDE patch series a
 resolver    = "static"
 url         = "https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz"
 filename    = "ACEBasic-3.0.1.tar.gz"
+version     = "3.0.1"
 patterns    = ["ACEBasic-3.0.1.tar.gz"]
 homepage    = "https://github.com/mdbergmann/ACEBasic"
 notes       = "Pinned: compilers/acebasic/patches/ only apply to this exact tag. acd_ace.py checks the sha256 and applies them."

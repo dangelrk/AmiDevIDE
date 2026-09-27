@@ -155,8 +155,9 @@ def resolve_vbcc_target(src: dict) -> tuple[str, str, str]:
 def resolve_static(src: dict) -> tuple[str, str, str]:
     url = src["url"]
     name = src.get("filename") or url.rsplit("/", 1)[-1]
-    version = ""
-    if src.get("version_page"):
+    # A pinned release states its version; the others read it off a page.
+    version = src.get("version", "")
+    if not version and src.get("version_page"):
         try:
             page = get_text(src["version_page"])
             m = re.search(src["version_regex"], page)

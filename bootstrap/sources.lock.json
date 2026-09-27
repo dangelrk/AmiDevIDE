@@ -1,49 +1,49 @@
 {
   "acebasic": {
     "filename": "ACEBasic-3.0.1.tar.gz",
-    "resolved": "2026-09-26",
+    "resolved": "2026-09-27",
     "sha256": "8a38419e35c31cf7474385384940166c4e97f2fda36c46501e5d7d40900a556f",
     "url": "https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz",
     "version": "3.0.1"
   },
   "mui38": {
     "filename": "mui38dev.lha",
-    "resolved": "2026-08-16",
+    "resolved": "2026-09-27",
     "sha256": "8d28b0262fa6f43a9a8e114da368a9309256bbc2f99fa1c23d8e4c105d565722",
     "url": "https://aminet.net/dev/mui/mui38dev.lha",
     "version": ""
   },
   "ndk32": {
     "filename": "NDK3.2.lha",
-    "resolved": "2026-08-16",
+    "resolved": "2026-09-27",
     "sha256": "96cabd4ad683dced632e147bf86dee0f50dcb1254386216c25c362916a6409bb",
     "url": "https://aminet.net/dev/misc/NDK3.2.lha",
     "version": ""
   },
   "vasm": {
     "filename": "vasm.tar.gz",
-    "resolved": "2026-08-16",
+    "resolved": "2026-09-27",
     "sha256": "c84b2de1cbb87831795fe64a85c5d9a7002a766e3a7c30b0a2d7d5e99d878f49",
     "url": "http://sun.hasenbraten.de/vasm/release/vasm.tar.gz",
     "version": "2.0f"
   },
   "vbcc": {
     "filename": "vbcc0_9hP2.tar.gz",
-    "resolved": "2026-08-16",
+    "resolved": "2026-09-27",
     "sha256": "1f07497c76125eee1f40414779fb9c9aa547cc2a413b73d5b5adb31f9146bcbb",
     "url": "http://phoenix.owl.de/tags/vbcc0_9hP2.tar.gz",
     "version": "0.9hP2"
   },
   "vbcc_target_m68k": {
     "filename": "vbcc_target_m68k-amigaos.lha",
-    "resolved": "2026-08-16",
+    "resolved": "2026-09-27",
     "sha256": "ec734d7115359cdb5d1c70349284ecbd5712ef47e8bc28d4150117c6f8c73289",
     "url": "http://phoenix.owl.de/vbcc/2022-05-22/vbcc_target_m68k-amigaos.lha",
     "version": "2022-05-22"
   },
   "vlink": {
     "filename": "vlink.tar.gz",
-    "resolved": "2026-08-16",
+    "resolved": "2026-09-27",
     "sha256": "8d151cdd30a4feb575a364e68810c2bc300fe1a7c074dbbee6fd1175a6c5bfae",
     "url": "http://sun.hasenbraten.de/vlink/release/vlink.tar.gz",
     "version": "0.18a"
