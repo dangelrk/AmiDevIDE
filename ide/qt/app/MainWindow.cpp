@@ -188,7 +188,6 @@ void MainWindow::createDocks()
     issuesDockWidget->setWidget(m_issuesPane);
     addDockWidget(Qt::BottomDockWidgetArea, issuesDockWidget);
     tabifyDockWidget(m_bottomDockWidget, issuesDockWidget);
-    m_bottomDockWidget->raise();
 
     m_helpDockWidget = new QDockWidget(tr("Help"), this);
     m_helpDockWidget->setObjectName(QStringLiteral("HelpDock"));
@@ -206,6 +205,10 @@ void MainWindow::createDocks()
     m_memoryMapDockWidget->setWidget(m_memoryMapDock);
     addDockWidget(Qt::BottomDockWidgetArea, m_memoryMapDockWidget);
     tabifyDockWidget(m_bottomDockWidget, m_memoryMapDockWidget);
+
+    // tabifyDockWidget() brings the newest tab to the front, so raise
+    // Output only once every bottom dock has been added.
+    m_bottomDockWidget->raise();
 }
 
 void MainWindow::createActions()
