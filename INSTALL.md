@@ -429,7 +429,7 @@ python3 emulator/acd_emu.py --serial
 | OS | AmigaOS 3.x; die IDE öffnet `intuition.library` v37 (≥ 2.04). Mit NDK 3.2 gebaut; getestet ist kein OS-Stand (ungeprüft: 3.1 / 3.2) |
 | MUI | `muimaster.library` ≥ v19 (MUI 3.8) |
 | Libraries | `reqtools.library` ≥ v38, `regex.library` in `LIBS:` |
-| MCCs (in `MUI:Libs/mui/`) | NList (`NList`, `NListview`, `NListtree`), `TextEditor`, `BetterString`, `TheBar` |
+| MCCs (in `MUI:Libs/mui/`) | NList (`NList`, `NListview`, `NListtree`), `TextEditor` |
 | make | GNU make für Amiga von Darren Coles (`gnu_make_amiga`, 4.4.1) |
 | Speicher / Stack | ungeprüft; ACE-Upstream setzt `stack 65000` in seiner User-Startup |
 
