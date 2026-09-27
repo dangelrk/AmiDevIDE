@@ -99,7 +99,7 @@ acd_script_target(acd-tools acd_build_tools.py
     COMMENT "Building vbcc, vasm and vlink from source")
 
 acd_script_target(acd-sdk acd_install_sdk.py
-    COMMENT "Installing NDK 3.2 and MUI 3.8")
+    COMMENT "Installing the SDKs")
 
 acd_script_target(acd-seed acd_seed_from_legacy.py
     COMMENT "Seeding SDKs and emulator images from a previous installation")

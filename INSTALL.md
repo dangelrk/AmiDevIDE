@@ -263,6 +263,27 @@ Pfad **ohne Leerzeichen** wählen (vc ruft seine Tools direkt, nicht über eine
 Shell, auf; ein Pfad mit Leerzeichen in den generierten Configs ist
 ungetestet).
 
+### Alles in einem Schritt: `install.sh`
+
+```sh
+./install.sh                              # sucht Qt selbst
+./install.sh --qt ~/Qt/6.11.1/macos       # oder mit Pfad
+```
+
+Erledigt §6.2 bis §6.8 in einem Lauf: prüft die Voraussetzungen aus §3 und
+bietet an, fehlende (CMake, Python, lhasa) per Homebrew zu installieren
+(`--yes` ohne Rückfrage). Es sucht Qt 6 im CMake-Cache, in `QTDIR`/
+`CMAKE_PREFIX_PATH`, unter `~/Qt/6.*/macos`, in Homebrew und über `qmake` und
+fragt nach dem Pfad, wenn nichts davon passt. Dann konfiguriert es mit Qt-IDE,
+MUI-IDE und Tests und baut Toolchain, `acd-doctor`, Qt-IDE, `ctest` und
+`amigaide-m68k`. Bei einem Fehler nennt es die Ursache und den nächsten
+Schritt; die Protokolle liegen unter `var/log/install/`. Jeder Schritt ist
+wiederholbar, nach einer Korrektur also einfach erneut starten. Der Emulator
+(§7) gehört nicht dazu. Verifiziert auf macOS; auf Linux läuft derselbe Ablauf,
+installiert aber nichts selbst.
+
+Die Einzelschritte:
+
 ### 6.2 Konfigurieren
 
 ```sh
