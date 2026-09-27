@@ -2,7 +2,6 @@
 @$VER: AmigaIDE.guide 0.1.0 (27.09.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
-@index Tasten
 @node Main "AmigaIDE - Anleitung"
 
                          @{b}AmigaIDE 0.1@{ub}
@@ -123,9 +122,9 @@ AmigaIDE per Doppelklick oder aus der Shell starten. Die Titelzeile
 zeigt Datum und Uhrzeit des Builds. So sieht man sofort, welche
 Version laeuft.
 
-Neben dem Programm legt AmigaIDE ein Verzeichnis cache/ an. Darin
-liegt der Autodoc-Index, damit er nur beim ersten Mal gebaut werden
-muss.
+Beim ersten F1 oder F2 legt AmigaIDE neben dem Programm ein
+Verzeichnis cache/ an. Darin liegt der Autodoc-Index, damit er nur
+beim ersten Mal gebaut werden muss.
 
 @endnode
 @node Hauptfenster "Das Hauptfenster"
@@ -151,9 +150,10 @@ Maustaste), viele auch als Tastenkuerzel.
 @{u}Links: Projekt@{uu}
 
 Der Projektbaum ordnet die Dateien in Gruppen: C-Quellen, ASM-Quellen,
-C-Header, ASM-Include. In BASIC-Projekten heissen die ersten beiden
-BASIC-Quellen und BASIC-Header, in reinen Assembler-Projekten Quellen
-und Header. Unterverzeichnisse erscheinen als eigene Knoten.
+C-Header, ASM-Include. In BASIC-Projekten heissen C-Quellen und
+C-Header stattdessen BASIC-Quellen und BASIC-Header, in reinen
+Assembler-Projekten Quellen und Header. Unterverzeichnisse erscheinen
+als eigene Knoten.
 
   @{b}fett@{ub}      die Datei, die gerade im Editor offen ist
   @{i}kursiv@{ui}    ungespeicherte Aenderungen
@@ -193,8 +193,11 @@ relativ zum Verzeichnis der .aproj.
   1. Verzeichnis fuer das Projekt waehlen.
   2. Es oeffnen sich die @{" Projekteinstellungen " link Projekteinstellungen}.
      Name und Binary muessen ausgefuellt sein.
-  3. OK legt <Name>.aproj im gewaehlten Verzeichnis an.
-     Abbrechen legt gar nichts an.
+  3. OK legt <Name>.aproj im gewaehlten Verzeichnis an und speichert
+     sie sofort. Abbrechen legt gar nichts an.
+
+Ungespeicherte Aenderungen an der offenen Datei gehen dabei ohne
+Nachfrage verloren; vorher "Speichern" waehlen.
 
 Ein neues Projekt ist leer. Dateien kommen ueber "Neue Datei" oder
 "Bestehende Datei hinzufuegen" hinein. vc.lib ist als Bibliothek schon
@@ -202,7 +205,8 @@ eingetragen, weil praktisch jedes vbcc-Programm sie braucht.
 
 @{u}Projekt > Oeffnen...  (Amiga-O)@{uu}
 
-Laedt eine .aproj.
+Laedt eine .aproj. Wie bei "Neu" gehen ungespeicherte Aenderungen
+ohne Nachfrage verloren.
 
 @{u}Projekt > Speichern  (Amiga-S)@{uu}
 
@@ -251,13 +255,15 @@ Build arbeitet im Hintergrund zu Ende.
 
 Die Einstellungen gelten nur fuer das offene Projekt und werden in der
 .aproj gespeichert. OK uebernimmt sie, gespeichert wird aber erst mit
-"Speichern".
+"Speichern". Ausnahme: Beim Anlegen eines neuen Projekts speichert OK
+die .aproj sofort.
 
 @{u}General@{uu}
 
   Sprache          C, ACE BASIC oder Assembler
   Ausgabe          Programm, Link-Library oder Shared Library
-  Name             Projektname (wird auch Name der .aproj)
+  Name             Projektname; beim Anlegen auch Name der .aproj
+                   (spaeteres Umbenennen benennt die Datei nicht um)
   Binary           Name der erzeugten Datei
   Zielverzeichnis  wohin das Ergebnis kommt
   Obj-Verzeichnis  wohin die Objektdateien kommen
@@ -373,6 +379,10 @@ Startet das gebaute Programm. CLI-Programme bekommen ein eigenes
 Konsolenfenster, das nach Programmende offen bleibt, bis man es
 schliesst. Endet das Programm mit einem Rueckgabewert ungleich 0,
 meldet AmigaIDE ihn.
+
+@{b}Solange das Programm laeuft, reagiert AmigaIDE nicht.@{ub} Bei
+CLI-Programmen gilt das, bis das Konsolenfenster geschlossen ist.
+Das ist kein Absturz: Fenster schliessen, dann geht es weiter.
 
 @{u}Build > Ausgabe speichern...@{uu}
 
@@ -537,8 +547,10 @@ Besonderheiten gegenueber der Qt-Version auf dem PC:
 
   - Nur eine Datei im Editor, keine Reiter.
   - Keine Syntaxhervorhebung und keine Zeilennummern.
-  - Beim Dateiwechsel keine Nachfrage wegen ungespeicherter
-    Aenderungen (siehe @{" Editor " link Editor}).
+  - Beim Dateiwechsel, bei "Neu" und bei "Oeffnen" keine Nachfrage
+    wegen ungespeicherter Aenderungen (siehe @{" Editor " link Editor}).
+  - AmigaIDE ist blockiert, solange ein mit "Run" gestartetes
+    Programm laeuft.
   - "Build abbrechen" beendet den Compiler nicht.
   - Der Symbolindex wird nach jedem Build komplett neu aufgebaut.
   - Die Shift+F-Tasten sind nicht auf jedem System getestet. Falls

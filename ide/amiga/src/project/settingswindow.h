@@ -9,10 +9,9 @@
  * AideRunConfig fields are still preserved verbatim through the .aproj
  * JSON round trip, just not editable from this UI).
  *
- * SDKs tab lists only the 4 fixed "extra" built-in SDK ids
- * (roadshow/amissl/sqlite3/posixlib, see aide_sdk_append_builtins()) as
- * checkboxes -- user-defined SDK registration (Qt's "Add User SDK...")
- * isn't implemented on this side. */
+ * SDKs tab lists the 9 built-in SDK ids (ndk-3.2 through posixlib, see
+ * aide_sdk_append_builtins()) as checkboxes -- user-defined SDK
+ * registration (Qt's "Add User SDK...") isn't implemented on this side. */
 
 #include <libraries/mui.h>
 
