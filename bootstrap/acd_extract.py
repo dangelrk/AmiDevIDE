@@ -83,6 +83,31 @@ def _lhafile_extract(archive: Path, dest: Path) -> bool:
     return True
 
 
+def _only_empty_dirs_failed(output: str, dest: Path) -> bool:
+    """Forgive lhasa for the empty directories it cannot create.
+
+    Some archives (mui38dev.lha) store an empty directory as an ordinary -lh0-
+    entry whose name ends in "/" rather than as an -lhd- entry.  lhasa tries
+    to create a file of that name, reports "Failure" and exits 1, although
+    every real file was extracted.  If those are the only failures, create the
+    directories ourselves and accept the result.
+    """
+    failed = []
+    for line in output.replace("\r", "\n").splitlines():
+        name, sep, status = line.rpartition("\t- ")
+        if sep and status.strip() == "Failure":
+            failed.append(name.strip())
+    if not failed or not all(name.endswith("/") for name in failed):
+        return False
+    root = dest.resolve()
+    for name in failed:
+        path = (dest / name).resolve()
+        if not path.is_relative_to(root):
+            return False
+        path.mkdir(parents=True, exist_ok=True)
+    return True
+
+
 def extract_lha(archive: Path, dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     archive = archive.resolve()
@@ -98,6 +123,10 @@ def extract_lha(archive: Path, dest: Path) -> None:
         proc = subprocess.run(argv, capture_output=True, text=True)
         if proc.returncode == 0:
             info(f"extracted with {tool}")
+            return
+        if tool in ("lha", "lhasa") and _only_empty_dirs_failed(
+                proc.stdout + proc.stderr, dest):
+            info(f"extracted with {tool} (created its empty directories)")
             return
         info(f"{tool} could not read {archive.name}, trying the next option")
 
