@@ -43,6 +43,11 @@ int aide_fs_read_file(const char *path, char **outData, size_t *outSize);
  * Silently does nothing if `dirPath` can't be opened as a directory. */
 void aide_fs_list_files(const char *dirPath, const char *suffix, AideStrList *out);
 
+/* Appends the names (not full paths) of every directory directly inside
+ * `dirPath` to *out, "." and ".." excluded. Silently does nothing if
+ * `dirPath` can't be opened as a directory. */
+void aide_fs_list_dirs(const char *dirPath, AideStrList *out);
+
 /* Fills *outSize (bytes) and *outMtimeMs (milliseconds since epoch,
  * whole-second resolution is fine -- used only for cache staleness
  * checks) for the file at `path`. Returns 1 on success, 0 if it

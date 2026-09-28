@@ -9,16 +9,20 @@
  * AideRunConfig fields are still preserved verbatim through the .aproj
  * JSON round trip, just not editable from this UI).
  *
- * SDKs tab lists the 9 built-in SDK ids (ndk-3.2 through posixlib, see
- * aide_sdk_append_builtins()) as checkboxes -- user-defined SDK
- * registration (Qt's "Add User SDK...") isn't implemented on this side,
- * but a user SDK's id already in the project survives OK unchanged. */
+ * SDKs tab has a checkbox per SDK in the registry -- the built-ins plus
+ * every AmiDevSDK.json found under SDK: -- and one per SDK the project
+ * names that is not installed, ticked and marked as such so it survives
+ * OK. SDKs are not entered here the way Qt's "Add SDK..." does: on the
+ * Amiga an SDK describes itself with an AmiDevSDK.json. */
 
 #include <libraries/mui.h>
 
 #include "aide/aide_project.h"
+#include "aide/aide_sdk.h"
 
-void settingswindow_init(Object *app);
+/* `registry` is read on every settingswindow_show(); the caller keeps it
+ * alive for the window's lifetime. */
+void settingswindow_init(Object *app, const AideSdkList *registry);
 void settingswindow_free(void);
 
 /* Opens the window, populating every field from a deep copy of

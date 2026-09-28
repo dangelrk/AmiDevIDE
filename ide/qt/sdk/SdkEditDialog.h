@@ -4,12 +4,16 @@
 
 #include <QDialog>
 
+class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
 class QComboBox;
 
-// Add/edit a user-defined SDK: name, kind, root dir, and newline-separated
-// path lists for include/asm-include/lib/autodoc/sfd directories.
+// Add/edit a user-defined SDK: name, version, kind, root dir, and
+// newline-separated path lists for include/asm-include/lib/autodoc/sfd
+// directories. The id is not entered: it is derived from name and version
+// (aide_sdk_make_id), so a project names the SDK the same way on every
+// machine and in the MUI IDE.
 class SdkEditDialog : public QDialog {
     Q_OBJECT
 public:
@@ -18,12 +22,19 @@ public:
     void setDescriptor(const SdkDescriptor &descriptor);
     SdkDescriptor descriptor() const;
 
+    void accept() override;
+
 private slots:
     void browseRootDir();
+    void updateIdPreview();
 
 private:
-    QLineEdit *m_idEdit;
-    QLineEdit *m_displayNameEdit;
+    QString currentId() const;
+
+    QString m_originalId; // of the SDK being edited, empty when adding
+    QLineEdit *m_nameEdit;
+    QLineEdit *m_versionEdit;
+    QLabel *m_idLabel;
     QComboBox *m_kindCombo;
     QLineEdit *m_rootDirEdit;
     QPlainTextEdit *m_includeDirsEdit;

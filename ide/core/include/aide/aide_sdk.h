@@ -2,10 +2,15 @@
 #define AIDE_SDK_H
 
 /* Portable C99 mirror of sdk/SdkDescriptor.h + sdk/SdkRegistry.h: the SDK
- * descriptor data model, its .aproj-adjacent JSON (de)serialization, and
- * the 8 built-in descriptor table for the shipped sdk/ tree. File I/O
- * (sdks.json path resolution, autodoc/SFD directory scanning) stays in
- * the Qt/MUI layers -- this module is pure data + JSON text in/out. */
+ * descriptor data model, its .aproj-adjacent JSON (de)serialization, the
+ * built-in descriptor table for the shipped sdk/ tree, and the SDKs that
+ * describe themselves with an AmiDevSDK.json (the one place here that
+ * reads files, through aide_fs). Where sdks.json lives stays in the Qt
+ * layer.
+ *
+ * An SDK is identified by name and version, case-insensitively. Its id is
+ * derived from both (aide_sdk_make_id()), and every id comparison here
+ * ignores case, so "NDK-3.2" in a project finds "ndk-3.2". */
 
 #include "aide/aide_str.h"
 
@@ -57,8 +62,44 @@ void aide_sdk_list_clear(AideSdkList *l);
 /* Deep-copies *d into a new slot; caller keeps ownership of *d. */
 void aide_sdk_list_push(AideSdkList *l, const AideSdkDescriptor *d);
 /* Removes the first descriptor with this id. Returns 1 if one was removed. */
+/* Both compare ids case-insensitively. */
 int aide_sdk_list_remove(AideSdkList *l, const char *id);
 const AideSdkDescriptor *aide_sdk_list_find(const AideSdkList *l, const char *id);
+
+/* The id for an SDK called `name` in `version`: both lowercased, every run
+ * of characters other than a-z, 0-9 and '.' turned into one '-', and
+ * joined with '-' ("Foo Lib", "1.2" -> "foo-lib-1.2"; "NDK", "3.2" ->
+ * "ndk-3.2", the built-in's own id). Freshly malloc'd; "" if name is
+ * empty. */
+char *aide_sdk_make_id(const char *name, const char *version);
+
+/* File name of the self-description an SDK directory can carry. */
+#define AIDE_SDK_MANIFEST "AmiDevSDK.json"
+
+/* Fills *d from the text of an AmiDevSDK.json that lives in `rootDir`:
+ *
+ *   { "name": "Foo", "version": "1.2", "kind": "other",
+ *     "includeDirs": ["include"], "asmIncludeDirs": [], "libDirs": ["lib"],
+ *     "autodocDirs": ["Autodocs"], "autodocFiles": [], "sfdDirs": ["SFD"],
+ *     "suggestedLibs": ["foo"] }
+ *
+ * Every path is relative to rootDir and joined onto it ("." is rootDir
+ * itself), so the same directory works under SDK: on the Amiga and under
+ * toolchain/sdk on the host. The id comes from aide_sdk_make_id(); kind
+ * is "ndk", "mui" or "other" (the default); userDefined is set. Returns
+ * 0, leaving *d initialized and empty, if the text is not a JSON object or
+ * name or version is missing. */
+int aide_sdk_descriptor_from_manifest(AideSdkDescriptor *d, const char *json_text, const char *rootDir);
+
+/* Reads every "<sdk_root>/<dir>/AmiDevSDK.json" and appends each valid
+ * one whose id *out does not already hold -- so call it after
+ * aide_sdk_append_builtins(), and a built-in always wins. Returns how
+ * many it appended. */
+size_t aide_sdk_append_from_manifests(const char *sdk_root, AideSdkList *out);
+
+/* Appends to *missing every id in `selected` that `registry` does not
+ * know, in their order. */
+void aide_sdk_list_missing(const AideSdkList *registry, const AideStrList *selected, AideStrList *missing);
 
 /* Appends the built-in descriptors for `sdk_root`: ndk-3.2, mui-3.8, mcc,
  * regex, reqtools, roadshow, amissl, sqlite3, posixlib. Does not clear *out

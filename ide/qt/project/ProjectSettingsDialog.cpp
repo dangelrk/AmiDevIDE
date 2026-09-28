@@ -306,13 +306,25 @@ QWidget *ProjectSettingsDialog::createSdksTab()
     checksLayout->setContentsMargins(0, 0, 0, 0);
 
     for (const SdkDescriptor &d : SdkRegistry::instance().allSdks()) {
-        auto *check = new QCheckBox(d.displayName, m_extraSdksContainer);
-        check->setChecked(m_project.sdks.selected.contains(d.id));
+        auto *check = new QCheckBox(d.label(), m_extraSdksContainer);
+        check->setChecked(m_project.sdks.selected.contains(d.id, Qt::CaseInsensitive));
         if (d.id == QStringLiteral("ndk-3.2"))
             check->setToolTip(tr("The Amiga system headers."));
+        else if (d.fromManifest)
+            check->setToolTip(tr("Described by %1/AmiDevSDK.json").arg(d.rootDir));
         checksLayout->addWidget(check);
         m_extraSdkChecks << check;
         m_extraSdkIds << d.id;
+    }
+    // SDKs the project names but this machine lacks: shown ticked, so they
+    // survive OK and can be dropped deliberately by unticking them.
+    for (const QString &id : SdkRegistry::instance().missingIds(m_project.sdks.selected)) {
+        auto *check = new QCheckBox(tr("%1 (not installed)").arg(id), m_extraSdksContainer);
+        check->setChecked(true);
+        check->setToolTip(tr("Install an SDK with this name and version to build the project here."));
+        checksLayout->addWidget(check);
+        m_extraSdkChecks << check;
+        m_extraSdkIds << id;
     }
     sdkLayout->addWidget(m_extraSdksContainer);
 
@@ -415,12 +427,9 @@ void ProjectSettingsDialog::addUserSdk()
         return;
 
     const SdkDescriptor d = dialog.descriptor();
-    if (d.id.isEmpty())
-        return;
-
     SdkRegistry::instance().addUserSdk(d);
 
-    auto *check = new QCheckBox(d.displayName.isEmpty() ? d.id : d.displayName, m_extraSdksContainer);
+    auto *check = new QCheckBox(d.label(), m_extraSdksContainer);
     check->setChecked(true);
     m_extraSdksContainer->layout()->addWidget(check);
     m_extraSdkChecks << check;
@@ -487,7 +496,8 @@ Project ProjectSettingsDialog::resultProject() const
     p.linker.extraLdFlags = splitLines(m_extraLdFlagsEdit->toPlainText());
 
     // Written in registry order, which is the order the checkboxes were built
-    // in -- so the emitted -I/-L sequence is stable across edits.
+    // in -- so the emitted -I/-L sequence is stable across edits. Missing
+    // SDKs come last, as their checkboxes do.
     QStringList selected;
     for (int i = 0; i < m_extraSdkChecks.size(); ++i) {
         if (m_extraSdkChecks[i]->isChecked())

@@ -101,3 +101,11 @@ SdkDescriptor SdkDescriptor::fromJson(const QJsonObject &obj)
     aide_sdk_descriptor_free(&a);
     return d;
 }
+
+QString SdkDescriptor::label() const
+{
+    const QString name = displayName.isEmpty() ? id : displayName;
+    if (version.isEmpty() || name.endsWith(version))
+        return name;
+    return name + QLatin1Char(' ') + version;
+}

@@ -145,8 +145,11 @@ void SettingsDialog::reloadSdkList()
 {
     m_sdkList->clear();
     for (const SdkDescriptor &d : SdkRegistry::instance().userSdks()) {
-        auto *item = new QListWidgetItem(d.displayName.isEmpty() ? d.id : d.displayName, m_sdkList);
+        auto *item = new QListWidgetItem(d.fromManifest ? tr("%1 (AmiDevSDK.json)").arg(d.label()) : d.label(),
+                                         m_sdkList);
         item->setData(Qt::UserRole, d.id);
+        if (d.fromManifest)
+            item->setToolTip(tr("Described by %1/AmiDevSDK.json -- edit that file to change it.").arg(d.rootDir));
     }
 }
 
@@ -190,12 +193,7 @@ void SettingsDialog::addSdk()
     SdkEditDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted)
         return;
-    const SdkDescriptor d = dialog.descriptor();
-    if (d.id.isEmpty()) {
-        QMessageBox::warning(this, tr("Add SDK"), tr("An SDK id is required."));
-        return;
-    }
-    SdkRegistry::instance().addUserSdk(d);
+    SdkRegistry::instance().addUserSdk(dialog.descriptor());
     reloadSdkList();
 }
 
@@ -208,13 +206,23 @@ void SettingsDialog::editSdk()
     const SdkDescriptor *existing = SdkRegistry::instance().find(id);
     if (!existing)
         return;
+    if (existing->fromManifest) {
+        QMessageBox::information(this, tr("Edit SDK"),
+                                 tr("This SDK is described by\n%1/AmiDevSDK.json\n\nEdit that file to change it.")
+                                     .arg(existing->rootDir));
+        return;
+    }
 
     SdkEditDialog dialog(this);
     dialog.setDescriptor(*existing);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
-    SdkRegistry::instance().addUserSdk(dialog.descriptor());
+    // A new name or version is a new id: the old entry goes.
+    const SdkDescriptor edited = dialog.descriptor();
+    if (edited.id.compare(id, Qt::CaseInsensitive) != 0)
+        SdkRegistry::instance().removeUserSdk(id);
+    SdkRegistry::instance().addUserSdk(edited);
     reloadSdkList();
 }
 
@@ -223,7 +231,15 @@ void SettingsDialog::removeSdk()
     auto *item = m_sdkList->currentItem();
     if (!item)
         return;
-    SdkRegistry::instance().removeUserSdk(item->data(Qt::UserRole).toString());
+    const QString id = item->data(Qt::UserRole).toString();
+    const SdkDescriptor *existing = SdkRegistry::instance().find(id);
+    if (existing && existing->fromManifest) {
+        QMessageBox::information(this, tr("Remove SDK"),
+                                 tr("This SDK is described by\n%1/AmiDevSDK.json\n\nRemove that file or its "
+                                    "directory to remove the SDK.").arg(existing->rootDir));
+        return;
+    }
+    SdkRegistry::instance().removeUserSdk(id);
     reloadSdkList();
 }
 

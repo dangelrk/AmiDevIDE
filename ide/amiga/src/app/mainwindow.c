@@ -1229,6 +1229,27 @@ static int try_open_include_on_current_line(void)
  * nothing and left g_projectRoot empty -- breaking every join_path() call
  * for that project's sources. FilePart() returns a pointer to the
  * filename part regardless of whether the path ends in '/' or ':'. */
+/* Every SDK the project selects that the registry lacks -- neither
+ * built in nor described by an AmiDevSDK.json under SDK: -- one per line
+ * into *out. Returns how many. The Makefile leaves such an SDK out, so a
+ * build would fail on its headers with nothing saying why. */
+static size_t missing_sdks(AideStr *out)
+{
+    AideStrList missing;
+    size_t i, n;
+
+    aide_strlist_init(&missing);
+    aide_sdk_list_missing(&g_sdkRegistry, &g_project.sdks.selected, &missing);
+    for (i = 0; i < missing.count; ++i) {
+        aide_str_append(out, "  ");
+        aide_str_append(out, missing.items[i]);
+        aide_str_append_char(out, '\n');
+    }
+    n = missing.count;
+    aide_strlist_free(&missing);
+    return n;
+}
+
 static void set_project_paths(const char *aprojPath)
 {
     STRPTR namePart;
@@ -1350,6 +1371,21 @@ static void do_open_project(void)
     rebuild_symbol_index();
     invalidate_help_index();
     set_status("Projekt geladen");
+
+    {
+        AideStr list;
+        aide_str_init(&list);
+        if (missing_sdks(&list) > 0) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "Dieses Projekt benutzt SDKs, die hier nicht\n"
+                        "installiert sind:\n\n%s\n"
+                        "Der Build findet ihre Header und Libraries nicht.\n"
+                        "Abhilfe: ein SDK mit gleichem Namen und gleicher\n"
+                        "Version unter %s ablegen (mit AmiDevSDK.json).",
+                        list.data, prefs_sdk_root());
+        }
+        aide_str_free(&list);
+    }
 }
 
 /* Unified save: writes the open editor file (if any) and the project --
@@ -2530,6 +2566,19 @@ static void do_build(void)
     DoMethod(g_outputEditor, MUIM_TextEditor_ClearText);
     DoMethod(g_memmapList, MUIM_NList_Clear);
 
+    {
+        AideStr list, msg;
+        aide_str_init(&list);
+        if (missing_sdks(&list) > 0) {
+            aide_str_init(&msg);
+            aide_str_append(&msg, "Warnung: nicht installierte SDKs, ihre Pfade fehlen im Build:\n");
+            aide_str_append(&msg, list.data);
+            DoMethod(g_outputEditor, MUIM_TextEditor_InsertText, (ULONG)msg.data, MUIV_TextEditor_InsertText_Bottom);
+            aide_str_free(&msg);
+        }
+        aide_str_free(&list);
+    }
+
     /* Build must always compile what's actually in the editor, not
      * whatever was last written to disk -- otherwise editing a file and
      * hitting Build without an explicit Speichern first silently
@@ -2932,6 +2981,7 @@ int mainwindow_run(void)
      * derives it from the toolchain root (SdkRegistry.cpp appends
      * "/sdk" there instead). */
     aide_sdk_append_builtins(prefs_sdk_root(), &g_sdkRegistry);
+    aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
 
     /* A real tree (subfolders as actual expandable nodes), not a flat
      * "  path" string list -- per user feedback. NListtree.mcc, not
@@ -3128,7 +3178,7 @@ int mainwindow_run(void)
      * build per SDK is the only slow one. */
     helpwindow_init(g_app, "PROGDIR:cache", ensure_help_index_current);
     disasmwindow_init(g_app);
-    settingswindow_init(g_app);
+    settingswindow_init(g_app, &g_sdkRegistry);
     prefswindow_init(g_app);
 
     DoMethod(g_window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
@@ -3399,6 +3449,7 @@ int mainwindow_run(void)
                     aide_toolchain_init(&g_toolchain, prefs_toolchain_root());
                     aide_sdk_list_free(&g_sdkRegistry);
                     aide_sdk_append_builtins(prefs_sdk_root(), &g_sdkRegistry);
+                    aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
                     invalidate_make_availability();
                     set_status("Einstellungen uebernommen");
                 } else if (prefsResult == 0) {

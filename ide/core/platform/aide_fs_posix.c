@@ -152,3 +152,24 @@ void aide_fs_list_files(const char *dirPath, const char *suffix, AideStrList *ou
     }
     closedir(dir);
 }
+
+void aide_fs_list_dirs(const char *dirPath, AideStrList *out)
+{
+    DIR *dir = opendir(dirPath);
+    struct dirent *entry;
+
+    if (!dir)
+        return;
+
+    while ((entry = readdir(dir)) != NULL) {
+        char *fullPath;
+        struct stat st;
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+        fullPath = aide_fs_join(dirPath, entry->d_name);
+        if (stat(fullPath, &st) == 0 && S_ISDIR(st.st_mode))
+            aide_strlist_push(out, entry->d_name);
+        free(fullPath);
+    }
+    closedir(dir);
+}

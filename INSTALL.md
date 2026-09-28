@@ -248,6 +248,46 @@ python3 bootstrap/acd_seed_from_legacy.py --from /pfad/zum/alten/baum [--dry-run
 Erwartet wird dort: `<baum>/sdk/<Name>/`, `<baum>/kickstarts/*.rom`,
 `<baum>/hdf/workbench*.hdf`, `<baum>/adf/*.adf`.
 
+### 5.1 Eigene SDKs
+
+Jedes weitere SDK beschreibt sich selbst mit einer Datei `AmiDevSDK.json` in
+seinem Verzeichnis. Alle Pfade darin sind relativ zu diesem Verzeichnis:
+
+```json
+{
+  "name": "Foo Lib",
+  "version": "1.2",
+  "kind": "other",
+  "includeDirs": ["include"],
+  "asmIncludeDirs": [],
+  "libDirs": ["lib"],
+  "autodocDirs": ["Autodocs"],
+  "autodocFiles": [],
+  "sfdDirs": ["SFD"],
+  "suggestedLibs": ["foo"]
+}
+```
+
+Pflicht sind `name` und `version`; `kind` ist `ndk`, `mui` oder `other`
+(Standard), `"."` steht für das SDK-Verzeichnis selbst. Die Qt-IDE findet
+solche SDKs unter `toolchain/sdk/*/`, die MUI-IDE unter `SDK:*/`. Dasselbe
+Verzeichnis funktioniert also unverändert auf beiden Seiten.
+
+**Name und Version sind die Identität.** Ein Projekt speichert ein SDK als Id,
+die beide IDEs gleich aus Name und Version bilden: klein geschrieben, alles
+außer `a-z`, `0-9` und `.` wird zu `-`, also „Foo Lib“ + „1.2“ →
+`foo-lib-1.2`. Verglichen wird ohne Rücksicht auf Groß- und Kleinschreibung.
+Eingebaute SDKs gewinnen bei gleicher Id.
+
+In der Qt-IDE lässt sich ein SDK auch unter *Settings → SDKs* von Hand anlegen,
+mit Name und Version (die Id wird angezeigt, nicht eingegeben). Das gilt nur
+auf diesem Rechner; für den Amiga braucht es die `AmiDevSDK.json`.
+
+Nennt ein Projekt ein SDK, das nicht installiert ist, melden beide IDEs das
+beim Öffnen und am Anfang jedes Builds. In den Projekteinstellungen steht es
+mit „(not installed)“ bzw. „(nicht installiert)“ und bleibt angehakt, bis man
+das Häkchen entfernt.
+
 ---
 
 ## 6. Host: Schritt für Schritt

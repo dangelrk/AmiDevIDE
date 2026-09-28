@@ -13,6 +13,7 @@
   @{" Das Hauptfenster     " link Hauptfenster}  Projektbaum, Editor, Ausgabe
   @{" Projekte             " link Projekte}  Neu, Oeffnen, Speichern, Dateien
   @{" Projekteinstellungen " link Projekteinstellungen}  Compiler, Linker, SDKs
+  @{" Eigene SDKs          " link EigeneSDKs}  Weitere SDKs mit AmiDevSDK.json
   @{" Einstellungen        " link Einstellungen}  Make, SDK- und Toolchain-Pfad
   @{" Editor               " link Editor}  Bearbeiten und Formatieren
   @{" Bauen und Starten    " link Bauen}  Build, Clean, Run, Issues
@@ -208,6 +209,9 @@ eingetragen, weil praktisch jedes vbcc-Programm sie braucht.
 Laedt eine .aproj. Wie bei "Neu" gehen ungespeicherte Aenderungen
 ohne Nachfrage verloren.
 
+Benutzt das Projekt SDKs, die hier nicht installiert sind, nennt
+AmigaIDE sie in einem Hinweis. Siehe @{" Eigene SDKs " link EigeneSDKs}.
+
 @{u}Projekt > Speichern  (Amiga-S)@{uu}
 
 Speichert die offene Datei und das Projekt in einem Schritt. Nur beim
@@ -300,8 +304,59 @@ Reihenfolge werden Include- und Library-Pfade durchsucht:
   NDK 3.2, MUI 3.8, MUI-Zusatzklassen (MCC), regex.library,
   reqtools.library, Roadshow, AmiSSL v5, SQLite3, PosixLib
 
+Danach folgen die @{" eigenen SDKs " link EigeneSDKs}, die AmigaIDE unter SDK:
+gefunden hat, mit Name und Version.
+
+Benutzt das Projekt ein SDK, das hier nicht installiert ist, steht es
+am Ende mit dem Zusatz "(nicht installiert)" und ist angehakt. So
+geht es beim OK nicht verloren. Wer es nicht mehr braucht, nimmt das
+Haekchen weg.
+
 Kein SDK ist Pflicht, auch das NDK nicht: Ein Programm, das direkt
 auf die Hardware zugreift, braucht keine System-Header.
+
+@endnode
+@node EigeneSDKs "Eigene SDKs"
+
+@{b}Eigene SDKs@{ub}
+
+Neben den eingebauten SDKs kennt AmigaIDE jedes Verzeichnis unter
+SDK:, das eine Datei @{b}AmiDevSDK.json@{ub} enthaelt. Sie beschreibt das
+SDK; alle Pfade darin sind relativ zu seinem Verzeichnis:
+
+  {
+    "name": "Foo Lib",
+    "version": "1.2",
+    "kind": "other",
+    "includeDirs": ["include"],
+    "asmIncludeDirs": [],
+    "libDirs": ["lib"],
+    "autodocDirs": ["Autodocs"],
+    "autodocFiles": [],
+    "sfdDirs": ["SFD"],
+    "suggestedLibs": ["foo"]
+  }
+
+Pflicht sind "name" und "version". "kind" ist "ndk", "mui" oder
+"other" (Standard). "." steht fuer das SDK-Verzeichnis selbst. Die
+Autodocs erscheinen in der @{" Hilfe " link Hilfe}, sobald das SDK im
+Projekt angehakt ist.
+
+@{u}Name und Version sind die Identitaet@{uu}
+
+Ein Projekt merkt sich ein SDK als Name und Version, klein
+geschrieben und mit Bindestrichen verbunden: "Foo Lib" in Version
+"1.2" wird zu "foo-lib-1.2". Gross- und Kleinschreibung spielen
+keine Rolle. Das Verzeichnis darf heissen, wie es will.
+
+Die Qt-Version auf dem PC bildet den Namen genauso. Ein SDK-
+Verzeichnis mit AmiDevSDK.json funktioniert deshalb unveraendert auf
+beiden Seiten: auf dem PC unter toolchain/sdk/, auf dem Amiga unter
+SDK:. Ein Projekt, das dort mit "Foo Lib 1.2" gebaut wurde, findet
+hier dasselbe SDK, wenn es unter SDK: liegt.
+
+Gefunden werden die SDKs beim Start von AmigaIDE und nach OK unter
+@{" Einstellungen " link Einstellungen}.
 
 @endnode
 @node Einstellungen "Einstellungen"
@@ -348,7 +403,8 @@ Speichert die offene Datei, erzeugt im Projektverzeichnis
 
 und startet make im Hintergrund. Die Oberflaeche bleibt bedienbar; die
 Ausgabe erscheint laufend unter "Ausgabe", Fehler und Warnungen unter
-"Issues".
+"Issues". Fehlt ein SDK, das das Projekt benutzt, steht das als
+Warnung am Anfang der Ausgabe; der Build laeuft ohne dessen Pfade.
 
 Nach einem erfolgreichen Build:
 

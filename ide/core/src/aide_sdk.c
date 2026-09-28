@@ -1,4 +1,5 @@
 #include "aide/aide_sdk.h"
+#include "aide/aide_fs.h"
 
 #include "parson.h"
 
@@ -241,7 +242,7 @@ int aide_sdk_list_remove(AideSdkList *l, const char *id)
 {
     size_t i;
     for (i = 0; i < l->count; ++i) {
-        if (strcmp(l->items[i].id, id) == 0) {
+        if (aide_str_ieq(l->items[i].id, id)) {
             aide_sdk_descriptor_free(&l->items[i]);
             memmove(&l->items[i], &l->items[i + 1], (l->count - i - 1) * sizeof(AideSdkDescriptor));
             l->count--;
@@ -255,10 +256,164 @@ const AideSdkDescriptor *aide_sdk_list_find(const AideSdkList *l, const char *id
 {
     size_t i;
     for (i = 0; i < l->count; ++i) {
-        if (strcmp(l->items[i].id, id) == 0)
+        if (aide_str_ieq(l->items[i].id, id))
             return &l->items[i];
     }
     return NULL;
+}
+
+/* ---- identity, self-describing SDKs, missing ids ---- */
+
+static void append_id_part(AideStr *s, const char *part)
+{
+    int pendingDash = 0;
+    for (; *part; ++part) {
+        char c = *part;
+        if (c >= 'A' && c <= 'Z')
+            c = (char)(c - 'A' + 'a');
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.') {
+            if (pendingDash && s->len > 0 && s->data[s->len - 1] != '-')
+                aide_str_append_char(s, '-');
+            pendingDash = 0;
+            aide_str_append_char(s, c);
+        } else {
+            pendingDash = 1;
+        }
+    }
+}
+
+char *aide_sdk_make_id(const char *name, const char *version)
+{
+    AideStr s;
+    aide_str_init(&s);
+    append_id_part(&s, name ? name : "");
+    if (s.len > 0 && version && version[0]) {
+        size_t before = s.len;
+        aide_str_append_char(&s, '-');
+        append_id_part(&s, version);
+        if (s.len == before + 1) { /* version had nothing usable */
+            s.len = before;
+            s.data[s.len] = '\0';
+        }
+    }
+    return aide_str_take(&s);
+}
+
+static void manifest_paths(const JSON_Object *obj, const char *key, const char *rootDir, AideStrList *out)
+{
+    JSON_Array *arr = json_object_get_array(obj, key);
+    size_t i, n;
+
+    aide_strlist_clear(out);
+    if (!arr)
+        return;
+    n = json_array_get_count(arr);
+    for (i = 0; i < n; ++i) {
+        const char *rel = json_array_get_string(arr, i);
+        AideStr path;
+        if (!rel || !rel[0])
+            continue;
+        aide_str_init(&path);
+        aide_str_append(&path, rootDir);
+        if (strcmp(rel, ".") != 0) {
+            /* append_path knows that "SDK:" needs no '/' before a name */
+            aide_str_append_path(&path, "/");
+            aide_str_append(&path, rel);
+        }
+        aide_strlist_push(out, path.data);
+        aide_str_free(&path);
+    }
+}
+
+int aide_sdk_descriptor_from_manifest(AideSdkDescriptor *d, const char *json_text, const char *rootDir)
+{
+    JSON_Value *root = json_parse_string(json_text);
+    const JSON_Object *obj;
+    const char *name, *version;
+    char *id;
+
+    aide_sdk_descriptor_init(d);
+    if (!root || json_value_get_type(root) != JSONObject) {
+        if (root)
+            json_value_free(root);
+        return 0;
+    }
+    obj = json_value_get_object(root);
+    name = jstr(obj, "name", "");
+    version = jstr(obj, "version", "");
+    id = aide_sdk_make_id(name, version);
+    if (!name[0] || !version[0] || !id[0]) {
+        free(id);
+        json_value_free(root);
+        return 0;
+    }
+
+    free(d->id);
+    d->id = id;
+    strset(&d->displayName, name);
+    strset(&d->version, version);
+    d->kind = kind_from_string(jstr(obj, "kind", "other"));
+    strset(&d->rootDir, rootDir);
+    manifest_paths(obj, "includeDirs", rootDir, &d->includeDirs);
+    manifest_paths(obj, "asmIncludeDirs", rootDir, &d->asmIncludeDirs);
+    manifest_paths(obj, "libDirs", rootDir, &d->libDirs);
+    manifest_paths(obj, "autodocDirs", rootDir, &d->autodocDirs);
+    manifest_paths(obj, "autodocFiles", rootDir, &d->autodocFiles);
+    manifest_paths(obj, "sfdDirs", rootDir, &d->sfdDirs);
+    jstrlist(obj, "suggestedLibs", &d->suggestedLibs);
+    d->userDefined = 1;
+
+    json_value_free(root);
+    return 1;
+}
+
+size_t aide_sdk_append_from_manifests(const char *sdk_root, AideSdkList *out)
+{
+    AideStrList dirs;
+    size_t i, added = 0;
+
+    aide_strlist_init(&dirs);
+    aide_fs_list_dirs(sdk_root, &dirs);
+    for (i = 0; i < dirs.count; ++i) {
+        AideStr dir, manifest;
+        char *text;
+        size_t size;
+        AideSdkDescriptor d;
+
+        aide_str_init(&dir);
+        aide_str_append(&dir, sdk_root);
+        aide_str_append_path(&dir, "/");
+        aide_str_append(&dir, dirs.items[i]);
+
+        aide_str_init(&manifest);
+        aide_str_append(&manifest, dir.data);
+        aide_str_append(&manifest, "/" AIDE_SDK_MANIFEST);
+
+        if (aide_fs_read_file(manifest.data, &text, &size)) {
+            if (aide_sdk_descriptor_from_manifest(&d, text, dir.data)
+                && !aide_sdk_list_find(out, d.id)) {
+                list_reserve(out, out->count + 1);
+                out->items[out->count++] = d; /* ownership moves into the list */
+                ++added;
+            } else {
+                aide_sdk_descriptor_free(&d);
+            }
+            free(text);
+        }
+        aide_str_free(&manifest);
+        aide_str_free(&dir);
+    }
+    aide_strlist_free(&dirs);
+    return added;
+}
+
+void aide_sdk_list_missing(const AideSdkList *registry, const AideStrList *selected, AideStrList *missing)
+{
+    size_t i;
+    for (i = 0; i < selected->count; ++i) {
+        if (!aide_sdk_list_find(registry, selected->items[i]))
+            aide_strlist_push(missing, selected->items[i]);
+    }
 }
 
 char *aide_sdk_list_to_json_array(const AideSdkList *l)

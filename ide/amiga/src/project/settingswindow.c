@@ -12,6 +12,7 @@
 #include "mui/NListview_mcc.h"
 #include "mui/TextEditor_mcc.h"
 
+#include "aide/aide_sdk.h"
 #include "aide/aide_str.h"
 
 #include <stdlib.h>
@@ -51,10 +52,9 @@ static Object *g_extraLibDirsEditor, *g_stripCheck, *g_extraLdFlagsEditor;
 /* SDKs */
 #define EXTRA_SDK_COUNT 9
 typedef struct { const char *id; const char *label; } ExtraSdkDef;
-/* Every SDK, in the order aide_sdk_append_builtins() registers them, which
-   is also the include-search order. The NDK and MUI used to have their own
-   cycle gadgets from when there were two of each; there is one of each now
-   and neither is compulsory, so they are checkmarks like everything else. */
+/* German labels for the built-in SDKs, in the order
+   aide_sdk_append_builtins() registers them. Every other SDK is labelled
+   with its own name and version. */
 static const ExtraSdkDef g_extraSdkDefs[EXTRA_SDK_COUNT] = {
     { "ndk-3.2",  "NDK 3.2" },
     { "mui-3.8",  "MUI 3.8" },
@@ -66,7 +66,20 @@ static const ExtraSdkDef g_extraSdkDefs[EXTRA_SDK_COUNT] = {
     { "sqlite3",  "SQLite3" },
     { "posixlib", "PosixLib" },
 };
-static Object *g_extraSdkChecks[EXTRA_SDK_COUNT];
+/* One checkmark row per SDK in the registry (include-search order), then
+ * one per id the project names that the registry lacks -- ticked, labelled
+ * "nicht installiert", so it survives OK and can be dropped on purpose.
+ * Rebuilt by rebuild_sdk_rows() each time the window is shown, since the
+ * missing ones depend on the project and the registry can change with the
+ * preferences. */
+#define SDK_ROWS_MAX 64
+static const AideSdkList *g_registry;
+static Object *g_sdkGroup;
+static Object *g_sdkLabels[SDK_ROWS_MAX];
+static Object *g_sdkChecks[SDK_ROWS_MAX];
+static char *g_sdkRowIds[SDK_ROWS_MAX];
+static char *g_sdkRowTexts[SDK_ROWS_MAX]; /* kept alive for the label objects */
+static int g_sdkRowCount;
 
 static Object *g_okBtn, *g_cancelBtn;
 
@@ -216,7 +229,6 @@ static int ask_lib_name(char *out, size_t outsz)
 static void populate_widgets(void)
 {
     char stackBuf[16];
-    int i;
 
     set_cycle(g_languageCycle, (int)g_editing.language);
     set_cycle(g_outputKindCycle, (int)g_editing.output.kind);
@@ -249,25 +261,7 @@ static void populate_widgets(void)
     strlist_to_editor(g_extraLibDirsEditor, &g_editing.linker.extraLibDirs);
     set_check(g_stripCheck, g_editing.linker.strip);
     strlist_to_editor(g_extraLdFlagsEditor, &g_editing.linker.extraLdFlags);
-
-    for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
-        int selected = 0;
-        size_t j;
-        for (j = 0; j < g_editing.sdks.selected.count; ++j) {
-            if (strcmp(g_editing.sdks.selected.items[j], g_extraSdkDefs[i].id) == 0) { selected = 1; break; }
-        }
-        set_check(g_extraSdkChecks[i], selected);
-    }
-}
-
-static int is_builtin_sdk_id(const char *id)
-{
-    int i;
-    for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
-        if (strcmp(id, g_extraSdkDefs[i].id) == 0)
-            return 1;
-    }
-    return 0;
+    /* The SDK rows are set up by rebuild_sdk_rows(). */
 }
 
 static void apply_widgets(void)
@@ -312,30 +306,118 @@ static void apply_widgets(void)
     g_editing.linker.strip = get_check(g_stripCheck);
     editor_to_strlist(g_extraLdFlagsEditor, &g_editing.linker.extraLdFlags);
 
-    /* Built-ins in checkbox order, then every id this window has no
-     * checkbox for -- a user SDK added in the Qt IDE -- unchanged and in
-     * its old order, the way the Qt dialog lists user SDKs after the
-     * built-ins. This side cannot use them (the Makefile skips ids the
-     * registry does not know), but dropping them would lose them for the
-     * Qt IDE the next time the project is opened there. */
-    {
-        AideStrList others;
-        size_t j;
-
-        aide_strlist_init(&others);
-        for (j = 0; j < g_editing.sdks.selected.count; ++j) {
-            if (!is_builtin_sdk_id(g_editing.sdks.selected.items[j]))
-                aide_strlist_push(&others, g_editing.sdks.selected.items[j]);
-        }
-        aide_strlist_clear(&g_editing.sdks.selected);
-        for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
-            if (get_check(g_extraSdkChecks[i]))
-                aide_strlist_push(&g_editing.sdks.selected, g_extraSdkDefs[i].id);
-        }
-        for (j = 0; j < others.count; ++j)
-            aide_strlist_push(&g_editing.sdks.selected, others.items[j]);
-        aide_strlist_free(&others);
+    aide_strlist_clear(&g_editing.sdks.selected);
+    for (i = 0; i < g_sdkRowCount; ++i) {
+        if (get_check(g_sdkChecks[i]))
+            aide_strlist_push(&g_editing.sdks.selected, g_sdkRowIds[i]);
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* SDK rows                                                              */
+/* ------------------------------------------------------------------ */
+static int project_selects(const char *id)
+{
+    size_t j;
+    for (j = 0; j < g_editing.sdks.selected.count; ++j) {
+        if (aide_str_ieq(g_editing.sdks.selected.items[j], id))
+            return 1;
+    }
+    return 0;
+}
+
+static char *sdk_label(const AideSdkDescriptor *d)
+{
+    AideStr s;
+    size_t nameLen, verLen;
+    int i;
+
+    for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
+        if (aide_str_ieq(d->id, g_extraSdkDefs[i].id))
+            return aide_strdup(g_extraSdkDefs[i].label);
+    }
+    aide_str_init(&s);
+    aide_str_append(&s, d->displayName[0] ? d->displayName : d->id);
+    nameLen = s.len;
+    verLen = strlen(d->version);
+    if (verLen > 0 && !(nameLen >= verLen && strcmp(s.data + nameLen - verLen, d->version) == 0)) {
+        aide_str_append_char(&s, ' ');
+        aide_str_append(&s, d->version);
+    }
+    return aide_str_take(&s);
+}
+
+/* Takes ownership of `text`. Once the group is part of the window, only
+ * call this between MUIM_Group_InitChange and ExitChange. */
+static void add_sdk_row(const char *id, char *text, int selected)
+{
+    int i = g_sdkRowCount;
+    if (i >= SDK_ROWS_MAX) {
+        free(text);
+        return;
+    }
+    g_sdkRowIds[i] = aide_strdup(id);
+    g_sdkRowTexts[i] = text;
+    g_sdkLabels[i] = Label((STRPTR)text);
+    g_sdkChecks[i] = CheckMark(selected ? TRUE : FALSE);
+    DoMethod(g_sdkGroup, OM_ADDMEMBER, (ULONG)g_sdkLabels[i]);
+    DoMethod(g_sdkGroup, OM_ADDMEMBER, (ULONG)g_sdkChecks[i]);
+    g_sdkRowCount++;
+}
+
+static void free_sdk_row_strings(void)
+{
+    int i;
+    for (i = 0; i < g_sdkRowCount; ++i) {
+        free(g_sdkRowIds[i]);
+        free(g_sdkRowTexts[i]);
+    }
+}
+
+static void add_all_sdk_rows(void)
+{
+    AideStrList missing;
+    size_t i;
+
+    if (g_registry) {
+        for (i = 0; i < g_registry->count; ++i) {
+            const AideSdkDescriptor *d = &g_registry->items[i];
+            add_sdk_row(d->id, sdk_label(d), project_selects(d->id));
+        }
+    }
+
+    aide_strlist_init(&missing);
+    if (g_registry) {
+        aide_sdk_list_missing(g_registry, &g_editing.sdks.selected, &missing);
+    } else {
+        for (i = 0; i < g_editing.sdks.selected.count; ++i)
+            aide_strlist_push(&missing, g_editing.sdks.selected.items[i]);
+    }
+    for (i = 0; i < missing.count; ++i) {
+        AideStr text;
+        aide_str_init(&text);
+        aide_str_append(&text, missing.items[i]);
+        aide_str_append(&text, " (nicht installiert)");
+        add_sdk_row(missing.items[i], aide_str_take(&text), 1);
+    }
+    aide_strlist_free(&missing);
+}
+
+static void rebuild_sdk_rows(void)
+{
+    int i;
+
+    DoMethod(g_sdkGroup, MUIM_Group_InitChange);
+    for (i = 0; i < g_sdkRowCount; ++i) {
+        DoMethod(g_sdkGroup, OM_REMMEMBER, (ULONG)g_sdkLabels[i]);
+        DoMethod(g_sdkGroup, OM_REMMEMBER, (ULONG)g_sdkChecks[i]);
+        MUI_DisposeObject(g_sdkLabels[i]);
+        MUI_DisposeObject(g_sdkChecks[i]);
+    }
+    free_sdk_row_strings();
+    g_sdkRowCount = 0;
+    add_all_sdk_rows();
+    DoMethod(g_sdkGroup, MUIM_Group_ExitChange);
 }
 
 /* ------------------------------------------------------------------ */
@@ -349,15 +431,14 @@ static Object *make_editor(void)
     End;
 }
 
-void settingswindow_init(Object *app)
+void settingswindow_init(Object *app, const AideSdkList *registry)
 {
     Object *generalPage, *compilerPage, *assemblerPage, *linkerPage, *sdksPage;
     Object *libButtons;
-    Object *extraSdkGroup;
     Object *register_;
-    int i;
 
     g_app = app;
+    g_registry = registry;
     aide_project_init(&g_editing);
     g_haveEditing = 1;
 
@@ -461,17 +542,14 @@ void settingswindow_init(Object *app)
         Child, Label("Extra Linker-Flags (eine pro Zeile):"),      Child, g_extraLdFlagsEditor,
     End;
 
-    for (i = 0; i < EXTRA_SDK_COUNT; ++i)
-        g_extraSdkChecks[i] = CheckMark(FALSE);
-    extraSdkGroup = ColGroup(2), End;
-    for (i = 0; i < EXTRA_SDK_COUNT; ++i) {
-        DoMethod(extraSdkGroup, OM_ADDMEMBER, (ULONG)(Object *)Label((STRPTR)g_extraSdkDefs[i].label));
-        DoMethod(extraSdkGroup, OM_ADDMEMBER, (ULONG)g_extraSdkChecks[i]);
-    }
+    /* Filled here directly, before the group joins the window; from then
+     * on rebuild_sdk_rows() replaces the rows on every show. */
+    g_sdkGroup = ColGroup(2), End;
+    add_all_sdk_rows();
 
     sdksPage = VGroup,
         Child, Label("Include- und Library-Pfade werden in dieser Reihenfolge durchsucht:"),
-        Child, extraSdkGroup,
+        Child, g_sdkGroup,
         Child, RectangleObject, End,
     End;
 
@@ -519,6 +597,9 @@ void settingswindow_init(Object *app)
 
 void settingswindow_free(void)
 {
+    /* The row objects go with g_app; only their strings are ours. */
+    free_sdk_row_strings();
+    g_sdkRowCount = 0;
     if (g_haveEditing) {
         aide_project_free(&g_editing);
         g_haveEditing = 0;
@@ -533,6 +614,7 @@ void settingswindow_show(const AideProject *project)
     aide_project_from_json(&g_editing, json);
     free(json);
 
+    rebuild_sdk_rows();
     populate_widgets();
     set(g_window, MUIA_Window_Open, TRUE);
 }

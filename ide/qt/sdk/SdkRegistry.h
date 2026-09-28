@@ -23,17 +23,25 @@ public:
 
     QList<SdkDescriptor> allSdks() const { return m_sdks; }
     QList<SdkDescriptor> builtinSdks() const;
+    // Entered in SdkEditDialog or found through an AmiDevSDK.json.
     QList<SdkDescriptor> userSdks() const;
 
+    // Ids compare case-insensitively, as in aide_sdk.c.
     const SdkDescriptor *find(const QString &id) const;
+    // The ids in `ids` that no installed SDK has, in their order.
+    QStringList missingIds(const QStringList &ids) const;
 
+    // Only for SDKs entered in SdkEditDialog; built-ins and AmiDevSDK.json
+    // ones are never overwritten or removed from here.
     void addUserSdk(const SdkDescriptor &descriptor);
     void removeUserSdk(const QString &id);
 
 private:
     SdkRegistry() = default;
 
-    QList<SdkDescriptor> builtinDescriptors(const QString &toolchainRoot) const;
+    // Built-ins, then every AmiDevSDK.json under <toolchainRoot>/sdk that
+    // does not reuse a built-in's id.
+    QList<SdkDescriptor> builtinAndManifestDescriptors(const QString &toolchainRoot) const;
     QString userSdksJsonPath() const;
     void loadUserSdks();
     void saveUserSdks() const;

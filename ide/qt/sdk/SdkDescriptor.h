@@ -10,8 +10,8 @@ enum class SdkKind { Ndk, Mui, Other };
 // built-in set is provided by SdkRegistry from the shipped sdk/ tree; users
 // can add more without any code change (SdkEditDialog -> sdks.json).
 struct SdkDescriptor {
-    QString id;            // stable key, e.g. "ndk-3.2", used in .aproj
-    QString displayName;   // e.g. "NDK 3.2"
+    QString id;            // name + version, e.g. "ndk-3.2" (aide_sdk_make_id), used in .aproj
+    QString displayName;   // e.g. "NDK 3.2"; for a user SDK just its name
     SdkKind kind = SdkKind::Other;
     QString version;
     QString rootDir;
@@ -25,6 +25,12 @@ struct SdkDescriptor {
     QStringList suggestedLibs;   // library basenames to prefill in the linker tab
 
     bool userDefined = false;
+    // Found through an AmiDevSDK.json under <toolchain>/sdk rather than
+    // entered in SdkEditDialog: listed, but edited in that file, not here.
+    bool fromManifest = false;
+
+    // What the UI shows: the name, and the version unless it already says it.
+    QString label() const;
 
     QJsonObject toJson() const;
     static SdkDescriptor fromJson(const QJsonObject &obj);

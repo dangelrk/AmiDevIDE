@@ -826,6 +826,10 @@ void MainWindow::stopBuild()
 void MainWindow::onBuildStarted()
 {
     m_outputPane->clearOutput();
+    if (m_project) {
+        for (const QString &id : SdkRegistry::instance().missingIds(m_project->sdks.selected))
+            m_outputPane->appendLine(tr("Warning: SDK \"%1\" is not installed; its paths are left out.").arg(id));
+    }
     m_issuesPane->clear();
     m_currentIssues.clear();
     m_building = true;
@@ -977,6 +981,16 @@ void MainWindow::openProjectAt(const QString &path)
     }
 
     statusBar()->showMessage(tr("Opened project \"%1\"").arg(m_project->name), 3000);
+
+    const QStringList missing = SdkRegistry::instance().missingIds(m_project->sdks.selected);
+    if (!missing.isEmpty()) {
+        QMessageBox::warning(this, tr("Missing SDKs"),
+                             tr("This project uses SDKs that are not installed here:\n\n%1\n\n"
+                                "The build will not find their headers and libraries. Install an SDK "
+                                "with the same name and version (Settings > SDKs, or an AmiDevSDK.json "
+                                "under %2/sdk).")
+                                 .arg(missing.join(QLatin1Char('\n')), AppSettings::instance().toolchainRoot()));
+    }
 }
 
 void MainWindow::saveProject()

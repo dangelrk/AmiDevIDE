@@ -136,6 +136,30 @@ void aide_fs_list_files(const char *dirPath, const char *suffix, AideStrList *ou
     UnLock(lock);
 }
 
+void aide_fs_list_dirs(const char *dirPath, AideStrList *out)
+{
+    BPTR lock = Lock((CONST_STRPTR)amiga_path(dirPath), ACCESS_READ);
+    struct FileInfoBlock *fib;
+
+    if (!lock)
+        return;
+    fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+    if (!fib) {
+        UnLock(lock);
+        return;
+    }
+    if (Examine(lock, fib)) {
+        /* ExNext() lists the contents only, never the directory itself,
+         * and AmigaDOS has no "." or ".." entries to skip. */
+        while (ExNext(lock, fib)) {
+            if (fib->fib_DirEntryType > 0)
+                aide_strlist_push(out, fib->fib_FileName);
+        }
+    }
+    FreeDosObject(DOS_FIB, fib);
+    UnLock(lock);
+}
+
 int aide_fs_stat(const char *path, long *outSize, long long *outMtimeMs)
 {
     BPTR lock = Lock((CONST_STRPTR)amiga_path(path), ACCESS_READ);

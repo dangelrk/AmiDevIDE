@@ -35,10 +35,17 @@ version of either, not in the registry, the UI or the docs.
 `acd-doctor` flags their directories if an old toolchain still has them.
 
 **SDK selection is one list, and every entry is optional.** `sdks.selected`
-holds registry ids in include-search order. An id the registry does not
-know is skipped when the Makefile is generated. Not even the NDK is
-mandatory: a program that drives the hardware directly needs no system
-headers.
+holds registry ids in include-search order. Not even the NDK is mandatory: a
+program that drives the hardware directly needs no system headers.
+
+**An SDK is its name and version, case-insensitively.** Its id comes from
+`aide_sdk_make_id()` ("Foo Lib" + "1.2" -> `foo-lib-1.2`), never typed in,
+and every id comparison ignores case -- that is what lets a project move
+between the Qt and MUI IDEs. Beyond the built-ins, an SDK describes itself
+with an `AmiDevSDK.json` (paths relative to its directory), found under
+`toolchain/sdk/*/` and `SDK:*/` by `aide_sdk_append_from_manifests()`. An id
+the registry does not know is reported on project load and at build start,
+kept in the project, and skipped when the Makefile is generated.
 
 **Adding a file to `ide/core/src/` means editing `ide/core/sources.mk`,
 and only that.** CMake and both Amiga Makefiles read it. This used to be

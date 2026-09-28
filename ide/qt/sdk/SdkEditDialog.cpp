@@ -1,14 +1,21 @@
 #include "SdkEditDialog.h"
+#include "SdkRegistry.h"
+
+#include "aide/aide_sdk.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+#include <cstdlib>
 
 namespace {
 QStringList splitLines(const QString &text)
@@ -28,8 +35,9 @@ QString joinLines(const QStringList &list)
 
 SdkEditDialog::SdkEditDialog(QWidget *parent)
     : QDialog(parent)
-    , m_idEdit(new QLineEdit(this))
-    , m_displayNameEdit(new QLineEdit(this))
+    , m_nameEdit(new QLineEdit(this))
+    , m_versionEdit(new QLineEdit(this))
+    , m_idLabel(new QLabel(this))
     , m_kindCombo(new QComboBox(this))
     , m_rootDirEdit(new QLineEdit(this))
     , m_includeDirsEdit(new QPlainTextEdit(this))
@@ -59,8 +67,18 @@ SdkEditDialog::SdkEditDialog(QWidget *parent)
     }
 
     auto *form = new QFormLayout;
-    form->addRow(tr("Id:"), m_idEdit);
-    form->addRow(tr("Display name:"), m_displayNameEdit);
+    m_nameEdit->setPlaceholderText(tr("e.g. AmiSSL"));
+    m_versionEdit->setPlaceholderText(tr("e.g. 5.18"));
+    m_idLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_idLabel->setToolTip(tr("What the project stores. Derived from name and version; "
+                             "the MUI IDE finds the SDK by the same id."));
+    connect(m_nameEdit, &QLineEdit::textChanged, this, &SdkEditDialog::updateIdPreview);
+    connect(m_versionEdit, &QLineEdit::textChanged, this, &SdkEditDialog::updateIdPreview);
+    updateIdPreview();
+
+    form->addRow(tr("Name:"), m_nameEdit);
+    form->addRow(tr("Version:"), m_versionEdit);
+    form->addRow(tr("Id:"), m_idLabel);
     form->addRow(tr("Kind:"), m_kindCombo);
     form->addRow(tr("Root directory:"), rootRow);
     form->addRow(tr("Include dirs:"), m_includeDirsEdit);
@@ -86,10 +104,45 @@ void SdkEditDialog::browseRootDir()
         m_rootDirEdit->setText(dir);
 }
 
+QString SdkEditDialog::currentId() const
+{
+    const QByteArray name = m_nameEdit->text().trimmed().toUtf8();
+    const QByteArray version = m_versionEdit->text().trimmed().toUtf8();
+    char *id = aide_sdk_make_id(name.constData(), version.constData());
+    const QString result = QString::fromUtf8(id);
+    free(id);
+    return result;
+}
+
+void SdkEditDialog::updateIdPreview()
+{
+    const QString id = currentId();
+    m_idLabel->setText(id.isEmpty() ? tr("(enter a name and a version)") : id);
+}
+
+void SdkEditDialog::accept()
+{
+    if (m_nameEdit->text().trimmed().isEmpty() || m_versionEdit->text().trimmed().isEmpty()
+        || currentId().isEmpty()) {
+        QMessageBox::warning(this, windowTitle(), tr("An SDK needs a name and a version."));
+        return;
+    }
+    const QString id = currentId();
+    if (id.compare(m_originalId, Qt::CaseInsensitive) != 0) {
+        if (const SdkDescriptor *other = SdkRegistry::instance().find(id)) {
+            QMessageBox::warning(this, windowTitle(),
+                                 tr("There already is an SDK \"%1\" (id %2).").arg(other->label(), other->id));
+            return;
+        }
+    }
+    QDialog::accept();
+}
+
 void SdkEditDialog::setDescriptor(const SdkDescriptor &d)
 {
-    m_idEdit->setText(d.id);
-    m_displayNameEdit->setText(d.displayName);
+    m_originalId = d.id;
+    m_nameEdit->setText(d.displayName);
+    m_versionEdit->setText(d.version);
     const int kindIndex = m_kindCombo->findData(
         d.kind == SdkKind::Ndk ? QStringLiteral("ndk") : d.kind == SdkKind::Mui ? QStringLiteral("mui")
                                                                                  : QStringLiteral("other"));
@@ -105,8 +158,9 @@ void SdkEditDialog::setDescriptor(const SdkDescriptor &d)
 SdkDescriptor SdkEditDialog::descriptor() const
 {
     SdkDescriptor d;
-    d.id = m_idEdit->text().trimmed();
-    d.displayName = m_displayNameEdit->text().trimmed();
+    d.id = currentId();
+    d.displayName = m_nameEdit->text().trimmed();
+    d.version = m_versionEdit->text().trimmed();
     const QString kindStr = m_kindCombo->currentData().toString();
     d.kind = kindStr == QLatin1String("ndk") ? SdkKind::Ndk
              : kindStr == QLatin1String("mui") ? SdkKind::Mui
