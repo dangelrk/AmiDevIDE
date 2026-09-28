@@ -210,7 +210,8 @@ Laedt eine .aproj. Wie bei "Neu" gehen ungespeicherte Aenderungen
 ohne Nachfrage verloren.
 
 Benutzt das Projekt SDKs, die hier nicht installiert sind, nennt
-AmigaIDE sie in einem Hinweis. Siehe @{" Eigene SDKs " link EigeneSDKs}.
+AmigaIDE sie in einem Hinweis. Ebenso, wenn ein SDK nur in einer
+neueren Hauptversion da ist. Siehe @{" Eigene SDKs " link EigeneSDKs}.
 
 @{u}Projekt > Speichern  (Amiga-S)@{uu}
 
@@ -307,6 +308,10 @@ Reihenfolge werden Include- und Library-Pfade durchsucht:
 Danach folgen die @{" eigenen SDKs " link EigeneSDKs}, die AmigaIDE unter SDK:
 gefunden hat, mit Name und Version.
 
+Verlangt das Projekt eine aeltere Version, als installiert ist, steht
+das dahinter, etwa "Foo Lib 1.3 (Projekt: foo-lib-1.2)"; beim OK
+bleibt die Projektdatei bei 1.2.
+
 Benutzt das Projekt ein SDK, das hier nicht installiert ist, steht es
 am Ende mit dem Zusatz "(nicht installiert)" und ist angehakt. So
 geht es beim OK nicht verloren. Wer es nicht mehr braucht, nimmt das
@@ -349,11 +354,24 @@ geschrieben und mit Bindestrichen verbunden: "Foo Lib" in Version
 "1.2" wird zu "foo-lib-1.2". Gross- und Kleinschreibung spielen
 keine Rolle. Das Verzeichnis darf heissen, wie es will.
 
-Die Qt-Version auf dem PC bildet den Namen genauso. Ein SDK-
-Verzeichnis mit AmiDevSDK.json funktioniert deshalb unveraendert auf
-beiden Seiten: auf dem PC unter toolchain/sdk/, auf dem Amiga unter
-SDK:. Ein Projekt, das dort mit "Foo Lib 1.2" gebaut wurde, findet
-hier dasselbe SDK, wenn es unter SDK: liegt.
+Ist genau diese Version nicht installiert, nimmt AmigaIDE die neueste
+installierte Version desselben SDKs, die mindestens so neu ist: Ein
+Projekt fuer "foo-lib-1.2" baut auch mit Foo Lib 1.3, aber nicht mit
+1.1. Die Projektdatei bleibt dabei unveraendert, sie verlangt weiter
+1.2. Pfade stehen nie in der Projektdatei, nur Name und Version.
+
+Verglichen wird Abschnitt fuer Abschnitt als ganze Zahlen: 3.2.2 ist
+neuer als 3.2 und als 3.2.1, 3.10 ist neuer als 3.2.
+
+Nur eine aeltere Version blockiert. Ist die installierte Version eine
+andere Hauptversion (die erste Zahl), etwa 3.1 fuer ein Projekt, das
+1.2 verlangt, baut das Projekt trotzdem; beim Oeffnen weist AmigaIDE
+aber darauf hin, weil sich die Schnittstellen geaendert haben koennen.
+
+Die Qt-Version auf dem PC bildet den Namen genauso und waehlt nach
+derselben Regel. Eingerichtet wird ein SDK in jeder IDE fuer sich:
+auf dem Amiga als Verzeichnis unter SDK: mit AmiDevSDK.json. Eine
+Projektdatei aus der Qt-Version funktioniert dann hier 1:1.
 
 Gefunden werden die SDKs beim Start von AmigaIDE und nach OK unter
 @{" Einstellungen " link Einstellungen}.

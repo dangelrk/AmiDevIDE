@@ -987,9 +987,22 @@ void MainWindow::openProjectAt(const QString &path)
         QMessageBox::warning(this, tr("Missing SDKs"),
                              tr("This project uses SDKs that are not installed here:\n\n%1\n\n"
                                 "The build will not find their headers and libraries. Install an SDK "
-                                "with the same name and version (Settings > SDKs, or an AmiDevSDK.json "
+                                "with the same name, in that version or newer (Settings > SDKs, or an AmiDevSDK.json "
                                 "under %2/sdk).")
                                  .arg(missing.join(QLatin1Char('\n')), AppSettings::instance().toolchainRoot()));
+    }
+
+    const QStringList upgrades = SdkRegistry::instance().majorUpgradeIds(m_project->sdks.selected);
+    if (!upgrades.isEmpty()) {
+        QStringList lines;
+        for (const QString &id : upgrades)
+            lines << tr("%1  ->  %2").arg(id, SdkRegistry::instance().resolve(id)->label());
+        QMessageBox::warning(this, tr("Newer SDK versions"),
+                             tr("This project was written for older major versions of these SDKs; "
+                                "it builds against the installed ones:\n\n%1\n\n"
+                                "Their interfaces may have changed. The project file keeps the "
+                                "versions it asks for.")
+                                 .arg(lines.join(QLatin1Char('\n'))));
     }
 }
 
@@ -1094,7 +1107,7 @@ void MainWindow::reindexAllProjectFiles()
     QStringList sfdDirs;
     QList<SdkDescriptor> activeSdks;
     for (const QString &id : m_project->sdks.selected) {
-        if (const SdkDescriptor *sdk = SdkRegistry::instance().find(id)) {
+        if (const SdkDescriptor *sdk = SdkRegistry::instance().resolve(id)) {
             sfdDirs << sdk->sfdDirs;
             activeSdks << *sdk;
         }
@@ -1190,7 +1203,7 @@ QStringList MainWindow::allIncludeSearchPaths() const
         const QStringList sdkIds = m_project->sdks.selected;
 
         for (const QString &id : sdkIds) {
-            if (const SdkDescriptor *sdk = SdkRegistry::instance().find(id)) {
+            if (const SdkDescriptor *sdk = SdkRegistry::instance().resolve(id)) {
                 paths << sdk->includeDirs;
                 paths << sdk->asmIncludeDirs;
             }

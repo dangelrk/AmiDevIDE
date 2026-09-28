@@ -41,7 +41,14 @@ program that drives the hardware directly needs no system headers.
 **An SDK is its name and version, case-insensitively.** Its id comes from
 `aide_sdk_make_id()` ("Foo Lib" + "1.2" -> `foo-lib-1.2`), never typed in,
 and every id comparison ignores case -- that is what lets a project move
-between the Qt and MUI IDEs. Beyond the built-ins, an SDK describes itself
+between the Qt and MUI IDEs. A project's id is served by that SDK or the
+newest installed one of the same name at least that new:
+`aide_sdk_list_resolve()` (Qt: `SdkRegistry::resolve()`). Use it for
+everything that builds or indexes, and `find()` only for the SDK's own
+identity. Only an older version blocks; a newer major version builds and
+is warned about on project load (`aide_sdk_list_major_upgrades()`). The
+project keeps the id it asked for, also through OK in either settings
+dialog -- no paths, and no silent upgrade, ever go into an .aproj. Beyond the built-ins, an SDK describes itself
 with an `AmiDevSDK.json` (paths relative to its directory), found under
 `toolchain/sdk/*/` and `SDK:*/` by `aide_sdk_append_from_manifests()`. An id
 the registry does not know is reported on project load and at build start,

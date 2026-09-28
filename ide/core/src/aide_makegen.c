@@ -260,7 +260,7 @@ char *aide_makegen_generate_dialect(const AideToolchainConfig *toolchain, const 
         const AideStrList *ids = &project->sdks.selected;
 
         for (i = 0; i < ids->count; ++i) {
-            const AideSdkDescriptor *sdk = aide_sdk_list_find(sdk_registry, ids->items[i]);
+            const AideSdkDescriptor *sdk = aide_sdk_list_resolve(sdk_registry, ids->items[i]);
             size_t j;
             if (!sdk)
                 continue;

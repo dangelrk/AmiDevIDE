@@ -29,6 +29,11 @@ private slots:
     void manifestNeedsNameAndVersion();
     void manifestsAreFoundBesideTheBuiltins();
     void missingIdsAreListed();
+    void versionCompare_data();
+    void versionCompare();
+    void resolveAcceptsSameOrNewerVersion();
+    void registryResolvesNewerManifestSdk();
+    void majorVersionJumpsAreReported();
 };
 
 namespace {
@@ -297,6 +302,164 @@ void TstSdkRegistry::missingIdsAreListed()
     reg.reload(QStringLiteral("/tc"));
     QCOMPARE(reg.missingIds({ QStringLiteral("NDK-3.2"), QStringLiteral("bar-2") }),
              QStringList{ QStringLiteral("bar-2") });
+}
+
+void TstSdkRegistry::versionCompare_data()
+{
+    QTest::addColumn<QString>("a");
+    QTest::addColumn<QString>("b");
+    QTest::addColumn<int>("sign");
+
+    QTest::newRow("equal") << "5.18" << "5.18" << 0;
+    QTest::newRow("numeric, not text") << "1.10" << "1.9" << 1;
+    QTest::newRow("missing is zero") << "2" << "2.0" << 0;
+    QTest::newRow("more segments") << "1.2" << "1.2.1" << -1;
+    QTest::newRow("leading zeros") << "1.02" << "1.2" << 0;
+    QTest::newRow("case") << "V2" << "v2" << 0;
+    QTest::newRow("id form") << "1.2 beta" << "1.2-beta" << 0;
+    QTest::newRow("older") << "3.1" << "3.2" << -1;
+    QTest::newRow("3.2.2 > 3.2") << "3.2.2" << "3.2" << 1;
+    QTest::newRow("3.2.2 > 3.2.1") << "3.2.2" << "3.2.1" << 1;
+    QTest::newRow("3.2.10 > 3.2.9") << "3.2.10" << "3.2.9" << 1;
+    QTest::newRow("3.10 > 3.2.2") << "3.10" << "3.2.2" << 1;
+    QTest::newRow("patch over minor") << "1.3.89" << "1.3" << 1;
+    QTest::newRow("patch, numeric") << "1.3.89" << "1.3.9" << 1;
+    QTest::newRow("patch under next minor") << "1.3.89" << "1.4" << -1;
+    QTest::newRow("patch under 1.10") << "1.3.89" << "1.10" << -1;
+}
+
+void TstSdkRegistry::versionCompare()
+{
+    QFETCH(QString, a);
+    QFETCH(QString, b);
+    QFETCH(int, sign);
+    const int r = aide_sdk_version_compare(a.toUtf8().constData(), b.toUtf8().constData());
+    QCOMPARE(r < 0 ? -1 : r > 0 ? 1 : 0, sign);
+    const int back = aide_sdk_version_compare(b.toUtf8().constData(), a.toUtf8().constData());
+    QCOMPARE(back < 0 ? -1 : back > 0 ? 1 : 0, -sign);
+}
+
+void TstSdkRegistry::resolveAcceptsSameOrNewerVersion()
+{
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins("/tc/sdk", &list);
+    const char *const versions[] = { "1.1", "1.3", "2.0", "3.1.89" };
+    for (const char *v : versions) {
+        AideSdkDescriptor d;
+        aide_sdk_descriptor_init(&d);
+        free(d.id);
+        d.id = aide_sdk_make_id("Foo Lib", v);
+        free(d.displayName);
+        d.displayName = strdup("Foo Lib");
+        free(d.version);
+        d.version = strdup(v);
+        aide_sdk_list_push(&list, &d);
+        aide_sdk_descriptor_free(&d);
+    }
+    auto resolved = [&](const char *id) -> QString {
+        const AideSdkDescriptor *d = aide_sdk_list_resolve(&list, id);
+        return d ? QString::fromUtf8(d->id) : QString();
+    };
+
+    QCOMPARE(resolved("FOO-LIB-1.3"), QStringLiteral("foo-lib-1.3"));  // exact wins
+    QCOMPARE(resolved("foo-lib-2.0"), QStringLiteral("foo-lib-2.0"));  // exact beats newer
+    QCOMPARE(resolved("foo-lib-1.0"), QStringLiteral("foo-lib-3.1.89")); // newest newer one
+    QCOMPARE(resolved("foo-lib-3"), QStringLiteral("foo-lib-3.1.89"));   // 3.1.89 >= 3
+    QCOMPARE(resolved("foo-lib-3.1"), QStringLiteral("foo-lib-3.1.89")); // >= 3.1(.0)
+    QCOMPARE(resolved("foo-lib-3.1.9"), QStringLiteral("foo-lib-3.1.89")); // 89 > 9
+    QVERIFY(resolved("foo-lib-3.1.90").isEmpty());
+    QVERIFY(resolved("foo-lib-3.2").isEmpty());                         // nothing new enough
+    QVERIFY(resolved("foo-1.0").isEmpty());                             // other name
+    QVERIFY(resolved("foo-lib").isEmpty());                             // no version asked, none exact
+    // A built-in whose display name carries its version still matches by name.
+    QCOMPARE(resolved("ndk-3.1"), QStringLiteral("ndk-3.2"));
+    QVERIFY(resolved("ndk-3.3").isEmpty());
+
+    AideStrList selected, missing;
+    aide_strlist_init(&selected);
+    aide_strlist_init(&missing);
+    aide_strlist_push(&selected, "foo-lib-1.2");
+    aide_strlist_push(&selected, "foo-lib-4");
+    aide_sdk_list_missing(&list, &selected, &missing);
+    QCOMPARE(missing.count, size_t(1));
+    QCOMPARE(QString::fromUtf8(missing.items[0]), QStringLiteral("foo-lib-4"));
+    aide_strlist_free(&missing);
+    aide_strlist_free(&selected);
+    aide_sdk_list_free(&list);
+}
+
+void TstSdkRegistry::registryResolvesNewerManifestSdk()
+{
+    QTemporaryDir tc;
+    QVERIFY(tc.isValid());
+    const QString dir = tc.path() + QStringLiteral("/sdk/FooLib");
+    QVERIFY(QDir().mkpath(dir));
+    QVERIFY(writeFile(dir + QStringLiteral("/AmiDevSDK.json"),
+                      "{ \"name\": \"Foo Lib\", \"version\": \"1.3\", \"includeDirs\": [\"include\"] }"));
+
+    SdkRegistry &reg = SdkRegistry::instance();
+    reg.reload(tc.path());
+    QVERIFY(reg.find(QStringLiteral("foo-lib-1.2")) == nullptr);   // identity is exact
+    const SdkDescriptor *d = reg.resolve(QStringLiteral("Foo-Lib-1.2"));
+    QVERIFY(d != nullptr);
+    QCOMPARE(d->id, QStringLiteral("foo-lib-1.3"));
+    QCOMPARE(reg.missingIds({ QStringLiteral("foo-lib-1.2"), QStringLiteral("foo-lib-1.4") }),
+             QStringList{ QStringLiteral("foo-lib-1.4") });
+    reg.reload(QStringLiteral("/tc"));
+}
+
+// Only an older version blocks; a newer major version builds, but is named
+// so the IDE can warn when the project is opened.
+void TstSdkRegistry::majorVersionJumpsAreReported()
+{
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins("/tc/sdk", &list);
+    const char *const versions[] = { "1.3.89", "3.1.89" };
+    for (const char *v : versions) {
+        AideSdkDescriptor d;
+        aide_sdk_descriptor_init(&d);
+        free(d.id);
+        d.id = aide_sdk_make_id("Foo Lib", v);
+        free(d.displayName);
+        d.displayName = strdup("Foo Lib");
+        free(d.version);
+        d.version = strdup(v);
+        aide_sdk_list_push(&list, &d);
+        aide_sdk_descriptor_free(&d);
+    }
+
+    AideStrList selected, upgrades, missing;
+    aide_strlist_init(&selected);
+    aide_strlist_init(&upgrades);
+    aide_strlist_init(&missing);
+    aide_strlist_push(&selected, "foo-lib-3.0");      // 3.1.89: same major, quiet
+    aide_strlist_push(&selected, "foo-lib-2");        // 3.1.89: major jump
+    aide_strlist_push(&selected, "FOO-LIB-1.3.89");   // exact, quiet
+    aide_strlist_push(&selected, "ndk-3.1");          // NDK 3.2: same major, quiet
+    aide_strlist_push(&selected, "ndk-2.0");          // NDK 3.2: major jump
+    aide_strlist_push(&selected, "foo-lib-4");        // missing, not an upgrade
+
+    aide_sdk_list_major_upgrades(&list, &selected, &upgrades);
+    QCOMPARE(upgrades.count, size_t(2));
+    QCOMPARE(QString::fromUtf8(upgrades.items[0]), QStringLiteral("foo-lib-2"));
+    QCOMPARE(QString::fromUtf8(upgrades.items[1]), QStringLiteral("ndk-2.0"));
+
+    // A jump still builds: nothing but foo-lib-4 is missing.
+    aide_sdk_list_missing(&list, &selected, &missing);
+    QCOMPARE(missing.count, size_t(1));
+    QCOMPARE(QString::fromUtf8(missing.items[0]), QStringLiteral("foo-lib-4"));
+
+    aide_strlist_free(&missing);
+    aide_strlist_free(&upgrades);
+    aide_strlist_free(&selected);
+    aide_sdk_list_free(&list);
+
+    SdkRegistry &reg = SdkRegistry::instance();
+    reg.reload(QStringLiteral("/tc"));
+    QCOMPARE(reg.majorUpgradeIds({ QStringLiteral("ndk-3.2"), QStringLiteral("NDK-2.1") }),
+             QStringList{ QStringLiteral("NDK-2.1") });
 }
 
 QTEST_APPLESS_MAIN(TstSdkRegistry)

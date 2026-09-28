@@ -279,14 +279,24 @@ außer `a-z`, `0-9` und `.` wird zu `-`, also „Foo Lib“ + „1.2“ →
 `foo-lib-1.2`. Verglichen wird ohne Rücksicht auf Groß- und Kleinschreibung.
 Eingebaute SDKs gewinnen bei gleicher Id.
 
-In der Qt-IDE lässt sich ein SDK auch unter *Settings → SDKs* von Hand anlegen,
-mit Name und Version (die Id wird angezeigt, nicht eingegeben). Das gilt nur
-auf diesem Rechner; für den Amiga braucht es die `AmiDevSDK.json`.
+Ist genau diese Version nicht installiert, nimmt die IDE die neueste
+installierte Version desselben SDKs, die mindestens so neu ist: `foo-lib-1.2`
+baut mit Foo Lib 1.3, nicht mit 1.1. Verglichen wird Abschnitt für Abschnitt
+als ganze Zahlen: 3.2.2 ist neuer als 3.2 und 3.2.1, 3.10 neuer als 3.2. Nur
+eine ältere Version blockiert; eine andere Hauptversion (erste Zahl) baut, die
+IDE warnt aber beim Öffnen des Projekts. Die Projektdatei bleibt dabei
+unverändert, auch nach OK in den Projekteinstellungen. Pfade stehen nie in der
+Projektdatei, nur Name und Version; eine `.aproj` funktioniert deshalb 1:1 in
+beiden IDEs, sobald dort ein passendes SDK eingerichtet ist.
 
-Nennt ein Projekt ein SDK, das nicht installiert ist, melden beide IDEs das
-beim Öffnen und am Anfang jedes Builds. In den Projekteinstellungen steht es
-mit „(not installed)“ bzw. „(nicht installiert)“ und bleibt angehakt, bis man
-das Häkchen entfernt.
+Eingerichtet wird ein SDK in jeder IDE für sich. In der Qt-IDE geht das auch
+unter *Settings → SDKs* von Hand, mit Name und Version (die Id wird angezeigt,
+nicht eingegeben); auf dem Amiga mit einer `AmiDevSDK.json` unter `SDK:`.
+
+Nennt ein Projekt ein SDK, das in keiner passenden Version installiert ist,
+melden beide IDEs das beim Öffnen und am Anfang jedes Builds. In den
+Projekteinstellungen steht es mit „(not installed)“ bzw. „(nicht installiert)“
+und bleibt angehakt, bis man das Häkchen entfernt.
 
 ---
 

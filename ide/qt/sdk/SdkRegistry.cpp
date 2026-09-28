@@ -129,11 +129,57 @@ const SdkDescriptor *SdkRegistry::find(const QString &id) const
     return nullptr;
 }
 
+void SdkRegistry::toAideList(AideSdkList *out) const
+{
+    aide_sdk_list_init(out);
+    for (const SdkDescriptor &d : m_sdks) {
+        AideSdkDescriptor a;
+        sdkDescriptorToAide(d, &a);
+        aide_sdk_list_push(out, &a);
+        aide_sdk_descriptor_free(&a);
+    }
+}
+
+const SdkDescriptor *SdkRegistry::resolve(const QString &id) const
+{
+    // The rule lives in aide_sdk.c; run it over a C copy of the list and
+    // map the answer back by position.
+    AideSdkList list;
+    toAideList(&list);
+    const QByteArray idUtf8 = id.toUtf8();
+    const AideSdkDescriptor *hit = aide_sdk_list_resolve(&list, idUtf8.constData());
+    const SdkDescriptor *result = hit ? &m_sdks[int(hit - list.items)] : nullptr;
+    aide_sdk_list_free(&list);
+    return result;
+}
+
+QStringList SdkRegistry::majorUpgradeIds(const QStringList &ids) const
+{
+    AideSdkList list;
+    AideStrList selected, upgrades;
+    toAideList(&list);
+    aide_strlist_init(&selected);
+    aide_strlist_init(&upgrades);
+    for (const QString &id : ids) {
+        const QByteArray utf8 = id.toUtf8();
+        aide_strlist_push(&selected, utf8.constData());
+    }
+    aide_sdk_list_major_upgrades(&list, &selected, &upgrades);
+
+    QStringList result;
+    for (size_t i = 0; i < upgrades.count; ++i)
+        result << QString::fromUtf8(upgrades.items[i]);
+    aide_strlist_free(&upgrades);
+    aide_strlist_free(&selected);
+    aide_sdk_list_free(&list);
+    return result;
+}
+
 QStringList SdkRegistry::missingIds(const QStringList &ids) const
 {
     QStringList missing;
     for (const QString &id : ids) {
-        if (!find(id))
+        if (!resolve(id))
             missing << id;
     }
     return missing;

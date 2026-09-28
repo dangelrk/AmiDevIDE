@@ -306,22 +306,37 @@ QWidget *ProjectSettingsDialog::createSdksTab()
     checksLayout->setContentsMargins(0, 0, 0, 0);
 
     for (const SdkDescriptor &d : SdkRegistry::instance().allSdks()) {
-        auto *check = new QCheckBox(d.label(), m_extraSdksContainer);
-        check->setChecked(m_project.sdks.selected.contains(d.id, Qt::CaseInsensitive));
+        // The project's own id for this SDK, if one resolves to it -- maybe
+        // an older version it was written against. That id, not d.id, goes
+        // back on OK, so the project file stays exactly as it was.
+        QString requested;
+        for (const QString &id : m_project.sdks.selected) {
+            const SdkDescriptor *hit = SdkRegistry::instance().resolve(id);
+            if (hit && hit->id.compare(d.id, Qt::CaseInsensitive) == 0) {
+                requested = id;
+                break;
+            }
+        }
+        QString label = d.label();
+        if (!requested.isEmpty() && requested.compare(d.id, Qt::CaseInsensitive) != 0)
+            label = tr("%1 (project asks for %2)").arg(label, requested);
+        auto *check = new QCheckBox(label, m_extraSdksContainer);
+        check->setChecked(!requested.isEmpty());
         if (d.id == QStringLiteral("ndk-3.2"))
             check->setToolTip(tr("The Amiga system headers."));
         else if (d.fromManifest)
             check->setToolTip(tr("Described by %1/AmiDevSDK.json").arg(d.rootDir));
         checksLayout->addWidget(check);
         m_extraSdkChecks << check;
-        m_extraSdkIds << d.id;
+        m_extraSdkIds << (requested.isEmpty() ? d.id : requested);
     }
     // SDKs the project names but this machine lacks: shown ticked, so they
     // survive OK and can be dropped deliberately by unticking them.
     for (const QString &id : SdkRegistry::instance().missingIds(m_project.sdks.selected)) {
         auto *check = new QCheckBox(tr("%1 (not installed)").arg(id), m_extraSdksContainer);
         check->setChecked(true);
-        check->setToolTip(tr("Install an SDK with this name and version to build the project here."));
+        check->setToolTip(tr("Install an SDK with this name, in this version or newer, "
+                             "to build the project here."));
         checksLayout->addWidget(check);
         m_extraSdkChecks << check;
         m_extraSdkIds << id;

@@ -316,14 +316,19 @@ static void apply_widgets(void)
 /* ------------------------------------------------------------------ */
 /* SDK rows                                                              */
 /* ------------------------------------------------------------------ */
-static int project_selects(const char *id)
+/* The project's own id for installed SDK `d`, if one resolves to it --
+ * maybe an older version it was written against. That id, not d's own,
+ * goes back on OK, so the project file stays exactly as it was. NULL if
+ * the project does not use `d`. */
+static const char *requested_id(const AideSdkDescriptor *d)
 {
     size_t j;
     for (j = 0; j < g_editing.sdks.selected.count; ++j) {
-        if (aide_str_ieq(g_editing.sdks.selected.items[j], id))
-            return 1;
+        const char *id = g_editing.sdks.selected.items[j];
+        if (aide_sdk_list_resolve(g_registry, id) == d)
+            return id;
     }
-    return 0;
+    return NULL;
 }
 
 static char *sdk_label(const AideSdkDescriptor *d)
@@ -382,7 +387,19 @@ static void add_all_sdk_rows(void)
     if (g_registry) {
         for (i = 0; i < g_registry->count; ++i) {
             const AideSdkDescriptor *d = &g_registry->items[i];
-            add_sdk_row(d->id, sdk_label(d), project_selects(d->id));
+            const char *requested = requested_id(d);
+            char *label = sdk_label(d);
+            if (requested && !aide_str_ieq(requested, d->id)) {
+                AideStr s;
+                aide_str_init(&s);
+                aide_str_append(&s, label);
+                aide_str_append(&s, " (Projekt: ");
+                aide_str_append(&s, requested);
+                aide_str_append_char(&s, ')');
+                free(label);
+                label = aide_str_take(&s);
+            }
+            add_sdk_row(requested ? requested : d->id, label, requested != NULL);
         }
     }
 

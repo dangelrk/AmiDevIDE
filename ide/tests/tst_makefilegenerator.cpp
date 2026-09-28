@@ -3,6 +3,7 @@
 #include "project/Project.h"
 #include "sdk/SdkRegistry.h"
 
+#include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
@@ -15,6 +16,7 @@ class TstMakefileGenerator : public QObject {
     Q_OBJECT
 private slots:
     void initTestCase();
+    void newerInstalledSdkServesTheProject();
     void minimalCWithNdk32();
     void asmProjectWithMinstartAndMui38();
     void asmLibraryIsConcatenated();
@@ -249,6 +251,41 @@ void TstMakefileGenerator::asmProjectWithMinstartAndMui38AmigaDialect()
     const QString golden = readGolden(QStringLiteral("minstart_ndk32_mui38.amiga.makefile"));
 
     QCOMPARE(actual, golden);
+}
+
+// The .aproj names an SDK by name and version only. Installed in a newer
+// version, it builds against that one's paths, and the project file does
+// not change.
+void TstMakefileGenerator::newerInstalledSdkServesTheProject()
+{
+    QTemporaryDir tc;
+    QVERIFY(tc.isValid());
+    const QString sdkDir = tc.path() + QStringLiteral("/sdk/FooLib");
+    QVERIFY(QDir().mkpath(sdkDir));
+    QFile manifest(sdkDir + QStringLiteral("/AmiDevSDK.json"));
+    QVERIFY(manifest.open(QFile::WriteOnly));
+    manifest.write("{ \"name\": \"Foo Lib\", \"version\": \"1.3\", "
+                   "\"includeDirs\": [\"include\"], \"libDirs\": [\"lib\"] }");
+    manifest.close();
+
+    Project project = Project::createMinimalC(QStringLiteral("foo"));
+    project.sdks.selected = { QStringLiteral("ndk-3.2"), QStringLiteral("Foo-Lib-1.2") };
+    const QString aproj = m_dir.path() + QStringLiteral("/foo.aproj");
+    QVERIFY(project.save(aproj));
+
+    SdkRegistry::instance().reload(tc.path());
+    ToolchainConfig toolchain(tc.path());
+    const QString makefile = MakefileGenerator::generate(toolchain, project);
+    QVERIFY2(makefile.contains(sdkDir + QStringLiteral("/include")), qPrintable(makefile));
+    QVERIFY(makefile.contains(sdkDir + QStringLiteral("/lib")));
+
+    Project reloaded;
+    QVERIFY(reloaded.load(aproj));
+    QCOMPARE(reloaded.sdks.selected, project.sdks.selected);
+
+    // Not installed at all: the build goes ahead without its paths.
+    SdkRegistry::instance().reload(QStringLiteral("/fake/toolchain"));
+    QVERIFY(!MakefileGenerator::generate(toolchain, project).contains(sdkDir));
 }
 
 QTEST_APPLESS_MAIN(TstMakefileGenerator)

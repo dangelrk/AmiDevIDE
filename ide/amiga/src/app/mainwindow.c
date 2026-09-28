@@ -822,7 +822,7 @@ static void collect_active_sdk_descriptors(AideSdkDescriptor **outArr, size_t *o
         aide_strlist_push(&ids, g_project.sdks.selected.items[i]);
 
     for (i = 0; i < ids.count; ++i) {
-        const AideSdkDescriptor *sdk = aide_sdk_list_find(&g_sdkRegistry, ids.items[i]);
+        const AideSdkDescriptor *sdk = aide_sdk_list_resolve(&g_sdkRegistry, ids.items[i]);
         if (!sdk)
             continue;
         if (count >= cap) {
@@ -1380,11 +1380,48 @@ static void do_open_project(void)
                         "Dieses Projekt benutzt SDKs, die hier nicht\n"
                         "installiert sind:\n\n%s\n"
                         "Der Build findet ihre Header und Libraries nicht.\n"
-                        "Abhilfe: ein SDK mit gleichem Namen und gleicher\n"
-                        "Version unter %s ablegen (mit AmiDevSDK.json).",
+                        "Abhilfe: ein SDK mit gleichem Namen in dieser oder\n"
+                        "neuerer Version unter %s ablegen (mit AmiDevSDK.json).",
                         list.data, prefs_sdk_root());
         }
         aide_str_free(&list);
+    }
+
+    {
+        AideStrList upgrades;
+        size_t i;
+
+        aide_strlist_init(&upgrades);
+        aide_sdk_list_major_upgrades(&g_sdkRegistry, &g_project.sdks.selected, &upgrades);
+        if (upgrades.count > 0) {
+            AideStr list;
+            aide_str_init(&list);
+            for (i = 0; i < upgrades.count; ++i) {
+                const AideSdkDescriptor *d = aide_sdk_list_resolve(&g_sdkRegistry, upgrades.items[i]);
+                aide_str_append(&list, "  ");
+                aide_str_append(&list, upgrades.items[i]);
+                aide_str_append(&list, "  ->  ");
+                aide_str_append(&list, d->displayName);
+                {
+                    /* "NDK 3.2" already says its version */
+                    size_t n = strlen(d->displayName), v = strlen(d->version);
+                    if (!(n >= v && strcmp(d->displayName + n - v, d->version) == 0)) {
+                        aide_str_append_char(&list, ' ');
+                        aide_str_append(&list, d->version);
+                    }
+                }
+                aide_str_append_char(&list, '\n');
+            }
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "Dieses Projekt wurde fuer aeltere Hauptversionen\n"
+                        "dieser SDKs geschrieben und baut mit den\n"
+                        "installierten:\n\n%s\n"
+                        "Ihre Schnittstellen koennen sich geaendert haben.\n"
+                        "Die Projektdatei behaelt die verlangten Versionen.",
+                        list.data);
+            aide_str_free(&list);
+        }
+        aide_strlist_free(&upgrades);
     }
 }
 
@@ -1911,7 +1948,7 @@ static void collect_active_sdk_includes(AideStrList *includeDirs, AideStrList *a
         aide_strlist_push(&ids, g_project.sdks.selected.items[i]);
 
     for (i = 0; i < ids.count; ++i) {
-        const AideSdkDescriptor *sdk = aide_sdk_list_find(&g_sdkRegistry, ids.items[i]);
+        const AideSdkDescriptor *sdk = aide_sdk_list_resolve(&g_sdkRegistry, ids.items[i]);
         if (!sdk)
             continue;
         for (j = 0; j < sdk->includeDirs.count; ++j)

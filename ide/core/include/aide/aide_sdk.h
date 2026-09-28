@@ -62,9 +62,25 @@ void aide_sdk_list_clear(AideSdkList *l);
 /* Deep-copies *d into a new slot; caller keeps ownership of *d. */
 void aide_sdk_list_push(AideSdkList *l, const AideSdkDescriptor *d);
 /* Removes the first descriptor with this id. Returns 1 if one was removed. */
-/* Both compare ids case-insensitively. */
+/* Both compare ids case-insensitively, and exactly otherwise: this is the
+ * SDK's identity, for adding and removing. To find what a project's id
+ * builds against, use aide_sdk_list_resolve(). */
 int aide_sdk_list_remove(AideSdkList *l, const char *id);
 const AideSdkDescriptor *aide_sdk_list_find(const AideSdkList *l, const char *id);
+
+/* Compares two versions segment by segment -- '.', '-', '_' and spaces
+ * separate them -- digits numerically, anything else as text ignoring
+ * case, a missing segment counting as 0: "1.10" > "1.9", "2" == "2.0",
+ * "5.18" == "5.18". Returns <0, 0 or >0 like strcmp(). */
+int aide_sdk_version_compare(const char *a, const char *b);
+
+/* The installed SDK a project's `id` builds against: the SDK with exactly
+ * that id if there is one, otherwise the newest SDK of the same name whose
+ * version is at least the one the id asks for ("foo-lib-1.2" is served by
+ * Foo Lib 1.3, not by 1.1). Case never matters. NULL if nothing serves it.
+ * The project keeps its id either way; nothing about the match is written
+ * back. */
+const AideSdkDescriptor *aide_sdk_list_resolve(const AideSdkList *l, const char *id);
 
 /* The id for an SDK called `name` in `version`: both lowercased, every run
  * of characters other than a-z, 0-9 and '.' turned into one '-', and
@@ -97,9 +113,17 @@ int aide_sdk_descriptor_from_manifest(AideSdkDescriptor *d, const char *json_tex
  * many it appended. */
 size_t aide_sdk_append_from_manifests(const char *sdk_root, AideSdkList *out);
 
-/* Appends to *missing every id in `selected` that `registry` does not
- * know, in their order. */
+/* Appends to *missing every id in `selected` that no SDK in `registry`
+ * serves (see aide_sdk_list_resolve()), in their order. Only these stop a
+ * project from building: an SDK older than asked for serves nothing. */
 void aide_sdk_list_missing(const AideSdkList *registry, const AideStrList *selected, AideStrList *missing);
+
+/* Appends to *out every id in `selected` that is served by an SDK of
+ * another major version -- the first version segment differs, so
+ * "foo-lib-1.2" served by Foo Lib 3.1.89, not by 1.3.89. Such a project
+ * still builds; this is for a warning when it is opened, since the
+ * interfaces may have changed between major versions. */
+void aide_sdk_list_major_upgrades(const AideSdkList *registry, const AideStrList *selected, AideStrList *out);
 
 /* Appends the built-in descriptors for `sdk_root`: ndk-3.2, mui-3.8, mcc,
  * regex, reqtools, roadshow, amissl, sqlite3, posixlib. Does not clear *out

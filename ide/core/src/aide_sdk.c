@@ -407,11 +407,164 @@ size_t aide_sdk_append_from_manifests(const char *sdk_root, AideSdkList *out)
     return added;
 }
 
+/* ---- version matching ---- */
+
+static int is_version_sep(char c)
+{
+    return c == '.' || c == '-' || c == '_' || c == ' ';
+}
+
+static int is_digit(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+static char lower(char c)
+{
+    return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+}
+
+int aide_sdk_version_compare(const char *a, const char *b)
+{
+    for (;;) {
+        const char *ea, *eb;
+
+        while (is_version_sep(*a)) ++a;
+        while (is_version_sep(*b)) ++b;
+        if (!*a && !*b)
+            return 0;
+
+        for (ea = a; *ea && !is_version_sep(*ea); ++ea) {}
+        for (eb = b; *eb && !is_version_sep(*eb); ++eb) {}
+
+        if ((a == ea || is_digit(*a)) && (b == eb || is_digit(*b))) {
+            /* Numeric (or missing, which counts as 0): compare without
+             * leading zeros, longer digit run is larger. */
+            const char *da = a, *db = b;
+            size_t la, lb;
+            while (da < ea && *da == '0') ++da;
+            while (db < eb && *db == '0') ++db;
+            la = (size_t)(ea - da);
+            lb = (size_t)(eb - db);
+            if (la != lb)
+                return la < lb ? -1 : 1;
+            for (; da < ea; ++da, ++db) {
+                if (*da != *db)
+                    return *da < *db ? -1 : 1;
+            }
+        } else {
+            const char *pa = a, *pb = b;
+            for (; pa < ea && pb < eb; ++pa, ++pb) {
+                char ca = lower(*pa), cb = lower(*pb);
+                if (ca != cb)
+                    return ca < cb ? -1 : 1;
+            }
+            if ((pa < ea) != (pb < eb))
+                return pa < ea ? 1 : -1;
+        }
+        a = ea;
+        b = eb;
+    }
+}
+
+/* The name half of an SDK's id: its display name without a trailing
+ * version ("NDK 3.2" with version 3.2 -> "ndk"). Freshly malloc'd. */
+static char *name_id(const AideSdkDescriptor *d)
+{
+    size_t nameLen = strlen(d->displayName);
+    size_t verLen = strlen(d->version);
+    char *name, *id;
+
+    if (verLen > 0 && nameLen > verLen
+        && strcmp(d->displayName + nameLen - verLen, d->version) == 0)
+        nameLen -= verLen;
+    name = aide_strndup(d->displayName, nameLen);
+    id = aide_sdk_make_id(name, "");
+    free(name);
+    return id;
+}
+
+/* The version `id` asks of an SDK called `nameId`, or NULL if id is not
+ * "<nameId>-<version>". Points into id. */
+static const char *requested_version(const char *id, const char *nameId)
+{
+    size_t n = strlen(nameId);
+    size_t i;
+
+    if (n == 0 || strlen(id) <= n + 1 || id[n] != '-')
+        return NULL;
+    for (i = 0; i < n; ++i) {
+        if (lower(id[i]) != lower(nameId[i]))
+            return NULL;
+    }
+    return id + n + 1;
+}
+
+const AideSdkDescriptor *aide_sdk_list_resolve(const AideSdkList *l, const char *id)
+{
+    const AideSdkDescriptor *best = aide_sdk_list_find(l, id);
+    size_t i;
+
+    if (best)
+        return best;
+    for (i = 0; i < l->count; ++i) {
+        const AideSdkDescriptor *d = &l->items[i];
+        char *nameId;
+        const char *wanted;
+
+        if (!d->version[0])
+            continue;
+        nameId = name_id(d);
+        wanted = requested_version(id, nameId);
+        if (wanted && aide_sdk_version_compare(d->version, wanted) >= 0
+            && (!best || aide_sdk_version_compare(d->version, best->version) > 0))
+            best = d;
+        free(nameId);
+    }
+    return best;
+}
+
+/* Compares only the first segment of two versions ("3" of "3.1.89"). */
+static int major_differs(const char *a, const char *b)
+{
+    char ma[32], mb[32];
+    size_t i;
+
+    while (is_version_sep(*a)) ++a;
+    while (is_version_sep(*b)) ++b;
+    for (i = 0; a[i] && !is_version_sep(a[i]) && i < sizeof(ma) - 1; ++i)
+        ma[i] = a[i];
+    ma[i] = '\0';
+    for (i = 0; b[i] && !is_version_sep(b[i]) && i < sizeof(mb) - 1; ++i)
+        mb[i] = b[i];
+    mb[i] = '\0';
+    return aide_sdk_version_compare(ma, mb) != 0;
+}
+
+void aide_sdk_list_major_upgrades(const AideSdkList *registry, const AideStrList *selected, AideStrList *out)
+{
+    size_t i;
+    for (i = 0; i < selected->count; ++i) {
+        const char *id = selected->items[i];
+        const AideSdkDescriptor *d = aide_sdk_list_resolve(registry, id);
+        char *nameId;
+        const char *wanted;
+
+        if (!d || aide_str_ieq(d->id, id))
+            continue;
+        nameId = name_id(d);
+        wanted = requested_version(id, nameId);
+        if (wanted && major_differs(wanted, d->version))
+            aide_strlist_push(out, id);
+        free(nameId);
+    }
+}
+
 void aide_sdk_list_missing(const AideSdkList *registry, const AideStrList *selected, AideStrList *missing)
 {
     size_t i;
     for (i = 0; i < selected->count; ++i) {
-        if (!aide_sdk_list_find(registry, selected->items[i]))
+        if (!aide_sdk_list_resolve(registry, selected->items[i]))
             aide_strlist_push(missing, selected->items[i]);
     }
 }
