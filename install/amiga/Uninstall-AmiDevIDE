@@ -1,0 +1,45 @@
+; $VER: Uninstall-AmiDevIDE @VERSION@ (@DATE@)
+; Uninstall-AmiDevIDE -- entfernt AmigaIDE (Start per Icon über IconX)
+; SPDX-License-Identifier: GPL-3.0-or-later
+; Copyright (C) 2026 Ronny Krueger
+;
+; Shell: Execute Uninstall-AmiDevIDE [ZIEL=Work:]
+; Löscht die Schublade <ZIEL>AmigaIDE samt Hilfe-Cache und, nach
+; Rückfrage, die Einstellungen ENV:AmigaIDE und ENVARC:AmigaIDE sowie
+; HELP:AmigaIDE.guide. Projekte und Toolchain bleiben unberührt.
+
+.KEY ZIEL/K
+.BRA {
+.KET }
+.DEF ZIEL "Work:"
+
+FailAt 21
+
+If NOT EXISTS {ZIEL}AmigaIDE/AmigaIDE
+  Echo "Keine AmigaIDE in {ZIEL}AmigaIDE gefunden."
+  Echo "Anderes Verzeichnis: Execute Uninstall-AmiDevIDE ZIEL=DH1:"
+  Quit 5
+EndIf
+
+Ask "{ZIEL}AmigaIDE (Programm, Handbuch, Cache) löschen? (y/n)"
+If WARN
+  Delete {ZIEL}AmigaIDE ALL QUIET
+  Delete {ZIEL}AmigaIDE.info QUIET
+  Echo "  {ZIEL}AmigaIDE gelöscht."
+EndIf
+
+If EXISTS HELP:AmigaIDE.guide
+  Ask "HELP:AmigaIDE.guide löschen? (y/n)"
+  If WARN
+    Delete HELP:AmigaIDE.guide#? QUIET
+  EndIf
+EndIf
+
+If EXISTS ENVARC:AmigaIDE
+  Ask "Einstellungen (ENVARC:AmigaIDE) löschen? (y/n)"
+  If WARN
+    Delete ENV:AmigaIDE ENVARC:AmigaIDE ALL QUIET
+    Echo "  Einstellungen gelöscht."
+  EndIf
+EndIf
+Echo "Fertig."

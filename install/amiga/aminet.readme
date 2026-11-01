@@ -1,0 +1,55 @@
+Short:        IDE for vbcc, vasm and ACE BASIC (MUI)
+Author:       Ronny Krueger
+Uploader:     amitools@planet-rk.de (Ronny Krueger)
+Type:         dev/misc
+Version:      @VERSION@
+Architecture: m68k-amigaos >= 3.0.0
+Requires:     MUI 3.8, reqtools, regex.library, NList, TextEditor, vbcc
+Distribution: Aminet
+
+AmigaIDE is an integrated development environment for AmigaOS 3.x with
+a MUI interface, for C, assembler and ACE BASIC projects built with
+vbcc, vasm and vlink:
+
+  - projects with C, assembler and BASIC sources, SDK selection
+  - editor with syntax highlighting, indentation, bookmarks
+  - symbol index, go to definition, references, project-wide search
+  - build and clean through GNU make, error list with jump to source
+  - Autodoc help (F1) for every active SDK, struct layouts
+  - disassembler for hunk files, memory map after a build
+  - Workbench icons for built programs
+
+The same project files (.aproj) open in the Qt version of the IDE on
+macOS, Linux and Windows (AmiDevIDE, cross-development with the same
+toolchain).
+
+Installation
+------------
+Unpack the archive and double-click "Install-AmiDevIDE" (Commodore
+Installer). Without the Installer:  CD AmiDevIDE  and
+Execute Install-AmiDevIDE.shell [ZIEL=Work:]
+The drawer AmigaIDE also runs from wherever you drag it.
+
+Requirements
+------------
+- AmigaOS 3.x, 68020 or better, no FPU needed
+- MUI 3.8 or newer (util/libs/mui38usr.lha)
+- reqtools.library (util/libs/ReqToolsUsr.lha)
+- regex.library, the POSIX one by Alfonso Ranieri
+  (util/libs/regex_ranieri.lha)
+- MUI classes NList, NListview, NListtree (dev/mui/MCC_NList-0.128.lha)
+  and TextEditor (dev/mui/MCC_TextEditor-15.56.lha)
+To build programs:
+- vbcc with vasm and vlink (dev/c/vbcc_bin_amigaos68k.lha) and the
+  vbcc target m68k-amigaos (http://sun.hasenbraten.de/vbcc/)
+- NDK 3.2 (dev/misc/NDK3.2.lha), GNU make (dev/c/make-4.4.1.lha)
+- for BASIC projects ACE BASIC (dev/basic/ace-basic.lha)
+
+Documentation and user interface are in German.
+Die Dokumentation (AmigaIDE/AmigaIDE.guide) und die Oberfläche sind
+deutsch.
+
+License
+-------
+GNU General Public License, version 3 or later. Contains the JSON parser
+Parson (MIT license, see THIRD-PARTY-NOTICES).

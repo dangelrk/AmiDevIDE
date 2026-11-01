@@ -494,7 +494,7 @@ python3 emulator/acd_emu.py --serial
 | MUI 3.8 Developer | `https://aminet.net/dev/mui/mui38dev.lha` | Inhalt von `MUI/` nach `SDK:MUI_3.8/` (→ `SDK:MUI_3.8/Developer/C/Include`) |
 | MUI 3.8 User (Runtime) | `https://aminet.net/util/libs/mui38usr.lha` | per Installer, `MUI:` |
 | MCCs Developer + Runtime | siehe §1 (GitHub `amiga-mui`) | Header nach `SDK:MCC/Developer/C/include/mui/`, Klassen nach `MUI:Libs/mui/` |
-| regex.library | siehe §5 (ungeprüft) | Header nach `SDK:regex/include/`, Library nach `LIBS:` |
+| regex.library 5.1 (POSIX, Alfonso Ranieri) | `https://aminet.net/util/libs/regex_ranieri.lha` (Einsprünge passen zu `ide/amiga/src/mui/aide_regex_amiga.c`) | `Libs/regex.library` nach `LIBS:`; Header nur für eigene Programme nach `SDK:regex/include/` |
 | reqtools | `https://aminet.net/util/libs/ReqToolsDev.lha` (Header), `https://aminet.net/util/libs/ReqToolsUsr.lha` (Library) | Header nach `SDK:reqtools/include/`, Library nach `LIBS:` |
 | GNU make | `https://github.com/dmcoles/gnu_make_amiga/releases/download/4.4.1-26022026/make441-26022026.lha` oder `https://aminet.net/dev/c/make-4.4.1.lha` | `make` nach `C:` oder in einen Pfad im `PATH` |
 | ACE BASIC 3.0.1 (Original, **ungepatcht**) | `https://aminet.net/dev/basic/ace-basic.lha` | z. B. `Work:ACE`, mit den Assigns `ACE:`, `ACElib:`, `ACEinclude:`, `ACEbmaps:` (§8.3) |
@@ -586,6 +586,23 @@ die Assigns sind auf echter Hardware **ungeprüft**.
 
 Alternativ auf dem Host cross-kompilieren (§6.8) und nur
 `ide/amiga/bin/amigaide` auf den Amiga kopieren.
+
+### 8.4a Fertiges Archiv (Aminet)
+
+`cmake --build build --target amiga-release` baut die MUI-IDE und packt
+sie mit Installer (`install/amiga/`, `tools/release/amiga_release.py`):
+
+- `build/release/AmiDevIDE-<version>.lha` und `.readme` für GitHub,
+- `build/release/aminet-<version>/AmiDevIDE.lha` und `.readme` für Aminet
+  (Aminet will einen Namen für alle Versionen).
+
+Im Archiv: Schublade `AmigaIDE` (Programm, Icon, `AmigaIDE.guide`),
+`Install-AmiDevIDE` (Commodore-Installer), `Install-AmiDevIDE.shell`,
+`Uninstall-AmiDevIDE`, `ReadMe`, `LICENSE`, `THIRD-PARTY-NOTICES`.
+Das Skript prüft Version (zweiteilig, `aide_version.h`), `$VER` und Datum
+des Programms, das Handbuch und das Aminet-Readme. Hochladen per FTP nach
+`ftp://main.aminet.net/new/` (Benutzer `anonymous`, Passwort die
+E-Mail-Adresse).
 
 ### 8.5 Einstellungen der IDE auf dem Amiga
 

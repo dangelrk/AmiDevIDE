@@ -1,17 +1,17 @@
 @database AmigaIDE.guide
-@$VER: AmigaIDE.guide 0.1.0 (27.09.2026)
+@$VER: AmigaIDE.guide 0.1 (01.11.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
 
                          @{b}AmigaIDE 0.1@{ub}
-        Entwicklungsumgebung fuer vbcc, vasm, vlink und ACE BASIC
+        Entwicklungsumgebung für vbcc, vasm, vlink und ACE BASIC
 
-  @{" Ueberblick           " link Ueberblick}  Was AmigaIDE ist und kann
+  @{" Überblick            " link Ueberblick}  Was AmigaIDE ist und kann
   @{" Voraussetzungen      " link Voraussetzungen}  Libraries, MUI-Klassen, Werkzeuge
   @{" Einrichtung          " link Einrichtung}  Assigns, User-Startup, erster Start
   @{" Das Hauptfenster     " link Hauptfenster}  Projektbaum, Editor, Ausgabe
-  @{" Projekte             " link Projekte}  Neu, Oeffnen, Speichern, Dateien
+  @{" Projekte             " link Projekte}  Neu, Öffnen, Speichern, Dateien
   @{" Projekteinstellungen " link Projekteinstellungen}  Compiler, Linker, SDKs
   @{" Eigene SDKs          " link EigeneSDKs}  Weitere SDKs mit AmiDevSDK.json
   @{" Einstellungen        " link Einstellungen}  Make, SDK- und Toolchain-Pfad
@@ -21,35 +21,35 @@
   @{" Hilfe und Autodocs   " link Hilfe}  F1, Shift+F1, F2, Hilfefenster
   @{" Disassembler         " link Disassembler}  Hunk-Dateien ansehen
   @{" ACE BASIC            " link Basic}  BASIC-Projekte auf dem Amiga
-  @{" Tastenkuerzel        " link Tasten}  Alle Tasten auf einen Blick
+  @{" Tastenkürzel         " link Tasten}  Alle Tasten auf einen Blick
   @{" Bekannte Grenzen     " link Grenzen}  Was (noch) nicht geht
   @{" Lizenz               " link Lizenz}  GPL und Fremdkomponenten
 
 @endnode
-@node Ueberblick "Ueberblick"
+@node Ueberblick "Überblick"
 
-@{b}Ueberblick@{ub}
+@{b}Überblick@{ub}
 
-AmigaIDE ist eine Entwicklungsumgebung fuer AmigaOS 3.x mit MUI-
-Oberflaeche. Sie verwaltet Projekte aus C-, Assembler- und ACE-BASIC-
+AmigaIDE ist eine Entwicklungsumgebung für AmigaOS 3.x mit MUI-
+Oberfläche. Sie verwaltet Projekte aus C-, Assembler- und ACE-BASIC-
 Quellen, erzeugt daraus ein Makefile und baut es mit GNU make, vbcc,
 vasm und vlink.
 
-Dieselbe Projektdatei (.aproj) laesst sich auch mit der Qt-Version von
+Dieselbe Projektdatei (.aproj) lässt sich auch mit der Qt-Version von
 AmigaIDE auf einem PC oder Mac bauen. Beide Versionen teilen sich den
-gesamten Programmkern; nur die Oberflaeche ist verschieden.
+gesamten Programmkern; nur die Oberfläche ist verschieden.
 
 Was die Amiga-Version kann:
 
-  - Projekte anlegen, oeffnen und speichern
+  - Projekte anlegen, öffnen und speichern
   - Quellen und Header im Projektbaum verwalten
   - Bauen im Hintergrund, mit laufender Ausgabe und Fehlerliste
   - Programme starten, CLI-Programme in einem eigenen Konsolenfenster
   - Symbolindex, Sprung zur Definition, Referenzen, Projektsuche
-  - Autodoc-Hilfe fuer alle aktiven SDKs
+  - Autodoc-Hilfe für alle aktiven SDKs
   - Struct-Layout mit Offsets
-  - Disassembler fuer Hunk-Dateien, Memory Map nach dem Build
-  - Workbench-Icons fuer gebaute Programme
+  - Disassembler für Hunk-Dateien, Memory Map nach dem Build
+  - Workbench-Icons für gebaute Programme
 
 @endnode
 @node Voraussetzungen "Voraussetzungen"
@@ -59,7 +59,7 @@ Was die Amiga-Version kann:
 @{u}System@{uu}
 
   CPU        68020 oder besser (der Standard-Build nutzt -cpu=68020)
-  FPU        nicht noetig
+  FPU        nicht nötig
   OS         AmigaOS 3.x, intuition.library ab V37
   Stack      AmigaIDE setzt sich selbst 64 KB
 
@@ -69,8 +69,8 @@ Was die Amiga-Version kann:
   reqtools.library     ab V38
   regex.library        beliebige Version
 
-Fehlt eine davon, startet AmigaIDE nicht. regex.library wird fuer
-Symbolindex, Suche und Hilfe gebraucht, reqtools.library fuer alle
+Fehlt eine davon, startet AmigaIDE nicht. regex.library wird für
+Symbolindex, Suche und Hilfe gebraucht, reqtools.library für alle
 Datei- und Texteingaben.
 
 @{u}MUI-Klassen in MUI:Libs/mui/@{uu}
@@ -83,9 +83,23 @@ Datei- und Texteingaben.
   vbcc         vc, vbccm68k, vasmm68k_mot, vlink unter vbcc:bin/
   vbcc-Target  m68k-amigaos unter vbcc:targets/
   NDK 3.2      unter SDK:NDK_3.2/
-  ACE BASIC    nur fuer BASIC-Projekte, siehe @{" ACE BASIC " link Basic}
+  ACE BASIC    nur für BASIC-Projekte, siehe @{" ACE BASIC " link Basic}
 
-Bezugsquellen stehen in INSTALL.md, Abschnitt 8.2, im Quellarchiv.
+Alles davon gibt es auf Aminet:
+
+  util/libs/mui38usr.lha            MUI 3.8
+  util/libs/ReqToolsUsr.lha         reqtools.library
+  util/libs/regex_ranieri.lha       regex.library (POSIX, A. Ranieri)
+  dev/mui/MCC_NList-0.128.lha       NList, NListview, NListtree
+  dev/mui/MCC_TextEditor-15.56.lha  TextEditor
+  dev/c/vbcc_bin_amigaos68k.lha     vbcc, vasm, vlink
+  dev/misc/NDK3.2.lha               NDK 3.2
+  dev/c/make-4.4.1.lha              GNU make
+  dev/basic/ace-basic.lha           ACE BASIC
+
+Das vbcc-Target m68k-amigaos gibt es unter
+http://sun.hasenbraten.de/vbcc/. Weitere Hinweise: INSTALL.md,
+Abschnitt 8.2, im Quellarchiv.
 
 @endnode
 @node Einrichtung "Einrichtung"
@@ -95,7 +109,7 @@ Bezugsquellen stehen in INSTALL.md, Abschnitt 8.2, im Quellarchiv.
 @{u}Assigns@{uu}
 
 AmigaIDE sucht den Compiler unter vbcc: und die SDKs unter SDK:. Ein
-Beispiel fuer S:User-Startup (Pfade anpassen):
+Beispiel für S:User-Startup (Pfade anpassen):
 
   Assign vbcc: Work:vbcc
   Path vbcc:bin ADD
@@ -114,14 +128,14 @@ Erwartete Struktur unter SDK: (nur was man braucht):
 
 @{u}Andere Pfade@{uu}
 
-Liegen Compiler oder SDKs woanders oder heisst make anders, laesst sich
-das unter @{" Einstellungen " link Einstellungen} aendern.
+Liegen Compiler oder SDKs woanders oder heißt make anders, lässt sich
+das unter @{" Einstellungen " link Einstellungen} ändern.
 
 @{u}Erster Start@{uu}
 
 AmigaIDE per Doppelklick oder aus der Shell starten. Die Titelzeile
 zeigt Datum und Uhrzeit des Builds. So sieht man sofort, welche
-Version laeuft.
+Version läuft.
 
 Beim ersten F1 oder F2 legt AmigaIDE neben dem Programm ein
 Verzeichnis cache/ an. Darin liegt der Autodoc-Index, damit er nur
@@ -145,21 +159,21 @@ beim ersten Mal gebaut werden muss.
 Die Trennbalken zwischen den Bereichen lassen sich mit der Maus
 verschieben. MUI merkt sich die Aufteilung.
 
-Es gibt keine Werkzeugleiste. Alle Befehle stehen im Menue (rechte
-Maustaste), viele auch als Tastenkuerzel.
+Es gibt keine Werkzeugleiste. Alle Befehle stehen im Menü (rechte
+Maustaste), viele auch als Tastenkürzel.
 
 @{u}Links: Projekt@{uu}
 
 Der Projektbaum ordnet die Dateien in Gruppen: C-Quellen, ASM-Quellen,
-C-Header, ASM-Include. In BASIC-Projekten heissen C-Quellen und
+C-Header, ASM-Include. In BASIC-Projekten heißen C-Quellen und
 C-Header stattdessen BASIC-Quellen und BASIC-Header, in reinen
 Assembler-Projekten Quellen und Header. Unterverzeichnisse erscheinen
 als eigene Knoten.
 
   @{b}fett@{ub}      die Datei, die gerade im Editor offen ist
-  @{i}kursiv@{ui}    ungespeicherte Aenderungen
+  @{i}kursiv@{ui}    ungespeicherte Änderungen
 
-Ein Doppelklick oeffnet die Datei im Editor.
+Ein Doppelklick öffnet die Datei im Editor.
 
 @{u}Links: Symbole@{uu}
 
@@ -172,41 +186,41 @@ zur Fundstelle.
   Ausgabe      Was make, vc, vasm und vlink ausgeben
   Issues       Fehler und Warnungen, siehe @{" Bauen " link Bauen}
   Suche        Treffer von Referenzen und Projektsuche
-  Memory Map   Hunks des zuletzt gebauten Programms mit Groesse
+  Memory Map   Hunks des zuletzt gebauten Programms mit Größe
 
 Beim Start ist "Ausgabe" aktiv.
 
 @{u}Titelzeile@{uu}
 
-Ein "*" am Ende heisst: Es gibt ungespeicherte Aenderungen.
+Ein "*" am Ende heißt: Es gibt ungespeicherte Änderungen.
 
 @endnode
 @node Projekte "Projekte"
 
 @{b}Projekte@{ub}
 
-Ein Projekt ist eine Datei mit der Endung .aproj. Sie haelt die Liste
+Ein Projekt ist eine Datei mit der Endung .aproj. Sie hält die Liste
 der Quellen und Header sowie alle Einstellungen. Dateipfade darin sind
 relativ zum Verzeichnis der .aproj.
 
 @{u}Projekt > Neu...  (Amiga-N)@{uu}
 
-  1. Verzeichnis fuer das Projekt waehlen.
-  2. Es oeffnen sich die @{" Projekteinstellungen " link Projekteinstellungen}.
-     Name und Binary muessen ausgefuellt sein.
-  3. OK legt <Name>.aproj im gewaehlten Verzeichnis an und speichert
+  1. Verzeichnis für das Projekt wählen.
+  2. Es öffnen sich die @{" Projekteinstellungen " link Projekteinstellungen}.
+     Name und Binary müssen ausgefüllt sein.
+  3. OK legt <Name>.aproj im gewählten Verzeichnis an und speichert
      sie sofort. Abbrechen legt gar nichts an.
 
-Ungespeicherte Aenderungen an der offenen Datei gehen dabei ohne
-Nachfrage verloren; vorher "Speichern" waehlen.
+Ungespeicherte Änderungen an der offenen Datei gehen dabei ohne
+Nachfrage verloren; vorher "Speichern" wählen.
 
-Ein neues Projekt ist leer. Dateien kommen ueber "Neue Datei" oder
-"Bestehende Datei hinzufuegen" hinein. vc.lib ist als Bibliothek schon
+Ein neues Projekt ist leer. Dateien kommen über  "Neue Datei" oder
+"Bestehende Datei hinzufügen" hinein. vc.lib ist als Bibliothek schon
 eingetragen, weil praktisch jedes vbcc-Programm sie braucht.
 
-@{u}Projekt > Oeffnen...  (Amiga-O)@{uu}
+@{u}Projekt > Öffnen...  (Amiga-O)@{uu}
 
-Laedt eine .aproj. Wie bei "Neu" gehen ungespeicherte Aenderungen
+Lädt eine .aproj. Wie bei "Neu" gehen ungespeicherte Änderungen
 ohne Nachfrage verloren.
 
 Benutzt das Projekt SDKs, die hier nicht installiert sind, nennt
@@ -217,24 +231,24 @@ neueren Hauptversion da ist. Siehe @{" Eigene SDKs " link EigeneSDKs}.
 
 Speichert die offene Datei und das Projekt in einem Schritt. Nur beim
 allerersten Speichern fragt AmigaIDE nach dem Ort; fehlt ".aproj" im
-Namen, wird es angehaengt.
+Namen, wird es angehängt.
 
 @{u}Projekt > Neue Datei@{uu}
 
-Untermenue mit C-Quelle, C-Header, ASM-Quelle, ASM-Include und
+Untermenü mit C-Quelle, C-Header, ASM-Quelle, ASM-Include und
 BASIC-Quelle. AmigaIDE fragt nach einem Namen relativ zum Projekt,
-z.B. "src/grafik". Ohne Endung wird die passende angehaengt:
+z.B. "src/grafik". Ohne Endung wird die passende angehängt:
 
   C-Quelle .c    C-Header .h    ASM-Quelle .s (oder .asm)
   ASM-Include .i    BASIC-Quelle .b (oder .bas)
 
 Passt eine eingegebene Endung nicht zum Typ, fragt AmigaIDE nach.
 Existiert die Datei schon, ebenfalls. Die neue Datei wird sofort im
-Editor geoeffnet. Das Projekt muss vorher gespeichert sein.
+Editor geöffnet. Das Projekt muss vorher gespeichert sein.
 
-@{u}Projekt > Bestehende Datei hinzufuegen...  (Amiga-E)@{uu}
+@{u}Projekt > Bestehende Datei hinzufügen...  (Amiga-E)@{uu}
 
-Waehlt eine vorhandene Datei aus. .h und .i werden als Header
+Wählt eine vorhandene Datei aus. .h und .i werden als Header
 eingetragen, alles andere als Quelle.
 
 @{u}Projekt > Datei aus Projekt entfernen...@{uu}
@@ -242,15 +256,15 @@ eingetragen, alles andere als Quelle.
 Wirkt auf die im Projektbaum markierte Datei. Zur Wahl stehen:
 
   Nur entfernen            Datei bleibt auf der Platte
-  Entfernen und loeschen   Datei wird auch geloescht
+  Entfernen und löschen    Datei wird auch gelöscht
   Abbrechen
 
-Hinzufuegen und Entfernen aendern das Projekt nur im Speicher. Erst
+Hinzufügen und Entfernen ändern das Projekt nur im Speicher. Erst
 "Speichern" schreibt die .aproj.
 
 @{u}Projekt > Beenden  (Amiga-Q)@{uu}
 
-Fragt nach, wenn es ungespeicherte Aenderungen gibt. Ein laufender
+Fragt nach, wenn es ungespeicherte Änderungen gibt. Ein laufender
 Build arbeitet im Hintergrund zu Ende.
 
 @endnode
@@ -258,8 +272,8 @@ Build arbeitet im Hintergrund zu Ende.
 
 @{b}Projekteinstellungen@{ub}  (Projekt > Projekteinstellungen..., Amiga-I)
 
-Die Einstellungen gelten nur fuer das offene Projekt und werden in der
-.aproj gespeichert. OK uebernimmt sie, gespeichert wird aber erst mit
+Die Einstellungen gelten nur für das offene Projekt und werden in der
+.aproj gespeichert. OK übernimmt sie, gespeichert wird aber erst mit
 "Speichern". Ausnahme: Beim Anlegen eines neuen Projekts speichert OK
 die .aproj sofort.
 
@@ -268,12 +282,12 @@ die .aproj sofort.
   Sprache          C, ACE BASIC oder Assembler
   Ausgabe          Programm, Link-Library oder Shared Library
   Name             Projektname; beim Anlegen auch Name der .aproj
-                   (spaeteres Umbenennen benennt die Datei nicht um)
+                   (späteres Umbenennen benennt die Datei nicht um)
   Binary           Name der erzeugten Datei
   Zielverzeichnis  wohin das Ergebnis kommt
   Obj-Verzeichnis  wohin die Objektdateien kommen
   Typ              CLI oder Workbench
-  Stack-Groesse    Stack des Programms in Bytes
+  Stack-Größe      Stack des Programms in Bytes
   Icon             Generieren oder aus einer Datei kopieren
   Icon-Datei       .info-Datei, wenn Icon = Datei
 
@@ -293,13 +307,13 @@ Nur Workbench-Programme bekommen nach dem Build ein Icon.
   Startup          Standard (startup.o), MinStart, MinRes oder Custom
   Custom-Startup   eigene Startup-Objektdatei
   Strip            Symbole aus dem Ergebnis entfernen
-  Bibliotheken     in Linkreihenfolge; Hinzufuegen, Entfernen, Hoch,
+  Bibliotheken     in Linkreihenfolge; Hinzufügen, Entfernen, Hoch,
                    Runter
   Extra Lib-Verzeichnisse und Extra Linker-Flags
 
 @{u}SDKs@{uu}
 
-Haekchen fuer jedes SDK, das das Projekt benutzt. In dieser
+Häkchen für jedes SDK, das das Projekt benutzt. In dieser
 Reihenfolge werden Include- und Library-Pfade durchsucht:
 
   NDK 3.2, MUI 3.8, MUI-Zusatzklassen (MCC), regex.library,
@@ -308,14 +322,14 @@ Reihenfolge werden Include- und Library-Pfade durchsucht:
 Danach folgen die @{" eigenen SDKs " link EigeneSDKs}, die AmigaIDE unter SDK:
 gefunden hat, mit Name und Version.
 
-Verlangt das Projekt eine aeltere Version, als installiert ist, steht
+Verlangt das Projekt eine ältere Version, als installiert ist, steht
 das dahinter, etwa "Foo Lib 1.3 (Projekt: foo-lib-1.2)"; beim OK
 bleibt die Projektdatei bei 1.2.
 
 Benutzt das Projekt ein SDK, das hier nicht installiert ist, steht es
 am Ende mit dem Zusatz "(nicht installiert)" und ist angehakt. So
 geht es beim OK nicht verloren. Wer es nicht mehr braucht, nimmt das
-Haekchen weg.
+Häkchen weg.
 
 Kein SDK ist Pflicht, auch das NDK nicht: Ein Programm, das direkt
 auf die Hardware zugreift, braucht keine System-Header.
@@ -326,7 +340,7 @@ auf die Hardware zugreift, braucht keine System-Header.
 @{b}Eigene SDKs@{ub}
 
 Neben den eingebauten SDKs kennt AmigaIDE jedes Verzeichnis unter
-SDK:, das eine Datei @{b}AmiDevSDK.json@{ub} enthaelt. Sie beschreibt das
+SDK:, das eine Datei @{b}AmiDevSDK.json@{ub} enthält. Sie beschreibt das
 SDK; alle Pfade darin sind relativ zu seinem Verzeichnis:
 
   {
@@ -343,33 +357,33 @@ SDK; alle Pfade darin sind relativ zu seinem Verzeichnis:
   }
 
 Pflicht sind "name" und "version". "kind" ist "ndk", "mui" oder
-"other" (Standard). "." steht fuer das SDK-Verzeichnis selbst. Die
+"other" (Standard). "." steht für das SDK-Verzeichnis selbst. Die
 Autodocs erscheinen in der @{" Hilfe " link Hilfe}, sobald das SDK im
 Projekt angehakt ist.
 
-@{u}Name und Version sind die Identitaet@{uu}
+@{u}Name und Version sind die Identität@{uu}
 
 Ein Projekt merkt sich ein SDK als Name und Version, klein
 geschrieben und mit Bindestrichen verbunden: "Foo Lib" in Version
-"1.2" wird zu "foo-lib-1.2". Gross- und Kleinschreibung spielen
-keine Rolle. Das Verzeichnis darf heissen, wie es will.
+"1.2" wird zu "foo-lib-1.2". Groß- und Kleinschreibung spielen
+keine Rolle. Das Verzeichnis darf heißen, wie es will.
 
 Ist genau diese Version nicht installiert, nimmt AmigaIDE die neueste
 installierte Version desselben SDKs, die mindestens so neu ist: Ein
-Projekt fuer "foo-lib-1.2" baut auch mit Foo Lib 1.3, aber nicht mit
-1.1. Die Projektdatei bleibt dabei unveraendert, sie verlangt weiter
+Projekt für  "foo-lib-1.2" baut auch mit Foo Lib 1.3, aber nicht mit
+1.1. Die Projektdatei bleibt dabei unverändert, sie verlangt weiter
 1.2. Pfade stehen nie in der Projektdatei, nur Name und Version.
 
-Verglichen wird Abschnitt fuer Abschnitt als ganze Zahlen: 3.2.2 ist
+Verglichen wird Abschnitt für Abschnitt als ganze Zahlen: 3.2.2 ist
 neuer als 3.2 und als 3.2.1, 3.10 ist neuer als 3.2.
 
-Nur eine aeltere Version blockiert. Ist die installierte Version eine
-andere Hauptversion (die erste Zahl), etwa 3.1 fuer ein Projekt, das
-1.2 verlangt, baut das Projekt trotzdem; beim Oeffnen weist AmigaIDE
-aber darauf hin, weil sich die Schnittstellen geaendert haben koennen.
+Nur eine ältere Version blockiert. Ist die installierte Version eine
+andere Hauptversion (die erste Zahl), etwa 3.1 für ein Projekt, das
+1.2 verlangt, baut das Projekt trotzdem; beim Öffnen weist AmigaIDE
+aber darauf hin, weil sich die Schnittstellen geändert haben können.
 
-Die Qt-Version auf dem PC bildet den Namen genauso und waehlt nach
-derselben Regel. Eingerichtet wird ein SDK in jeder IDE fuer sich:
+Die Qt-Version auf dem PC bildet den Namen genauso und wählt nach
+derselben Regel. Eingerichtet wird ein SDK in jeder IDE für sich:
 auf dem Amiga als Verzeichnis unter SDK: mit AmiDevSDK.json. Eine
 Projektdatei aus der Qt-Version funktioniert dann hier 1:1.
 
@@ -381,7 +395,7 @@ Gefunden werden die SDKs beim Start von AmigaIDE und nach OK unter
 
 @{b}Einstellungen@{ub}  (Projekt > Einstellungen...)
 
-Diese Einstellungen gelten fuer alle Projekte.
+Diese Einstellungen gelten für alle Projekte.
 
   Make-Programm    Standard "make"
   SDK-Root         Standard "SDK:"
@@ -400,12 +414,12 @@ und Spalte des Cursors.
 
 @{b}Achtung:@{ub} Beim Wechsel zu einer anderen Datei (Doppelklick,
 Sprung zur Definition, Fehler anspringen) fragt AmigaIDE nicht, ob
-Aenderungen gespeichert werden sollen. Vorher "Speichern" waehlen.
+Änderungen gespeichert werden sollen. Vorher "Speichern" wählen.
 "Build" speichert die offene Datei allerdings immer selbst.
 
-@{u}Build > Formatieren (Einrueckung)@{uu}
+@{u}Build > Formatieren (Einrückung)@{uu}
 
-Rueckt die ganze Datei nach geschweiften Klammern neu ein, vier
+Rückt die ganze Datei nach geschweiften Klammern neu ein, vier
 Leerzeichen pro Ebene. Das Ergebnis ist noch nicht gespeichert.
 
 @endnode
@@ -419,10 +433,10 @@ Speichert die offene Datei, erzeugt im Projektverzeichnis
 
   build/Makefile    build/vc.cfg
 
-und startet make im Hintergrund. Die Oberflaeche bleibt bedienbar; die
+und startet make im Hintergrund. Die Oberfläche bleibt bedienbar; die
 Ausgabe erscheint laufend unter "Ausgabe", Fehler und Warnungen unter
 "Issues". Fehlt ein SDK, das das Projekt benutzt, steht das als
-Warnung am Anfang der Ausgabe; der Build laeuft ohne dessen Pfade.
+Warnung am Anfang der Ausgabe; der Build läuft ohne dessen Pfade.
 
 Nach einem erfolgreichen Build:
 
@@ -430,33 +444,33 @@ Nach einem erfolgreichen Build:
   - der Symbolindex wird neu aufgebaut
   - Workbench-Programme bekommen ein Icon
 
-Dateinamen von Quellen duerfen keine Leerzeichen enthalten; AmigaIDE
+Dateinamen von Quellen dürfen keine Leerzeichen enthalten; AmigaIDE
 nennt betroffene Dateien vor dem Build. Leerzeichen im Projekt-
 verzeichnis sind dagegen kein Problem.
 
-Temporaere Dateien landen in T: (aide-build.script, aide-build.out).
+Temporäre Dateien landen in T: (aide-build.script, aide-build.out).
 
 @{u}Build > Clean@{uu}
 
-Fuehrt "make clean" aus und loescht das Obj-Verzeichnis und das
+Führt  "make clean" aus und löscht das Obj-Verzeichnis und das
 gebaute Programm.
 
 @{u}Build > Build abbrechen@{uu}
 
 Markiert den Build als abgebrochen. Der laufende Compiler wird dabei
 nicht beendet, er arbeitet im Hintergrund zu Ende; AmigaIDE ignoriert
-nur sein Ergebnis. Ein neuer Build ist erst danach moeglich.
+nur sein Ergebnis. Ein neuer Build ist erst danach möglich.
 
 @{u}Build > Run  (Amiga-R)@{uu}
 
 Startet das gebaute Programm. CLI-Programme bekommen ein eigenes
 Konsolenfenster, das nach Programmende offen bleibt, bis man es
-schliesst. Endet das Programm mit einem Rueckgabewert ungleich 0,
+schließt. Endet das Programm mit einem Rückgabewert ungleich 0,
 meldet AmigaIDE ihn.
 
-@{b}Solange das Programm laeuft, reagiert AmigaIDE nicht.@{ub} Bei
+@{b}Solange das Programm läuft, reagiert AmigaIDE nicht.@{ub} Bei
 CLI-Programmen gilt das, bis das Konsolenfenster geschlossen ist.
-Das ist kein Absturz: Fenster schliessen, dann geht es weiter.
+Das ist kein Absturz: Fenster schließen, dann geht es weiter.
 
 @{u}Build > Ausgabe speichern...@{uu}
 
@@ -467,7 +481,7 @@ Schreibt den Inhalt von "Ausgabe" in eine Datei.
 Jede Zeile nennt ERROR oder WARN, Datei, Zeile und Meldung.
 
   Doppelklick     springt zur Stelle im Editor
-  F4              naechster Issue
+  F4              nächster Issue
   Shift+F4        voriger Issue
 
 @endnode
@@ -477,7 +491,7 @@ Jede Zeile nennt ERROR oder WARN, Datei, Zeile und Meldung.
 
 @{u}Gehe zu > Definition  (F3)@{uu}
 
-Steht der Cursor in einer #include- bzw. include-Zeile, oeffnet F3 die
+Steht der Cursor in einer #include- bzw. include-Zeile, öffnet F3 die
 eingebundene Datei. Sonst springt F3 zur Definition des Wortes unter
 dem Cursor, soweit es im Symbolindex des Projekts steht.
 
@@ -492,7 +506,7 @@ hin.
 Fragt nach einem Suchtext und durchsucht alle Projektdateien. Die
 Treffer stehen ebenfalls unter "Suche".
 
-@{u}Gehe zu > Naechster/Voriger Issue  (F4, Shift+F4)@{uu}
+@{u}Gehe zu > Nächster/Voriger Issue  (F4, Shift+F4)@{uu}
 
 Siehe @{" Bauen und Starten " link Bauen}.
 
@@ -511,32 +525,32 @@ und ist sofort da.
 
 @{u}Hilfe > Hothelp  (F1)@{uu}
 
-Zeigt das Autodoc zum Wort unter dem Cursor. Gross- und Klein-
+Zeigt das Autodoc zum Wort unter dem Cursor. Groß- und Klein-
 schreibung werden notfalls ignoriert, und "...Tags" findet auch
 "...TagList" (SystemTags -> SystemTagList).
 
 @{u}Hilfe > Struct-Layout  (Shift+F1)@{uu}
 
-Zeigt fuer das Wort unter dem Cursor alle Felder des gleichnamigen
+Zeigt für das Wort unter dem Cursor alle Felder des gleichnamigen
 Structs oder der Union aus dem Projekt, mit Offset und Typ.
 
 @{u}Hilfe > Autodoc-Suche...  (F2)@{uu}
 
-Fragt nach einem Suchmuster. * steht fuer beliebig viele Zeichen,
-? fuer genau eines. Beispiel: "Alloc*".
+Fragt nach einem Suchmuster. * steht für beliebig viele Zeichen,
+? für genau eines. Beispiel: "Alloc*".
 
 @{u}Das Hilfefenster@{uu}
 
   Links     Liste der Treffer. Ein Doppelklick zeigt den Eintrag.
   Rechts    Text des Autodocs.
 
-  Zurueck, Vor         blaettern durch die zuletzt gezeigten Eintraege
+  Zurück, Vor         blättern durch die zuletzt gezeigten Einträge
   Markierung suchen    sucht den im Text markierten Begriff
 
 Zu "Markierung suchen": Einfach ein Wort im Hilfetext mit der Maus
-markieren und den Knopf druecken, z.B. einen Namen unter SEE ALSO.
+markieren und den Knopf drücken, z.B. einen Namen unter SEE ALSO.
 Klammern und Bibliotheksnamen werden dabei weggelassen, aus
-"dos.library/Open()" wird "Open". Enthaelt die Markierung * oder ?,
+"dos.library/Open()" wird "Open". Enthält die Markierung * oder ?,
 wird daraus eine Mustersuche. Ist nichts markiert, blinkt der
 Bildschirm kurz.
 
@@ -545,7 +559,7 @@ Bildschirm kurz.
 
 @{b}Disassembler@{ub}  (Build > Disassemblieren..., Amiga-D)
 
-Waehlt eine Hunk-Datei (Programm oder Objektdatei) aus, standardmaessig
+Wählt eine Hunk-Datei (Programm oder Objektdatei) aus, standardmäßig
 im Zielverzeichnis des Projekts. Alle CODE-Hunks werden als
 
   Adresse: Hex-Bytes  Befehl
@@ -558,11 +572,11 @@ in eine Datei.
 
 @{b}ACE BASIC@{ub}
 
-Fuer BASIC-Projekte in den Projekteinstellungen "Sprache: ACE BASIC"
-waehlen. Auf dem Amiga wird ACE BASIC 3.0.1 so benutzt, wie es von
+Für BASIC-Projekte in den Projekteinstellungen "Sprache: ACE BASIC"
+wählen. Auf dem Amiga wird ACE BASIC 3.0.1 so benutzt, wie es von
 Aminet kommt, ohne Patches.
 
-Noetige Assigns:
+Nötige Assigns:
 
   Assign ACE: Work:ACE
   Assign ACElib: ACE:lib
@@ -570,47 +584,47 @@ Noetige Assigns:
   Assign ACEinclude: ACE:include
   Path ACE:bin ADD
 
-Besonderheiten gegenueber der Qt-Version auf dem PC:
+Besonderheiten gegenüber der Qt-Version auf dem PC:
 
   - Bei CPU 68000 stellt das Makefile "OPTION 2-" vor den Quelltext,
-    weil das Original-ace dafuer keinen Schalter hat. Quelltext und
-    .aproj bleiben unveraendert.
+    weil das Original-ace dafür keinen Schalter hat. Quelltext und
+    .aproj bleiben unverändert.
   - Das Original-yap kennt kein -g. ace meldet Fehler deshalb mit der
     Zeile im vorverarbeiteten Text und ohne Dateinamen. Diese Issues
     lassen sich nicht per Doppelklick anspringen.
 
 @endnode
-@node Tasten "Tastenkuerzel"
+@node Tasten "Tastenkürzel"
 
-@{b}Tastenkuerzel@{ub}
+@{b}Tastenkürzel@{ub}
 
-@{u}Menue (Amiga = rechte Amiga-Taste)@{uu}
+@{u}Menü (Amiga = rechte Amiga-Taste)@{uu}
 
   Amiga-N    Neues Projekt
-  Amiga-O    Projekt oeffnen
+  Amiga-O    Projekt öffnen
   Amiga-S    Speichern
-  Amiga-E    Bestehende Datei hinzufuegen
+  Amiga-E    Bestehende Datei hinzufügen
   Amiga-I    Projekteinstellungen
   Amiga-F    Im Projekt suchen
   Amiga-Q    Beenden
   Amiga-B    Build
   Amiga-R    Run
   Amiga-D    Disassemblieren
-  Amiga-?    Ueber AmigaIDE
+  Amiga-?    Über AmigaIDE
 
 @{u}Funktionstasten im Hauptfenster@{uu}
 
   F1          @{" Hothelp " link Hilfe}
   Shift+F1    Struct-Layout
   F2          Autodoc-Suche
-  F3          @{" Definition " link Navigation} bzw. Include oeffnen
+  F3          @{" Definition " link Navigation} bzw. Include öffnen
   Shift+F3    Referenzen
-  F4          @{" Naechster Issue " link Bauen}
+  F4          @{" Nächster Issue " link Bauen}
   Shift+F4    Voriger Issue
 
 @{u}Hilfefenster@{uu}
 
-  Z           Zurueck
+  Z           Zurück
   V           Vor
   S           Markierung suchen
 
@@ -621,14 +635,14 @@ Besonderheiten gegenueber der Qt-Version auf dem PC:
 
   - Nur eine Datei im Editor, keine Reiter.
   - Keine Syntaxhervorhebung und keine Zeilennummern.
-  - Beim Dateiwechsel, bei "Neu" und bei "Oeffnen" keine Nachfrage
-    wegen ungespeicherter Aenderungen (siehe @{" Editor " link Editor}).
+  - Beim Dateiwechsel, bei "Neu" und bei "Öffnen" keine Nachfrage
+    wegen ungespeicherter Änderungen (siehe @{" Editor " link Editor}).
   - AmigaIDE ist blockiert, solange ein mit "Run" gestartetes
-    Programm laeuft.
+    Programm läuft.
   - "Build abbrechen" beendet den Compiler nicht.
   - Der Symbolindex wird nach jedem Build komplett neu aufgebaut.
   - Die Shift+F-Tasten sind nicht auf jedem System getestet. Falls
-    eine nicht reagiert: Alle Befehle stehen auch im Menue.
+    eine nicht reagiert: Alle Befehle stehen auch im Menü.
 
 @endnode
 @node Lizenz "Lizenz"
@@ -636,7 +650,7 @@ Besonderheiten gegenueber der Qt-Version auf dem PC:
 @{b}Lizenz@{ub}
 
 AmigaIDE steht unter der GNU General Public License, Version 3. Der
-Quelltext ist unter https://github.com/dangelrk/AmiDevIDE erhaeltlich.
+Quelltext ist unter https://github.com/dangelrk/AmiDevIDE erhältlich.
 
 Im Programm enthalten ist parson (JSON-Parser, MIT-Lizenz).
 

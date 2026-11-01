@@ -7,8 +7,11 @@
  * the MUI app's include path, since qt/app/mainwindow.h would then shadow
  * amiga/src/app/mainwindow.h.
  *
- * Raise AMIGAIDE_VERSION_STRING by hand: the patch level for fixes, the
- * minor for a larger feature.
+ * Raise AMIGAIDE_VERSION_STRING by hand with every release. Two numbers,
+ * version.revision ("0.2", "1.0", "0.10"), nothing else: the Amiga's
+ * Version command and the Installer's getversion compare exactly those
+ * two, so "0.1.1" would look like "0.1" and an update would not be
+ * recognised as newer.
  *
  * The build number and date come from a header the build system writes,
  * AmigaIDEBuildStamp.h -- cmake/BuildStamp.cmake for the Qt build,
@@ -20,7 +23,7 @@
  * Without git the number is "0"; a missing date falls back to the
  * compiler's own __DATE__. */
 
-#define AMIGAIDE_VERSION_STRING "0.1.0"
+#define AMIGAIDE_VERSION_STRING "0.1"
 #define AMIGAIDE_COPYRIGHT_STRING "Copyright \xC2\xA9 2026 Ronny Kr\xC3\xBCger"
 
 #ifndef AMIGAIDE_BUILD_NUMBER

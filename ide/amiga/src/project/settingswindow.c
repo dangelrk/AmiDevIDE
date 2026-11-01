@@ -485,7 +485,7 @@ void settingswindow_init(Object *app, const AideSdkList *registry)
             Child, Label("Zielverzeichnis:"),   Child, g_targetDirStr,
             Child, Label("Obj-Verzeichnis:"),   Child, g_objDirStr,
             Child, Label("Typ:"),               Child, g_typeCycle,
-            Child, Label("Stack-Groesse:"),     Child, g_stackStr,
+            Child, Label("Stack-Gr\366\337e:"),     Child, g_stackStr,
             Child, Label("Icon:"),              Child, g_iconModeCycle,
             Child, Label("Icon-Datei:"),        Child, g_iconPathStr,
         End,
@@ -647,7 +647,7 @@ int settingswindow_handle_id(long id)
          * the window open instead of closing/applying. */
         if (!g_editing.name[0] || !g_editing.output.binary[0]) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                        "Name und Binary-Name duerfen nicht leer sein.");
+                        "Name und Binary-Name d\374rfen nicht leer sein.");
             return 3; /* handled, window still open */
         }
         set(g_window, MUIA_Window_Open, FALSE);

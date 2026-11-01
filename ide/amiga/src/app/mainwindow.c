@@ -956,7 +956,7 @@ static void goto_file_line(const char *absPath, int line)
 {
     if (strcmp(absPath, g_currentFile) != 0) {
         if (!editor_open_file(absPath)) {
-            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Konnte Datei nicht oeffnen.");
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Konnte Datei nicht \366ffnen.");
             return;
         }
     }
@@ -1188,7 +1188,7 @@ static int try_open_include_on_current_line(void)
 
     if (!resolved) {
         char msg[192];
-        snprintf(msg, sizeof(msg), "\"%s\" nicht gefunden (Include-Pfade/SDKs pruefen).", directive);
+        snprintf(msg, sizeof(msg), "\"%s\" nicht gefunden (Include-Pfade/SDKs pr\374fen).", directive);
         set_status(msg);
     } else {
         goto_file_line(resolved, 0);
@@ -1308,7 +1308,7 @@ static void do_new_project(void)
 {
     char dir[AIDE_MAX_PATH];
 
-    if (!ask_directory("Neues Projekt: Verzeichnis waehlen", dir, sizeof(dir)))
+    if (!ask_directory("Neues Projekt: Verzeichnis w\344hlen", dir, sizeof(dir)))
         return;
 
     set_status("Neues Projekt...");
@@ -1349,7 +1349,7 @@ static void do_open_project(void)
     char path[AIDE_MAX_PATH];
     AideProject loaded;
 
-    if (!ask_file("Projekt oeffnen (.aproj)", 0, NULL, path, sizeof(path)))
+    if (!ask_file("Projekt \366ffnen (.aproj)", 0, NULL, path, sizeof(path)))
         return;
 
     set_status("Lade Projekt...");
@@ -1413,11 +1413,11 @@ static void do_open_project(void)
                 aide_str_append_char(&list, '\n');
             }
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                        "Dieses Projekt wurde fuer aeltere Hauptversionen\n"
+                        "Dieses Projekt wurde f\374r \344ltere Hauptversionen\n"
                         "dieser SDKs geschrieben und baut mit den\n"
                         "installierten:\n\n%s\n"
-                        "Ihre Schnittstellen koennen sich geaendert haben.\n"
-                        "Die Projektdatei behaelt die verlangten Versionen.",
+                        "Ihre Schnittstellen k\366nnen sich ge\344ndert haben.\n"
+                        "Die Projektdatei beh\344lt die verlangten Versionen.",
                         list.data);
             aide_str_free(&list);
         }
@@ -1572,7 +1572,7 @@ static void do_add_new_file(int kind)
     } else if (!newfile_ext_matches_kind(kind, dot)) {
         LONG proceed = MUI_Request(g_app, g_window, 0, "Neue Datei",
                                     "_Trotzdem anlegen|_Abbrechen",
-                                    "\"%s\" passt nicht zum gewaehlten Dateityp\n(erwartet: %s).\n\nTrotzdem anlegen?",
+                                    "\"%s\" passt nicht zum gew\344hlten Dateityp\n(erwartet: %s).\n\nTrotzdem anlegen?",
                                     relPath, defaultExt);
         if (proceed != 1) {
             set_status("Abgebrochen");
@@ -1590,7 +1590,7 @@ static void do_add_new_file(int kind)
     if (aide_fs_exists(absPath)) {
         LONG overwrite = MUI_Request(g_app, g_window, 0, "Neue Datei",
                                       "_Ueberschreiben|_Abbrechen",
-                                      "\"%s\" existiert bereits.\n\nWirklich leeren und ueberschreiben?",
+                                      "\"%s\" existiert bereits.\n\nWirklich leeren und \374berschreiben?",
                                       relPath);
         if (overwrite != 1) {
             set_status("Abgebrochen");
@@ -1641,13 +1641,13 @@ static void do_add_existing_file(void)
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Bitte zuerst Projekt speichern.");
         return;
     }
-    if (!ask_file("Bestehende Datei hinzufuegen", 0, g_projectRoot, absPath, sizeof(absPath)))
+    if (!ask_file("Bestehende Datei hinzuf\374gen", 0, g_projectRoot, absPath, sizeof(absPath)))
         return;
 
     relativize(g_projectRoot, absPath, relPath, sizeof(relPath));
     kind = classify_by_extension(relPath);
 
-    set_status("Fuege Datei hinzu...");
+    set_status("F\374ge Datei hinzu...");
     if (kind == 2)
         aide_strlist_push(&g_project.headers, relPath);
     else
@@ -1658,7 +1658,7 @@ static void do_add_existing_file(void)
 
     refresh_tree();
     rebuild_symbol_index();
-    set_status("Datei hinzugefuegt -- noch nicht gespeichert");
+    set_status("Datei hinzugef\374gt -- noch nicht gespeichert");
 }
 
 /* Removes every entry equal to `value` from `l` (there's normally at
@@ -1708,7 +1708,7 @@ static void do_remove_file_from_project(void)
     get(g_treeList, MUIA_NListtree_Active, &active);
     if (!active || !tree_relpath_of(active, relPath, sizeof(relPath))) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                    "Bitte zuerst eine Datei im Projektbaum auswaehlen.");
+                    "Bitte zuerst eine Datei im Projektbaum ausw\344hlen.");
         return;
     }
     resolve_tree_row(relPath, absPath, sizeof(absPath));
@@ -1717,7 +1717,7 @@ static void do_remove_file_from_project(void)
                           "_Nur entfernen|Entfernen und _loeschen|_Abbrechen",
                           "\"%s\" aus dem Projekt entfernen?\n\n"
                           "Die Datei kann unangetastet auf der Platte bleiben\n"
-                          "oder zusaetzlich geloescht werden.", relPath);
+                          "oder zus\344tzlich gel\366scht werden.", relPath);
     if (choice != 1 && choice != 2)
         return; /* Abbrechen */
     alsoDelete = (choice == 2);
@@ -1738,7 +1738,7 @@ static void do_remove_file_from_project(void)
     if (alsoDelete) {
         if (!DeleteFile((CONST_STRPTR)absPath)) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                        "Aus dem Projekt entfernt, aber Datei konnte nicht geloescht werden:\n%s",
+                        "Aus dem Projekt entfernt, aber Datei konnte nicht gel\366scht werden:\n%s",
                         absPath);
         }
     }
@@ -1746,7 +1746,7 @@ static void do_remove_file_from_project(void)
     g_projectDirty = 1;
     refresh_tree();
     rebuild_symbol_index();
-    set_status(alsoDelete ? "Entfernt und geloescht -- noch nicht gespeichert"
+    set_status(alsoDelete ? "Entfernt und gel\366scht -- noch nicht gespeichert"
                           : "Aus Projekt entfernt -- noch nicht gespeichert");
 }
 
@@ -2389,7 +2389,7 @@ static void build_finished(int ok)
 
     if (!g_build.isBuildTarget) {
         /* "clean" -- no post-build steps at all. */
-        set_status(ok ? "Aufgeraeumt" : "Aufraeumen fehlgeschlagen");
+        set_status(ok ? "Aufger\344umt" : "Aufr\344umen fehlgeschlagen");
         return;
     }
 
@@ -2537,7 +2537,7 @@ static void build_tick(void)
 static void do_build(void)
 {
     if (g_build.state != BUILD_IDLE) {
-        set_status("Build laeuft bereits");
+        set_status("Build l\344uft bereits");
         return;
     }
     if (!g_projectRoot[0]) {
@@ -2546,7 +2546,7 @@ static void do_build(void)
     }
     if (!g_timerOpen) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                    "Timer-Gerät konnte nicht geoeffnet werden -- Build nicht moeglich.");
+                    "Timer-Ger\344t konnte nicht ge\366ffnet werden -- Build nicht m\366glich.");
         return;
     }
     if (!make_is_available()) {
@@ -2582,7 +2582,7 @@ static void do_build(void)
         if (haveOffenders) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
                         "Diese Quelldateien enthalten ein Leerzeichen im Dateinamen "
-                        "und koennen nicht gebaut werden -- bitte umbenennen:\n\n%s",
+                        "und k\366nnen nicht gebaut werden -- bitte umbenennen:\n\n%s",
                         offenders.data);
             aide_str_free(&offenders);
             return;
@@ -2687,7 +2687,7 @@ static void do_build(void)
 static void do_clean(void)
 {
     if (g_build.state != BUILD_IDLE) {
-        set_status("Build laeuft bereits");
+        set_status("Build l\344uft bereits");
         return;
     }
     if (!g_projectRoot[0]) {
@@ -2696,7 +2696,7 @@ static void do_clean(void)
     }
     if (!g_timerOpen) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                    "Timer-Gerät konnte nicht geoeffnet werden -- Aufraeumen nicht moeglich.");
+                    "Timer-Ger\344t konnte nicht ge\366ffnet werden -- Aufr\344umen nicht m\366glich.");
         return;
     }
     if (!make_is_available()) {
@@ -2708,7 +2708,7 @@ static void do_clean(void)
         return;
     }
 
-    set_status("Raeume auf...");
+    set_status("R\344ume auf...");
     clear_issues();
     DoMethod(g_issuesList, MUIM_NList_Clear);
     DoMethod(g_outputEditor, MUIM_TextEditor_ClearText);
@@ -2717,7 +2717,7 @@ static void do_clean(void)
     g_build.isBuildTarget = 0;
     if (!write_build_makefile() || !write_make_script()) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Konnte Build-Dateien nicht anlegen.");
-        set_status("Aufraeumen fehlgeschlagen");
+        set_status("Aufr\344umen fehlgeschlagen");
         return;
     }
 
@@ -2728,7 +2728,7 @@ static void do_clean(void)
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
                         "Konnte Log nicht neu anlegen (IoErr %ld):\n%s",
                         (long)IoErr(), g_build.logPath);
-            set_status("Aufraeumen fehlgeschlagen");
+            set_status("Aufr\344umen fehlgeschlagen");
             return;
         }
         Close(truncFh);
@@ -2739,9 +2739,9 @@ static void do_clean(void)
     aide_logtail_init(&g_build.tail);
 
     if (!launch_build_script()) {
-        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Aufraeumen konnte nicht gestartet werden.");
+        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Aufr\344umen konnte nicht gestartet werden.");
         aide_logtail_free(&g_build.tail);
-        set_status("Aufraeumen fehlgeschlagen");
+        set_status("Aufr\344umen fehlgeschlagen");
         return;
     }
 
@@ -2817,7 +2817,7 @@ static void do_run(void)
          * autoinit_amissl_main.c ("CON://///AUTO/CLOSE/WAIT"). */
         con = Open((CONST_STRPTR)"CON:20/20/640/200/AmigaIDE Run/CLOSE/WAIT", MODE_NEWFILE);
         if (!con) {
-            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Konnte Konsolenfenster nicht oeffnen.");
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Konnte Konsolenfenster nicht \366ffnen.");
             aide_str_free(&cmd);
             return;
         }
@@ -2847,7 +2847,7 @@ static void do_run(void)
 
     if (rc != 0) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                    "Programm beendet mit Rueckgabewert %ld.", (long)rc);
+                    "Programm beendet mit R\374ckgabewert %ld.", (long)rc);
     }
 }
 
@@ -2938,7 +2938,7 @@ static void do_format_current_file(void)
 static struct NewMenu MenuData[] = {
     { NM_TITLE, "Projekt", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Neu...",     "N", 0, 0, (APTR)ID_NEW_PROJECT },
-    { NM_ITEM,  "Oeffnen...", "O", 0, 0, (APTR)ID_OPEN_PROJECT },
+    { NM_ITEM,  "\326ffnen...", "O", 0, 0, (APTR)ID_OPEN_PROJECT },
     { NM_ITEM,  "Speichern",  "S", 0, 0, (APTR)ID_SAVE },
     { NM_ITEM,  "Neue Datei", 0, 0, 0, (APTR)0 },
     { NM_SUB,   "C-Quelle...",      0, 0, 0, (APTR)ID_ADD_NEW_C_SOURCE },
@@ -2946,7 +2946,7 @@ static struct NewMenu MenuData[] = {
     { NM_SUB,   "ASM-Quelle...",    0, 0, 0, (APTR)ID_ADD_NEW_ASM_SOURCE },
     { NM_SUB,   "ASM-Include...",   0, 0, 0, (APTR)ID_ADD_NEW_ASM_INCLUDE },
     { NM_SUB,   "BASIC-Quelle...",  0, 0, 0, (APTR)ID_ADD_NEW_BASIC_SOURCE },
-    { NM_ITEM,  "Bestehende Datei hinzufuegen...", "E", 0, 0, (APTR)ID_ADD_EXISTING_FILE },
+    { NM_ITEM,  "Bestehende Datei hinzuf\374gen...", "E", 0, 0, (APTR)ID_ADD_EXISTING_FILE },
     { NM_ITEM,  "Datei aus Projekt entfernen...", 0, 0, 0, (APTR)ID_REMOVE_FILE },
     { NM_ITEM,  "Projekteinstellungen...", "I", 0, 0, (APTR)ID_PROJECT_SETTINGS },
     { NM_ITEM,  "Einstellungen...", 0, 0, 0, (APTR)ID_PREFS },
@@ -2961,18 +2961,18 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "Run",    "R", 0, 0, (APTR)ID_RUN },
     { NM_ITEM,  "Disassemblieren...", "D", 0, 0, (APTR)ID_DISASSEMBLE },
     { NM_ITEM,  "Ausgabe speichern...", 0, 0, 0, (APTR)ID_SAVE_OUTPUT },
-    { NM_ITEM,  "Formatieren (Einrueckung)", 0, 0, 0, (APTR)ID_FORMAT },
+    { NM_ITEM,  "Formatieren (Einr\374ckung)", 0, 0, 0, (APTR)ID_FORMAT },
     { NM_TITLE, "Gehe zu", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Definition (F3)",         0, 0, 0, (APTR)ID_GOTO_DEF },
     { NM_ITEM,  "Referenzen (Shift+F3)",   0, 0, 0, (APTR)ID_FIND_REFS },
-    { NM_ITEM,  "Naechster Issue (F4)",    0, 0, 0, (APTR)ID_ISSUE_NEXT },
+    { NM_ITEM,  "N\344chster Issue (F4)",    0, 0, 0, (APTR)ID_ISSUE_NEXT },
     { NM_ITEM,  "Voriger Issue (Shift+F4)",0, 0, 0, (APTR)ID_ISSUE_PREV },
     { NM_TITLE, "Hilfe", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Hothelp (F1)",             0, 0, 0, (APTR)ID_HELP_F1 },
     { NM_ITEM,  "Struct-Layout (Shift+F1)", 0, 0, 0, (APTR)ID_HELP_SHIFT_F1 },
     { NM_ITEM,  "Autodoc-Suche... (F2)",    0, 0, 0, (APTR)ID_HELP_F2 },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
-    { NM_ITEM,  "Ueber AmigaIDE...", "?", 0, 0, (APTR)ID_ABOUT },
+    { NM_ITEM,  "\334ber AmigaIDE...", "?", 0, 0, (APTR)ID_ABOUT },
     { NM_END, NULL, 0, 0, 0, (APTR)0 },
 };
 
@@ -3306,7 +3306,7 @@ int mainwindow_run(void)
             if (has_unsaved_changes()) {
                 LONG choice = MUI_Request(g_app, g_window, 0, "AmigaIDE",
                                            "_Beenden|_Abbrechen",
-                                           "Es gibt ungespeicherte Aenderungen.\n\nTrotzdem beenden?");
+                                           "Es gibt ungespeicherte \304nderungen.\n\nTrotzdem beenden?");
                 if (choice != 1)
                     break;
             }
@@ -3316,7 +3316,7 @@ int mainwindow_run(void)
              * never a reason to keep the whole IDE open. */
             if (g_build.state != BUILD_IDLE) {
                 MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
-                            "Ein Build laeuft noch im Hintergrund weiter.");
+                            "Ein Build l\344uft noch im Hintergrund weiter.");
             }
             running = FALSE;
             break;
@@ -3409,7 +3409,7 @@ int mainwindow_run(void)
                 char about[160];
                 sprintf(about,
                         "AmigaIDE %s build %s (%s)\n"
-                        "vbcc/vasm/vlink IDE fuer AmigaOS 3.x",
+                        "vbcc/vasm/vlink IDE f\374r AmigaOS 3.x",
                         AMIGAIDE_VERSION_STRING, AMIGAIDE_BUILD_NUMBER,
                         AMIGAIDE_BUILD_DATE);
                 MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", about);
@@ -3463,7 +3463,7 @@ int mainwindow_run(void)
                     refresh_tree();
                     rebuild_symbol_index();
                     invalidate_help_index();
-                    set_status("Einstellungen uebernommen -- noch nicht gespeichert");
+                    set_status("Einstellungen \374bernommen -- noch nicht gespeichert");
                 }
             } else if (settingsResult == 1) {
                 /* Cancel -- for the "Neu" flow this creates NOTHING at
@@ -3488,7 +3488,7 @@ int mainwindow_run(void)
                     aide_sdk_append_builtins(prefs_sdk_root(), &g_sdkRegistry);
                     aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
                     invalidate_make_availability();
-                    set_status("Einstellungen uebernommen");
+                    set_status("Einstellungen \374bernommen");
                 } else if (prefsResult == 0) {
                     if (!helpwindow_handle_id(id))
                         disasmwindow_handle_id(id);

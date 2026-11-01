@@ -180,6 +180,17 @@ if(ACD_BUILD_IDE_AMIGA)
         COMMENT "Cross-building the MUI IDE for m68k-amigaos"
         USES_TERMINAL
         VERBATIM)
+
+    # Amiga archive + Aminet files (install/amiga/, tools/release/):
+    # build/release/AmiDevIDE-<version>.lha/.readme for GitHub and
+    # build/release/aminet-<version>/ without the version for Aminet.
+    add_custom_target(amiga-release
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/release/amiga_release.py"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Packing the MUI IDE for Aminet"
+        USES_TERMINAL
+        VERBATIM)
+    add_dependencies(amiga-release amigaide-m68k)
 endif()
 
 # ---------------------------------------------------------------- summary

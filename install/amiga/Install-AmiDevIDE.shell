@@ -1,0 +1,100 @@
+; $VER: Install-AmiDevIDE.shell @VERSION@ (@DATE@)
+; Install-AmiDevIDE.shell -- installiert AmigaIDE ohne Installer
+; SPDX-License-Identifier: GPL-3.0-or-later
+; Copyright (C) 2026 Ronny Krueger
+;
+; Aufruf im Shell-Fenster, aus der ausgepackten Schublade heraus:
+;     CD RAM:AmiDevIDE
+;     Execute Install-AmiDevIDE.shell              (nach Work:AmigaIDE)
+;     Execute Install-AmiDevIDE.shell ZIEL=DH1:    (nach DH1:AmigaIDE)
+;
+; Kopiert die Schublade AmigaIDE (Programm, Icons, Handbuch). Ist dort
+; schon eine NEUERE AmigaIDE installiert, fragt das Skript vorher.
+; Einstellungen in ENVARC:AmigaIDE/ werden nie angelegt oder geändert.
+
+.KEY ZIEL/K
+.BRA {
+.KET }
+.DEF ZIEL "Work:"
+
+FailAt 21
+
+If NOT EXISTS AmigaIDE/AmigaIDE
+  Echo "Install-AmiDevIDE.shell muss aus der Installationsschublade gestartet werden:"
+  Echo "  CD RAM:AmiDevIDE"
+  Echo "  Execute Install-AmiDevIDE.shell"
+  Quit 10
+EndIf
+
+CPU CHECK 68020 >NIL:
+If WARN
+  Echo "AmigaIDE @VERSION@ braucht mindestens einen 68020."
+  Quit 10
+EndIf
+
+Echo ""
+Echo "AmigaIDE @VERSION@ - Installation nach {ZIEL}AmigaIDE"
+Echo "=================================================="
+
+If NOT EXISTS {ZIEL}AmigaIDE
+  MakeDir {ZIEL}AmigaIDE
+  If ERROR
+    Echo "FEHLER: {ZIEL}AmigaIDE konnte nicht angelegt werden."
+    Quit 10
+  EndIf
+  Copy AmigaIDE.info {ZIEL}AmigaIDE.info QUIET
+EndIf
+
+Set instneu 1
+If EXISTS {ZIEL}AmigaIDE/AmigaIDE
+  ; Version liefert 0, wenn die installierte Datei mindestens
+  ; @VER_MAJOR@.@VER_REVN@ hat, also neuer ist als die im Archiv.
+  Version >NIL: {ZIEL}AmigaIDE/AmigaIDE @VER_MAJOR@ @VER_REVN@ FILE
+  If NOT WARN
+    Echo "  Die installierte AmigaIDE ist neuer als die in diesem Archiv:"
+    Echo NOLINE "    installiert: "
+    Version {ZIEL}AmigaIDE/AmigaIDE FILE
+    Echo NOLINE "    im Archiv:   "
+    Version AmigaIDE/AmigaIDE FILE
+    Ask "  Trotzdem durch die ältere Version ersetzen? (y/n)"
+    If NOT WARN
+      Set instneu 0
+    EndIf
+  EndIf
+EndIf
+
+If $instneu EQ 1
+  Copy AmigaIDE/AmigaIDE TO {ZIEL}AmigaIDE QUIET
+  If ERROR
+    Echo "FEHLER: AmigaIDE konnte nicht kopiert werden."
+    Quit 10
+  EndIf
+  Protect >NIL: {ZIEL}AmigaIDE/AmigaIDE +rwed
+  Echo "  AmigaIDE kopiert."
+EndIf
+UnSet instneu
+
+If NOT EXISTS {ZIEL}AmigaIDE/AmigaIDE.info
+  Copy AmigaIDE/AmigaIDE.info TO {ZIEL}AmigaIDE QUIET
+EndIf
+Copy AmigaIDE/AmigaIDE.guide TO {ZIEL}AmigaIDE QUIET
+If NOT EXISTS {ZIEL}AmigaIDE/AmigaIDE.guide.info
+  Copy AmigaIDE/AmigaIDE.guide.info TO {ZIEL}AmigaIDE QUIET
+EndIf
+Echo "  Handbuch kopiert."
+
+Echo ""
+If NOT EXISTS LIBS:regex.library
+  Echo "Hinweis: LIBS:regex.library fehlt (Aminet util/libs/regex_ranieri.lha)."
+EndIf
+If NOT EXISTS LIBS:reqtools.library
+  Echo "Hinweis: LIBS:reqtools.library fehlt (Aminet util/libs/ReqToolsUsr.lha)."
+EndIf
+If NOT EXISTS MUI:Libs/mui/TextEditor.mcc
+  Echo "Hinweis: TextEditor.mcc fehlt (Aminet dev/mui/MCC_TextEditor-15.56.lha)."
+EndIf
+If NOT EXISTS MUI:Libs/mui/NListtree.mcc
+  Echo "Hinweis: NList-Klassen fehlen (Aminet dev/mui/MCC_NList-0.128.lha)."
+EndIf
+Echo "Fertig. Vor dem ersten Übersetzen die Assigns vbcc: und SDK:"
+Echo "einrichten (Handbuch, Abschnitt Einrichtung)."

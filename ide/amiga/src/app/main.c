@@ -73,7 +73,7 @@ int main(void)
         if (MUIMasterBase) {
             MUI_Request(NULL, NULL, 0, "AmigaIDE",
                         "_OK", "Konnte intuition.library/regex.library/reqtools.library "
-                               "nicht oeffnen (regex.library und reqtools.library muessen "
+                               "nicht \366ffnen (regex.library und reqtools.library m\374ssen "
                                "in LIBS: installiert sein).");
         }
         close_libs();

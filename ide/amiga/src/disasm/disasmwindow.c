@@ -113,7 +113,7 @@ void disasmwindow_show(const char *binaryPath)
 
     aide_hunkreader_init(&reader);
     if (!aide_hunkreader_load_bytes(&reader, (const unsigned char *)data, size)) {
-        aide_str_appendf(&out, "Kein gueltiges Hunk-Executable: %s\n", reader.error);
+        aide_str_appendf(&out, "Kein g\374ltiges Hunk-Executable: %s\n", reader.error);
         aide_hunkreader_free(&reader);
         free(data);
         goto show;

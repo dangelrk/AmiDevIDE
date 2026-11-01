@@ -1,0 +1,136 @@
+; $VER: Install-AmiDevIDE @VERSION@ (@DATE@)
+; Installer-Skript für AmigaIDE (AmiDevIDE), AmigaOS 3.x, Installer ab 43
+; SPDX-License-Identifier: GPL-3.0-or-later
+; Copyright (C) 2026 Ronny Krueger
+;
+; Start: Icon "Install-AmiDevIDE" doppelt anklicken. Ohne Installer gibt
+; es dasselbe als Shell-Skript: Execute Install-AmiDevIDE.shell
+;
+; Kopiert die Schublade AmigaIDE (Programm, Icon, Handbuch) in ein
+; Verzeichnis nach Wahl (Vorgabe Work:). Einstellungen in ENVARC:AmigaIDE/
+; werden nie angelegt oder überschrieben. Ein erneuter Start über eine
+; vorhandene Installation aktualisiert sie: das Programm wird nur ersetzt,
+; wenn die installierte Version nicht neuer ist (im Expertenmodus fragt
+; der Installer), vorhandene Icons bleiben erhalten.
+
+(set @app-name "AmigaIDE")
+(set @default-dest "Work:")
+
+(onerror
+  (message "\nDie Installation wurde abgebrochen.\n\n"
+           "Bereits kopierte Dateien bleiben erhalten;\n"
+           "ein erneuter Start setzt sie wieder ein."))
+
+(if (= 0 (exists "AmigaIDE/AmigaIDE" (noreq)))
+  (abort "AmigaIDE wurde nicht gefunden.\n\n"
+         "Bitte den Installer aus der ausgepackten\n"
+         "AmiDevIDE-Schublade starten."))
+
+; ---- Prozessor -------------------------------------------------------------
+(if (or (= (database "cpu") "68000") (= (database "cpu") "68010"))
+  (abort "AmigaIDE @VERSION@ braucht mindestens einen 68020.\n\n"
+         "Dieser Amiga hat einen " (database "cpu") "."))
+
+; ---- Voraussetzungen -------------------------------------------------------
+; Ohne sie startet AmigaIDE nicht; die Installation geht trotzdem.
+(set #fehlt "")
+(if (= 0 (exists "LIBS:muimaster.library" (noreq)))
+  (if (= 0 (exists "MUI:Libs/muimaster.library" (noreq)))
+    (set #fehlt (cat #fehlt "MUI 3.8 (util/libs/mui38usr.lha)\n"))))
+(if (= 0 (exists "LIBS:reqtools.library" (noreq)))
+  (set #fehlt (cat #fehlt "reqtools.library (util/libs/ReqToolsUsr.lha)\n")))
+(if (= 0 (exists "LIBS:regex.library" (noreq)))
+  (set #fehlt (cat #fehlt "regex.library (util/libs/regex_ranieri.lha)\n")))
+(if (= 0 (exists "MUI:Libs/mui/NListtree.mcc" (noreq)))
+  (set #fehlt (cat #fehlt "NList-Klassen (dev/mui/MCC_NList-0.128.lha)\n")))
+(if (= 0 (exists "MUI:Libs/mui/TextEditor.mcc" (noreq)))
+  (set #fehlt (cat #fehlt "TextEditor.mcc (dev/mui/MCC_TextEditor-15.56.lha)\n")))
+
+(message "\nAmigaIDE @VERSION@ - Entwicklungsumgebung\n"
+         "für vbcc, vasm, vlink und ACE BASIC\n\n"
+         "Zum Übersetzen braucht sie außerdem vbcc,\n"
+         "das NDK 3.2 und GNU make (siehe ReadMe)."
+         (if (> (strlen #fehlt) 0)
+           (cat "\n\nNicht gefunden (Installation geht trotzdem,\n"
+                "AmigaIDE startet aber erst damit):\n\n" #fehlt)
+           ""))
+
+; ---- Ziel ------------------------------------------------------------------
+(set #ziel
+  (askdir
+    (prompt "Wohin soll die Schublade AmigaIDE?\n"
+            "(Eine vorhandene AmigaIDE-Schublade dort wird aktualisiert.)")
+    (help "AmigaIDE kommt mit Programm, Icon und Handbuch in eine "
+          "eigene Schublade namens AmigaIDE in diesem Verzeichnis. "
+          "Im Unterverzeichnis cache legt die IDE später ihren "
+          "Hilfe-Index ab.\n\n" @askdir-help)
+    (default @default-dest)))
+(set #appdir (tackon #ziel "AmigaIDE"))
+(set @default-dest #appdir)
+
+(if (= 0 (exists #appdir (noreq)))
+  (
+    (makedir #appdir (prompt "Schublade " #appdir " anlegen") (help @makedir-help))
+  ))
+(complete 20)
+
+; ---- Programm, mit Versionsprüfung ------------------------------------------
+(set #ersetzen 1)
+(set #prog (tackon #appdir "AmigaIDE"))
+(if (> (exists #prog (noreq)) 0)
+  (
+    (set #vneu (getversion "AmigaIDE/AmigaIDE"))
+    (set #valt (getversion #prog))
+    (set #tneu (cat (/ #vneu 65536) "." (BITAND #vneu 65535)))
+    (set #talt (if (= #valt 0) "unbekannt" (cat (/ #valt 65536) "." (BITAND #valt 65535))))
+    (if (= @user-level 2)
+      (set #ersetzen
+        (askbool
+          (prompt #prog "\nist schon vorhanden.\n\n"
+                  "Installiert: " #talt "\nIm Archiv: " #tneu
+                  (if (< #vneu #valt) "\n\nDie installierte Version ist NEUER!" "")
+                  "\n\nDurch die Version aus dem Archiv ersetzen?")
+          (help "Außerhalb des Expertenmodus ersetzt der Installer "
+                "gleiche und ältere Versionen ohne Nachfrage und "
+                "behält neuere.\n\n" @askbool-help)
+          (choices "Ersetzen" "Behalten")
+          (default (if (< #vneu #valt) 0 1))))
+      (if (< #vneu #valt) (set #ersetzen 0)))))
+
+(if #ersetzen
+  (copyfiles
+    (prompt "AmigaIDE nach " #appdir " kopieren")
+    (help @copyfiles-help)
+    (source "AmigaIDE/AmigaIDE")
+    (dest #appdir))
+  (message "\n" #prog "\nist neuer als die Version im Archiv\nund bleibt unverändert." (all)))
+(complete 60)
+
+; Icons nur, wenn noch keine da sind (eigene Tooltypes bleiben)
+(if (= 0 (exists (tackon #appdir "AmigaIDE.info") (noreq)))
+  (copyfiles (source "AmigaIDE/AmigaIDE.info") (dest #appdir)))
+(copyfiles
+  (prompt "Handbuch nach " #appdir " kopieren")
+  (help @copyfiles-help)
+  (source "AmigaIDE/AmigaIDE.guide")
+  (dest #appdir))
+(if (= 0 (exists (tackon #appdir "AmigaIDE.guide.info") (noreq)))
+  (copyfiles (source "AmigaIDE/AmigaIDE.guide.info") (dest #appdir)))
+(if (= 0 (exists (cat #appdir ".info") (noreq)))
+  (copyfiles (source "AmigaIDE.info") (dest #ziel)))
+(complete 90)
+
+(if (= 2 (exists "HELP:" (noreq)))
+  (if (askbool
+        (prompt "Das Handbuch zusätzlich nach HELP: kopieren?")
+        (help "Dann findet es auch das Hilfe-System des Workbench. "
+              "Es liegt in jedem Fall in der Schublade AmigaIDE.\n\n" @askbool-help)
+        (default 0))
+    (copyfiles (source "AmigaIDE/AmigaIDE.guide") (dest "HELP:"))))
+(complete 100)
+
+(message "\nAmigaIDE ist installiert in\n" #appdir "\n\n"
+         "Vor dem ersten Übersetzen die Assigns vbcc: und\n"
+         "SDK: einrichten (Handbuch, Abschnitt Einrichtung).\n\n"
+         "Entfernen: Icon Uninstall-AmiDevIDE")
+(exit (quiet))

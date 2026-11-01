@@ -1,0 +1,46 @@
+AmigaIDE @VERSION@ (@DATE@) - Entwicklungsumgebung für AmigaOS 3.x
+======================================================================
+
+AmigaIDE ist eine MUI-Entwicklungsumgebung für C, Assembler und
+ACE BASIC mit vbcc, vasm und vlink: Projekte, Editor mit Hervorhebung,
+Symbolindex, Suche, Build mit Fehlerliste, Autodoc-Hilfe, Disassembler
+und Memory Map. Dieselben Projekte (.aproj) öffnet auch die Qt-Fassung
+auf macOS, Linux und Windows (AmiDevIDE).
+
+Inhalt dieser Schublade
+-----------------------
+  AmigaIDE/                Programm, Icon und Handbuch (AmigaIDE.guide)
+  Install-AmiDevIDE        Installer (Commodore-Installer ab 43)
+  Install-AmiDevIDE.shell  dasselbe ohne Installer:
+                             Execute Install-AmiDevIDE.shell [ZIEL=Work:]
+  Uninstall-AmiDevIDE      entfernt AmigaIDE wieder
+  LICENSE                  GNU General Public License 3
+  THIRD-PARTY-NOTICES      Lizenz von Parson (JSON-Parser, MIT)
+
+Die Schublade AmigaIDE läuft auch ohne Installation, einfach an einen
+Ort nach Wahl ziehen.
+
+Voraussetzungen (alle auf Aminet)
+---------------------------------
+  68020 oder besser, AmigaOS 3.x, MUI 3.8 oder neuer
+  util/libs/mui38usr.lha            MUI (muimaster.library)
+  util/libs/ReqToolsUsr.lha         reqtools.library
+  util/libs/regex_ranieri.lha       regex.library (POSIX, von A. Ranieri)
+  dev/mui/MCC_NList-0.128.lha       NList, NListview, NListtree
+  dev/mui/MCC_TextEditor-15.56.lha  TextEditor
+
+Zum Übersetzen außerdem:
+  dev/c/vbcc_bin_amigaos68k.lha     vbcc, vasm, vlink (Assign vbcc:)
+  vbcc-Target m68k-amigaos          http://sun.hasenbraten.de/vbcc/
+  dev/misc/NDK3.2.lha               NDK 3.2 (nach SDK:NDK_3.2/)
+  dev/c/make-4.4.1.lha              GNU make
+  dev/basic/ace-basic.lha           ACE BASIC, nur für BASIC-Projekte
+
+Einrichtung der Assigns: Handbuch, Abschnitt "Einrichtung".
+
+Lizenz
+------
+GNU General Public License, Version 3 oder neuer. Enthält Parson
+(MIT-Lizenz, siehe THIRD-PARTY-NOTICES).
+
+Ronny Krueger <amitools@planet-rk.de>

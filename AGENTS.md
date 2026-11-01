@@ -139,6 +139,17 @@ bundle; copied to `toolchain/bin` it fails with "Library not loaded:
 @rpath/QtWidgets.framework". `toolchain/bin/amigaide` is a launcher script
 that execs the bundle.
 
+**Version numbers have two parts.** `AMIGAIDE_VERSION_STRING` is
+version.revision ("0.1", "0.10"): the Amiga's `Version` command and the
+Installer compare exactly two numbers, so "0.1.1" would not count as newer.
+
+**The Amiga release goes through `amiga-release`.** `tools/release/` holds
+copies of AmiCloudCore's packing tools (LhA writer, icon writer, guide and
+Aminet-readme checks); `install/amiga/` the installer, readmes and icon
+layout. Text the Amiga shows (MUI strings, the guide, installer, ReadMe)
+is ISO-8859-1: in C sources write umlauts as octal escapes (`\344`),
+never as UTF-8 bytes.
+
 ## Before you commit
 
 ```sh
