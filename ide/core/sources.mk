@@ -42,7 +42,8 @@ AIDE_CORE_SOURCES = \
 	src/aide_theme.c \
 	src/aide_keywords.c \
 	src/aide_reindent.c \
-	src/aide_emulator.c
+	src/aide_emulator.c \
+	src/aide_vcs.c
 
 # Platform backends.  Exactly one set is compiled; the choice is made by the
 # build system, not at runtime -- see aide_fs.h and aide_regex.h.

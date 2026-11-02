@@ -152,7 +152,23 @@ char *aide_project_to_json(const AideProject *p, const char *raw_json_passthroug
  * on success, 0 if json_text isn't a valid JSON object. */
 int aide_project_from_json(AideProject *p, const char *json_text);
 
-/* Loads/saves the .aproj file at `path`. Returns 1 on success. */
+/* The same without the editor section: what goes into the .aproj file.
+ * The editor state (open files, active file) changes with every session
+ * and would keep a versioned project "modified"; it lives in
+ * <project>.aproj.user next to it (aide_project_save_user()). A
+ * passthrough "editor" key is dropped too. */
+char *aide_project_to_file_json(const AideProject *p, const char *raw_json_passthrough);
+
+/* <aproj_path>.user, the per-user side file */
+void aide_project_user_path(const char *aproj_path, char *out, size_t outsz);
+/* writes / reads only the editor section of <aproj_path>.user; load
+ * returns 0 (and changes nothing) if there is none */
+int aide_project_save_user(const AideProject *p, const char *aproj_path);
+int aide_project_load_user(AideProject *p, const char *aproj_path);
+
+/* Loads/saves the .aproj file at `path` together with its .user side
+ * file (aide_project_load() reads it after the .aproj, save writes both).
+ * Returns 1 if the .aproj itself was read/written. */
 int aide_project_load(AideProject *p, const char *path);
 int aide_project_save(const AideProject *p, const char *path);
 

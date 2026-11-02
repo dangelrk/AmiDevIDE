@@ -216,7 +216,7 @@ void aide_project_free(AideProject *p)
 
 /* ---- JSON ---- */
 
-char *aide_project_to_json(const AideProject *p, const char *raw_json_passthrough)
+static char *to_json(const AideProject *p, const char *raw_json_passthrough, int with_editor)
 {
     JSON_Value *rootVal = json_value_init_object();
     JSON_Object *obj = json_value_get_object(rootVal);
@@ -235,7 +235,10 @@ char *aide_project_to_json(const AideProject *p, const char *raw_json_passthroug
             size_t n = json_object_get_count(rawObj);
             for (i = 0; i < n; ++i) {
                 const char *key = json_object_get_name(rawObj, i);
-                JSON_Value *copy = json_value_deep_copy(json_object_get_value_at(rawObj, i));
+                JSON_Value *copy;
+                if (!with_editor && strcmp(key, "editor") == 0)
+                    continue;   /* lives in <project>.aproj.user now */
+                copy = json_value_deep_copy(json_object_get_value_at(rawObj, i));
                 json_object_set_value(obj, key, copy);
             }
         }
@@ -337,11 +340,13 @@ char *aide_project_to_json(const AideProject *p, const char *raw_json_passthroug
     json_object_set_value(subObj, "extraFsUaeArgs", mk_strlist_array(&p->run.extraFsUaeArgs));
     json_object_set_value(obj, "run", sub);
 
-    sub = json_value_init_object();
-    subObj = json_value_get_object(sub);
-    json_object_set_value(subObj, "openFiles", mk_strlist_array(&p->editor.openFiles));
-    json_object_set_string(subObj, "activeFile", p->editor.activeFile);
-    json_object_set_value(obj, "editor", sub);
+    if (with_editor) {
+        sub = json_value_init_object();
+        subObj = json_value_get_object(sub);
+        json_object_set_value(subObj, "openFiles", mk_strlist_array(&p->editor.openFiles));
+        json_object_set_string(subObj, "activeFile", p->editor.activeFile);
+        json_object_set_value(obj, "editor", sub);
+    }
 
     serialized = json_serialize_to_string_pretty(rootVal);
     result = aide_strdup(serialized ? serialized : "");
@@ -349,6 +354,89 @@ char *aide_project_to_json(const AideProject *p, const char *raw_json_passthroug
         json_free_serialized_string(serialized);
     json_value_free(rootVal);
     return result;
+}
+
+char *aide_project_to_json(const AideProject *p, const char *raw_json_passthrough)
+{
+    return to_json(p, raw_json_passthrough, 1);
+}
+
+char *aide_project_to_file_json(const AideProject *p, const char *raw_json_passthrough)
+{
+    return to_json(p, raw_json_passthrough, 0);
+}
+
+void aide_project_user_path(const char *aproj_path, char *out, size_t outsz)
+{
+    if (!outsz) return;
+    snprintf(out, outsz, "%s.user", aproj_path);
+}
+
+int aide_project_save_user(const AideProject *p, const char *aproj_path)
+{
+    JSON_Value *rootVal = json_value_init_object();
+    JSON_Object *obj = json_value_get_object(rootVal);
+    JSON_Value *sub = json_value_init_object();
+    JSON_Object *subObj = json_value_get_object(sub);
+    char path[1024];
+    char *serialized;
+    FILE *f;
+    int ok = 0;
+
+    json_object_set_value(subObj, "openFiles", mk_strlist_array(&p->editor.openFiles));
+    json_object_set_string(subObj, "activeFile", p->editor.activeFile);
+    json_object_set_value(obj, "editor", sub);
+    serialized = json_serialize_to_string_pretty(rootVal);
+    json_value_free(rootVal);
+    if (!serialized)
+        return 0;
+    aide_project_user_path(aproj_path, path, sizeof(path));
+    f = fopen(path, "wb");
+    if (f) {
+        size_t len = strlen(serialized);
+        ok = fwrite(serialized, 1, len, f) == len;
+        fclose(f);
+    }
+    json_free_serialized_string(serialized);
+    return ok;
+}
+
+int aide_project_load_user(AideProject *p, const char *aproj_path)
+{
+    char path[1024];
+    FILE *f;
+    long size;
+    char *buf;
+    JSON_Value *val;
+    JSON_Object *sub;
+
+    aide_project_user_path(aproj_path, path, sizeof(path));
+    f = fopen(path, "rb");
+    if (!f)
+        return 0;
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (size < 0) { fclose(f); return 0; }
+    buf = (char *)malloc((size_t)size + 1);
+    if (!buf) { fclose(f); return 0; }
+    buf[fread(buf, 1, (size_t)size, f)] = '\0';
+    fclose(f);
+    val = json_parse_string(buf);
+    free(buf);
+    if (!val || json_value_get_type(val) != JSONObject) {
+        if (val) json_value_free(val);
+        return 0;
+    }
+    sub = json_object_get_object(json_value_get_object(val), "editor");
+    if (sub) {
+        aide_strlist_free(&p->editor.openFiles);
+        aide_strlist_init(&p->editor.openFiles);
+        jstrlist(sub, "openFiles", &p->editor.openFiles);
+        strset(&p->editor.activeFile, jstr(sub, "activeFile", ""));
+    }
+    json_value_free(val);
+    return 1;
 }
 
 int aide_project_from_json(AideProject *p, const char *json_text)
@@ -461,12 +549,14 @@ int aide_project_load(AideProject *p, const char *path)
 
     ok = aide_project_from_json(p, buf);
     free(buf);
+    if (ok)
+        aide_project_load_user(p, path);   /* open files etc., if any */
     return ok;
 }
 
 int aide_project_save(const AideProject *p, const char *path)
 {
-    char *json = aide_project_to_json(p, NULL);
+    char *json = aide_project_to_file_json(p, NULL);
     FILE *f = fopen(path, "wb");
     size_t len;
     size_t written;
@@ -480,7 +570,10 @@ int aide_project_save(const AideProject *p, const char *path)
     written = fwrite(json, 1, len, f);
     fclose(f);
     free(json);
-    return written == len;
+    if (written != len)
+        return 0;
+    aide_project_save_user(p, path);   /* a failure here only loses the open-files list */
+    return 1;
 }
 
 void aide_project_create_minimal_c(AideProject *p, const char *name)

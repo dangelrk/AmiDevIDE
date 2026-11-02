@@ -19,6 +19,7 @@ private slots:
     void noSdkSelectedRoundTrips();
     void languageAndOutputKindRoundTrip();
     void legacyProjectStaysC();
+    void editorStateInUserFile();
 };
 
 void TstProject::minimalCDefaults()
@@ -179,4 +180,38 @@ void TstProject::unknownKeysPreserved()
 }
 
 QTEST_APPLESS_MAIN(TstProject)
+// The editor state (open files, active file) lives in <project>.aproj.user,
+// not in the .aproj: it changes every session and would keep a versioned
+// project "modified" (AmiVCS refuses switch/merge/pull then).
+void TstProject::editorStateInUserFile()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("demo.aproj"));
+
+    Project p = Project::createMinimalC(QStringLiteral("demo"));
+    p.editor.openFiles = QStringList{ QStringLiteral("src/main.c"), QStringLiteral("src/util.c") };
+    p.editor.activeFile = QStringLiteral("src/util.c");
+    QVERIFY(p.save(path));
+
+    QFile aproj(path);
+    QVERIFY(aproj.open(QFile::ReadOnly));
+    const QByteArray text = aproj.readAll();
+    QVERIFY(!text.contains("\"editor\""));
+    QVERIFY(!text.contains("openFiles"));
+    QVERIFY(QFile::exists(path + QStringLiteral(".user")));
+
+    Project q;
+    QVERIFY(q.load(path));
+    QCOMPARE(q.editor.openFiles, p.editor.openFiles);
+    QCOMPARE(q.editor.activeFile, QStringLiteral("src/util.c"));
+
+    // saving again changes nothing in the .aproj when only the editor moved
+    q.editor.activeFile = QStringLiteral("src/main.c");
+    QVERIFY(q.save(path));
+    QFile again(path);
+    QVERIFY(again.open(QFile::ReadOnly));
+    QCOMPARE(again.readAll(), text);
+}
+
 #include "tst_project.moc"

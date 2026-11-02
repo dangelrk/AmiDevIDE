@@ -43,3 +43,4 @@ amigaide_add_test(tst_project tst_project.cpp)
 amigaide_add_test(tst_sdkregistry tst_sdkregistry.cpp)
 
 amigaide_add_test(tst_logtail tst_logtail.cpp)
+amigaide_add_test(tst_vcs tst_vcs.cpp)
