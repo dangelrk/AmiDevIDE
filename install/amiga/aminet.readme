@@ -18,6 +18,8 @@ vbcc, vasm and vlink:
   - Autodoc help (F1) for every active SDK, struct layouts
   - disassembler for hunk files, memory map after a build
   - Workbench icons for built programs
+  - version control with AmiVCS (commit, branches, merge, history
+    graph, push/pull/clone), if AmiVCS 0.6 or newer is installed
 
 The same project files (.aproj) open in the Qt version of the IDE on
 macOS, Linux and Windows (AmiDevIDE, cross-development with the same
@@ -44,10 +46,20 @@ To build programs:
   vbcc target m68k-amigaos (http://sun.hasenbraten.de/vbcc/)
 - NDK 3.2 (dev/misc/NDK3.2.lha), GNU make (dev/c/make-4.4.1.lha)
 - for BASIC projects ACE BASIC (dev/basic/ace-basic.lha)
+Optional:
+- AmiVCS 0.6 or newer for version control (dev/misc/AmiVCS.lha)
 
 Documentation and user interface are in German.
 Die Dokumentation (AmigaIDE/AmigaIDE.guide) und die Oberfläche sind
 deutsch.
+
+History
+-------
+0.2  version control with AmiVCS; a first push asks for the repository
+     name on the server; project files read and written independent of
+     the locale; directory requester fixes (current directory, paths
+     right below a volume)
+0.1  first release
 
 License
 -------

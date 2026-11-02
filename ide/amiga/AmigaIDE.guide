@@ -1,10 +1,10 @@
 @database AmigaIDE.guide
-@$VER: AmigaIDE.guide 0.1 (01.11.2026)
+@$VER: AmigaIDE.guide 0.2 (02.11.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
 
-                         @{b}AmigaIDE 0.1@{ub}
+                         @{b}AmigaIDE 0.2@{ub}
         Entwicklungsumgebung für vbcc, vasm, vlink und ACE BASIC
 
   @{" Überblick            " link Ueberblick}  Was AmigaIDE ist und kann
@@ -24,6 +24,7 @@
   @{" ACE BASIC            " link Basic}  BASIC-Projekte auf dem Amiga
   @{" Tastenkürzel         " link Tasten}  Alle Tasten auf einen Blick
   @{" Bekannte Grenzen     " link Grenzen}  Was (noch) nicht geht
+  @{" Versionsgeschichte   " link Geschichte}  Was sich wann geändert hat
   @{" Lizenz               " link Lizenz}  GPL und Fremdkomponenten
 
 @endnode
@@ -701,6 +702,27 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
   - Der Symbolindex wird nach jedem Build komplett neu aufgebaut.
   - Die Shift+F-Tasten sind nicht auf jedem System getestet. Falls
     eine nicht reagiert: Alle Befehle stehen auch im Menü.
+
+@endnode
+@node Geschichte "Versionsgeschichte"
+
+@{b}Versionsgeschichte@{ub}
+
+0.2 (02.11.2026)
+  - Versionsverwaltung mit AmiVCS (ab 0.6, eigenes Programm):
+    Register "Versionen" und "Verlauf", Menü "Versionen" mit
+    Commit, Bereitstellen, Branches, Merge, Pull, Push und Clone.
+    Siehe @{" Versionsverwaltung " link Versionen}.
+  - Ein erster Push fragt nach dem Namen des Repositorys auf dem
+    Server.
+  - Zahlen in Projektdateien werden unabhängig von der
+    Spracheinstellung gelesen und geschrieben.
+  - Verzeichnisauswahl: das aktuelle Verzeichnis zu bestätigen
+    funktioniert; Pfade direkt unter einem Laufwerk
+    ("RAM Disk:x") werden richtig gebildet.
+
+0.1 (01.11.2026)
+  - Erste Version auf Aminet.
 
 @endnode
 @node Lizenz "Lizenz"
