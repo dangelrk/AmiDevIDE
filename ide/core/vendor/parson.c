@@ -36,6 +36,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <errno.h>
+#include <locale.h>
 
 /* Apparently sscanf is not implemented in some "standard" libraries, so don't use it, if you
  * don't have to. */
@@ -856,15 +857,39 @@ static JSON_Value * parse_boolean_value(const char **string) {
     return NULL;
 }
 
+/* AmigaIDE: JSON numbers always use '.', but strtod() follows the process
+ * locale -- the Qt IDE runs with the user's locale, and under de_DE
+ * strtod() stopped at the '.' or read "0,1" as one number, so every
+ * project file failed to load. The number token is copied and its '.'
+ * turned into the locale's decimal point before strtod() (same fix as in
+ * AmiCloudCore's copy). */
+static char locale_decimal_point(void) {
+    const struct lconv *lc = localeconv();
+    return (lc && lc->decimal_point && lc->decimal_point[0] && !lc->decimal_point[1])
+           ? lc->decimal_point[0] : '.';
+}
+
 static JSON_Value * parse_number_value(const char **string) {
+    char buf[NUM_BUF_SIZE];
+    const char *s = *string;
     char *end;
     double number = 0;
-    errno = 0;
-    number = strtod(*string, &end);
-    if (errno || !is_decimal(*string, end - *string)) {
+    size_t n = 0;   /* a ',' never gets into the token: "0,5" stays two values */
+    char dp = locale_decimal_point();
+    while (s[n] && strchr("+-0123456789.eE", s[n]) && n < sizeof(buf) - 1) {
+        buf[n] = (s[n] == '.') ? dp : s[n];
+        n++;
+    }
+    buf[n] = '\0';
+    if (n == 0 || n == sizeof(buf) - 1) {
         return NULL;
     }
-    *string = end;
+    errno = 0;
+    number = strtod(buf, &end);
+    if (errno || end == buf || !is_decimal(s, (size_t)(end - buf))) {
+        return NULL;
+    }
+    *string = s + (end - buf);
     return json_value_init_number(number);
 }
 
@@ -1008,7 +1033,22 @@ static int json_serialize_to_buffer_r(const JSON_Value *value, char *buf, int le
             if (buf != NULL) {
                 num_buf = buf;
             }
-            written = sprintf(num_buf, FLOAT_FORMAT, num);
+            /* AmigaIDE: whole numbers in the long range are written as
+             * integers. vbcc's printf (m68k-amigaos vc.lib) prints some
+             * exact whole doubles wrongly with %1.17g, e.g. 986.0 as
+             * "985.999999999999" (as in AmiCloudCore's copy). */
+            if (num >= -2147483647.0 && num <= 2147483647.0 && num == (double)(long)num) {
+                written = sprintf(num_buf, "%ld", (long)num);
+            } else {
+                written = sprintf(num_buf, FLOAT_FORMAT, num);
+                if (written > 0) {   /* AmigaIDE: '.' whatever the locale says */
+                    char dp = locale_decimal_point();
+                    int k;
+                    for (k = 0; dp != '.' && k < written; k++) {
+                        if (num_buf[k] == dp) num_buf[k] = '.';
+                    }
+                }
+            }
             if (written < 0) {
                 return -1;
             }

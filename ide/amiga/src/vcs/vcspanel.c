@@ -418,6 +418,23 @@ static void job_done(void)
         else show_messages(&r);
         break;
     default:
+        if (op == AIDE_VCS_PUSH && !ok && aide_vcs_needs_remote_name(&r)) {
+            /* a first push needs the repository name on the server */
+            char name[128];
+            const char *base = strrchr(g_root, '/');
+            base = base ? base + 1 : (strchr(g_root, ':') ? strchr(g_root, ':') + 1 : g_root);
+            strncpy(name, base, sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+            if (g_host.ask_string && g_host.ask_string("Push", "Dieses Repository wurde noch nie gepusht.\n"
+                                                       "Name des Repositorys auf dem Server\n"
+                                                       "(wird angelegt, wenn es fehlt):", name, sizeof(name))
+                && name[0]) {
+                aide_vcs_result_free(&r);
+                set_enabled(1);
+                run_one(AIDE_VCS_PUSH, name);
+                return;
+            }
+        }
         show_messages(&r);
         if (!ok) {
             const char *e = aide_vcs_result_error(&r);
@@ -429,7 +446,11 @@ static void job_done(void)
                 AideStrList found;
                 aide_strlist_init(&found);
                 aide_fs_list_files(g_run.cloneTarget, ".aproj", &found);
-                if (found.count > 0) g_host.open_project(found.items[0]);
+                if (found.count > 0) {   /* names, not paths (aide_fs.h) */
+                    char *aproj = aide_fs_join(g_run.cloneTarget, found.items[0]);
+                    if (aproj) g_host.open_project(aproj);
+                    free(aproj);
+                }
                 else MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
                                  "Geklont nach %s.\nDort liegt noch keine .aproj.", g_run.cloneTarget);
                 aide_strlist_free(&found);

@@ -108,7 +108,7 @@ int aide_vcs_job_build(AideVcsJob *job, AideVcsOp op, const char *program,
     case AIDE_VCS_SWITCH:     cmd = "switch"; wantArgs = 1; break;
     case AIDE_VCS_MERGE:      cmd = "merge"; wantArgs = 1; break;
     case AIDE_VCS_CHECKOUT:   cmd = "checkout"; break;
-    case AIDE_VCS_PUSH:       cmd = "push"; break;
+    case AIDE_VCS_PUSH:       cmd = "push"; wantArgs = items && items->count > 0; break;
     case AIDE_VCS_PULL:       cmd = "pull"; wantArgs = items && items->count > 0; break;
     case AIDE_VCS_CLONE:      cmd = "clone"; wantArgs = 1; break;
     }
@@ -361,6 +361,14 @@ int aide_vcs_present(const char *projectRoot)
     int ok = p && aide_fs_exists(p);
     free(p);
     return ok;
+}
+
+int aide_vcs_needs_remote_name(const AideVcsResult *r)
+{
+    size_t i;
+    for (i = 0; r && i < r->messageCount; i++)
+        if (strstr(r->messages[i].text, "no remote repository configured")) return 1;
+    return 0;
 }
 
 int aide_vcs_has_theirs(const AideVcsResult *status)

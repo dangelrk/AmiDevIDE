@@ -69,8 +69,9 @@ typedef struct AideVcsJob {
  * for the job's files (e.g. "T:aide-vcs" or "/tmp/aide-vcs-123"; the
  * module appends ".pc", ".args", ".msg"). `items`: paths (relative to the
  * project, local codeset) for add/unstage; the branch name for
- * branch/switch/merge/pull (optional for pull); for clone the repository
- * name and the target directory. `message` for commit. `flag`: commit
+ * branch/switch/merge/pull (optional for pull); the repository name on
+ * the server for push (optional: amivcs remembers it after the first push
+ * or a clone); for clone the repository name and the target directory. `message` for commit. `flag`: commit
  * -a. `logLimit` for log (0 = all). Writes the args/message files.
  * Returns 1, or 0 if a file could not be written. */
 int  aide_vcs_job_build(AideVcsJob *job, AideVcsOp op, const char *program,
@@ -151,6 +152,11 @@ int  aide_vcs_present(const char *projectRoot);
 void aide_vcs_ignore_missing(const AideProject *p, const char *existingText, AideStrList *out);
 /* Appends lines to <projectRoot>/.amivcsignore. Returns 1 on success. */
 int  aide_vcs_ignore_append(const char *projectRoot, const AideStrList *lines);
+
+/* 1 if a failed push only lacked the repository name on the server (a
+ * repository created locally, never pushed or cloned): ask for it and
+ * push again with the name as the item. */
+int  aide_vcs_needs_remote_name(const AideVcsResult *r);
 
 /* 1 if a status result lists `.theirs` copies (an unresolved merge) */
 int  aide_vcs_has_theirs(const AideVcsResult *status);

@@ -300,6 +300,15 @@ static int ask_directory(const char *title, char *out, size_t outsz)
     if (ok) {
         strncpy(out, (char *)filereq->Dir, outsz - 1);
         out[outsz - 1] = '\0';
+        /* an empty drawer is reqtools' way of saying "the current
+         * directory" -- callers need a real path (a clone's parent, a
+         * new project's root), so ask DOS for its full name */
+        if (!out[0]) {
+            BPTR lock = Lock((STRPTR)"", ACCESS_READ);
+            if (!lock || !NameFromLock(lock, (STRPTR)out, (LONG)outsz)) out[0] = '\0';
+            if (lock) UnLock(lock);
+            if (!out[0]) ok = 0;
+        }
     }
 
     rtFreeRequest(filereq);

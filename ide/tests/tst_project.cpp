@@ -4,6 +4,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <clocale>
+
 // Project.cpp is now a thin adapter over core/src/aide_project.c (JSON via
 // parson). No prior test existed
 // for this class; this one guards the .aproj round trip and the
@@ -20,6 +22,7 @@ private slots:
     void languageAndOutputKindRoundTrip();
     void legacyProjectStaysC();
     void editorStateInUserFile();
+    void loadsUnderGermanLocale();
 };
 
 void TstProject::minimalCDefaults()
@@ -177,6 +180,42 @@ void TstProject::unknownKeysPreserved()
     const QString text = QString::fromUtf8(saved.readAll());
     QVERIFY(text.contains(QStringLiteral("futureFeature")));
     QVERIFY(text.contains(QStringLiteral("someKey")));
+}
+
+// A QApplication sets the user's locale; under de_DE strtod() wants ','
+// and parson's number parsing failed, so no project with a number in it
+// could be opened (vendor/parson.c, "AmigaIDE:").
+void TstProject::loadsUnderGermanLocale()
+{
+    const char *names[] = { "de_DE.UTF-8", "de_DE.utf8", "de_DE", nullptr };
+    bool set = false;
+    for (int i = 0; names[i] && !set; ++i)
+        set = std::setlocale(LC_ALL, names[i]) != nullptr;
+    if (!set)
+        QSKIP("no German locale installed");
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("demo.aproj"));
+    QFile file(path);
+    QVERIFY(file.open(QFile::WriteOnly));
+    file.write(R"({ "format": "amigaide-project", "version": 1, "name": "demo",
+        "ratio": 0.25, "sources": [ { "path": "src/main.c" } ] })");
+    file.close();
+
+    Project p;
+    const bool loaded = p.load(path);
+    const QString saved = dir.filePath(QStringLiteral("demo2.aproj"));
+    const bool wrote = loaded && p.save(saved);
+    QFile out(saved);
+    const bool opened = wrote && out.open(QFile::ReadOnly);
+    const QString text = opened ? QString::fromUtf8(out.readAll()) : QString();
+    std::setlocale(LC_ALL, "C");
+    QVERIFY(loaded);
+    QCOMPARE(p.name, QStringLiteral("demo"));
+    QVERIFY(wrote && opened);
+    QVERIFY(text.contains(QStringLiteral("0.25")));
+    QVERIFY(text.contains(QStringLiteral("\"version\": 1")) || text.contains(QStringLiteral("\"version\":1")));
 }
 
 QTEST_APPLESS_MAIN(TstProject)

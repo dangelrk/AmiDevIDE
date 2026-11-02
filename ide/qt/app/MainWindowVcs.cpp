@@ -331,6 +331,18 @@ void MainWindow::vcsOnFinished(int opInt, VcsResultPtr res)
         break;
     }
 
+    // a first push needs the repository name on the server
+    if (op == AIDE_VCS_PUSH && !res->ok() && aide_vcs_needs_remote_name(&res->r)) {
+        bool ok = false;
+        const QString name = QInputDialog::getText(
+            this, opName(op), tr("This repository has not been pushed yet. Name of the repository "
+                                 "on the server (it is created if it does not exist):"),
+            QLineEdit::Normal, m_project ? m_project->name : QString(), &ok).trimmed();
+        if (ok && !name.isEmpty())
+            vcsStartWrite(AIDE_VCS_PUSH, { name });
+        return;
+    }
+
     // writing jobs
     vcsReport(res, opName(op), true);
     if (op == AIDE_VCS_CLONE) {

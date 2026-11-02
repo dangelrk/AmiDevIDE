@@ -52,7 +52,11 @@ char *aide_fs_join(const char *dir, const char *relative)
         return aide_strdup(relative);
     aide_str_init(&s);
     aide_str_append(&s, dir);
-    aide_str_append_char(&s, '/');
+    /* no '/' after a volume or assign ("RAM Disk:" + "x" is "RAM Disk:x";
+     * "RAM Disk:/x" would mean the parent of the root) or after one that
+     * is already there */
+    if (dir[0] && dir[strlen(dir) - 1] != ':' && dir[strlen(dir) - 1] != '/')
+        aide_str_append_char(&s, '/');
     aide_str_append(&s, relative);
     return aide_str_take(&s);
 }

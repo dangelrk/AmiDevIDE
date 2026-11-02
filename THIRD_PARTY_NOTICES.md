@@ -8,7 +8,7 @@ someone else.
 
 | Component | Where | License |
 |---|---|---|
-| Parson 1.1.0, © 2012–2020 Krzysztof Gabis | `ide/core/vendor/parson.{c,h}` | MIT (header preserved in the files) |
+| Parson 1.1.0, © 2012–2020 Krzysztof Gabis | `ide/core/vendor/parson.{c,h}` | MIT (header preserved in the files); locale-independent number parsing/printing added, marked "AmigaIDE:" |
 
 `ide/core/src/aide_basic_keywords.c` is generated from the keyword
 dictionaries shipped with ACE BASIC (`IDE/CubicIDE-ACE/add-ons/ace/syntax/`).
