@@ -155,6 +155,22 @@ int  aide_vcs_ignore_append(const char *projectRoot, const AideStrList *lines);
 /* 1 if a status result lists `.theirs` copies (an unresolved merge) */
 int  aide_vcs_has_theirs(const AideVcsResult *status);
 
+/* Branch graph for a log result (commit records, newest first), same
+ * lane layout as AmiVCS's own GUI: per row the commit's lane, the lanes
+ * of the lines down to its parents, and every lane passing through. */
+#define AIDE_VCS_MAX_PARENTS 8
+typedef struct AideVcsGraphRow {
+    int lane;
+    int parentLanes[AIDE_VCS_MAX_PARENTS];
+    int nParentLanes;
+    int *activeLanes;     /* sorted ascending, includes `lane` */
+    int nActiveLanes;
+} AideVcsGraphRow;
+/* rows: commitCount entries (malloc'd); maxLanes: columns to draw.
+ * Returns 1, or 0 when out of memory. */
+int  aide_vcs_graph(const AideVcsResult *log, AideVcsGraphRow **rows, int *maxLanes);
+void aide_vcs_graph_free(AideVcsGraphRow *rows, size_t n);
+
 /* Escapes one field the way amivcs reads --args-from lines. malloc'd. */
 char *aide_vcs_escape(const char *text);
 

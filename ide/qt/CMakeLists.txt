@@ -20,6 +20,13 @@ set(AMIGAIDE_CORE_SOURCES
     app/AppSettings.cpp
     app/MainWindow.h
     app/MainWindow.cpp
+    app/MainWindowVcs.cpp
+    vcs/VcsRunner.cpp
+    vcs/VcsRunner.h
+    vcs/VcsDock.cpp
+    vcs/VcsDock.h
+    vcs/HistoryDock.cpp
+    vcs/HistoryDock.h
     app/SettingsDialog.h
     app/SettingsDialog.cpp
 

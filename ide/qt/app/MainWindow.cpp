@@ -97,6 +97,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     createDocks();
     createActions();
+    createVcs();
     updateWindowTitle();
 
     connect(m_editorTabs, &EditorTabWidget::gotoDefinitionRequested, this, &MainWindow::onGotoDefinitionRequested);
@@ -782,6 +783,10 @@ void MainWindow::buildProject()
         statusBar()->showMessage(tr("No project open."), 3000);
         return;
     }
+    if (m_vcs && m_vcs->writing()) {
+        statusBar()->showMessage(tr("Version control is changing the project -- try again in a moment."), 3000);
+        return;
+    }
     if (m_buildManager->isRunning()) {
         statusBar()->showMessage(tr("Build already in progress."), 3000);
         return;
@@ -807,6 +812,10 @@ void MainWindow::runProject()
 {
     if (!m_project) {
         statusBar()->showMessage(tr("No project open."), 3000);
+        return;
+    }
+    if (m_vcs && m_vcs->writing()) {
+        statusBar()->showMessage(tr("Version control is changing the project -- try again in a moment."), 3000);
         return;
     }
     if (m_buildManager->isRunning()) {
@@ -854,6 +863,7 @@ void MainWindow::onBuildFinished(bool success, bool stopped)
     m_building = false;
     updateWindowTitle();
     setBuildActionsEnabled(true);
+    vcsRefreshSoon();
 
     if (stopped) {
         m_runAfterBuild = false;
@@ -981,6 +991,7 @@ void MainWindow::openProjectAt(const QString &path)
     }
 
     statusBar()->showMessage(tr("Opened project \"%1\"").arg(m_project->name), 3000);
+    vcsProjectChanged();
 
     const QStringList missing = SdkRegistry::instance().missingIds(m_project->sdks.selected);
     if (!missing.isEmpty()) {

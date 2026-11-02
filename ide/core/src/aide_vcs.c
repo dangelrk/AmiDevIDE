@@ -447,3 +447,116 @@ int aide_vcs_ignore_append(const char *projectRoot, const AideStrList *lines)
     free(path);
     return ok;
 }
+
+/* ------------------------------------------------------------------ */
+/* graph lanes (as libcloudvcsgui/graph.c, on oid strings)              */
+
+typedef struct { char **waiting; int n, cap; } Lanes;
+
+static int lane_find(const Lanes *l, const char *oid)
+{
+    int i;
+    for (i = 0; i < l->n; i++)
+        if (l->waiting[i] && strcmp(l->waiting[i], oid) == 0) return i;
+    return -1;
+}
+
+static int lane_alloc(Lanes *l)
+{
+    int i;
+    for (i = 0; i < l->n; i++) if (!l->waiting[i]) return i;
+    if (l->n == l->cap) {
+        int nc = l->cap ? l->cap * 2 : 8;
+        char **w = (char **)realloc(l->waiting, sizeof(char *) * (size_t)nc);
+        if (!w) return -1;
+        l->waiting = w;
+        l->cap = nc;
+    }
+    l->waiting[l->n] = NULL;
+    return l->n++;
+}
+
+/* parent i of a comma list into buf; 0 if there is none */
+static int nth_parent(const char *list, int i, char *buf, size_t sz)
+{
+    const char *p = list;
+    while (i-- > 0) {
+        p = strchr(p, ',');
+        if (!p) return 0;
+        p++;
+    }
+    if (!*p) return 0;
+    {
+        const char *e = strchr(p, ',');
+        size_t n = e ? (size_t)(e - p) : strlen(p);
+        if (n >= sz) n = sz - 1;
+        memcpy(buf, p, n);
+        buf[n] = '\0';
+    }
+    return 1;
+}
+
+int aide_vcs_graph(const AideVcsResult *log, AideVcsGraphRow **rowsOut, int *maxLanes)
+{
+    Lanes lanes;
+    AideVcsGraphRow *rows;
+    size_t i;
+    int j;
+
+    *rowsOut = NULL;
+    *maxLanes = 0;
+    if (log->commitCount == 0) return 1;
+    rows = (AideVcsGraphRow *)calloc(log->commitCount, sizeof(AideVcsGraphRow));
+    if (!rows) return 0;
+    memset(&lanes, 0, sizeof(lanes));
+
+    for (i = 0; i < log->commitCount; i++) {
+        const AideVcsCommit *c = &log->commits[i];
+        AideVcsGraphRow *row = &rows[i];
+        char parent[64];
+        int primary = lane_find(&lanes, c->oid), cnt = 0, k;
+
+        if (primary < 0) primary = lane_alloc(&lanes);
+        if (primary < 0) break;
+        /* two tips converging on this commit: fold the extra lanes */
+        for (j = 0; j < lanes.n; j++)
+            if (j != primary && lanes.waiting[j] && strcmp(lanes.waiting[j], c->oid) == 0) {
+                free(lanes.waiting[j]);
+                lanes.waiting[j] = NULL;
+            }
+        for (j = 0; j < lanes.n; j++) if (j == primary || lanes.waiting[j]) cnt++;
+        row->activeLanes = (int *)malloc(sizeof(int) * (size_t)(cnt ? cnt : 1));
+        if (row->activeLanes)
+            for (j = 0; j < lanes.n; j++)
+                if (j == primary || lanes.waiting[j]) row->activeLanes[row->nActiveLanes++] = j;
+        row->lane = primary;
+
+        free(lanes.waiting[primary]);
+        lanes.waiting[primary] = NULL;
+        if (nth_parent(c->parents, 0, parent, sizeof(parent))) {
+            lanes.waiting[primary] = aide_strdup(parent);
+            row->parentLanes[row->nParentLanes++] = primary;
+            for (k = 1; k < AIDE_VCS_MAX_PARENTS && nth_parent(c->parents, k, parent, sizeof(parent)); k++) {
+                int pl = lane_find(&lanes, parent);
+                if (pl < 0) {
+                    pl = lane_alloc(&lanes);
+                    if (pl < 0) break;
+                    lanes.waiting[pl] = aide_strdup(parent);
+                }
+                row->parentLanes[row->nParentLanes++] = pl;
+            }
+        }
+        if (lanes.n > *maxLanes) *maxLanes = lanes.n;
+    }
+    for (j = 0; j < lanes.n; j++) free(lanes.waiting[j]);
+    free(lanes.waiting);
+    *rowsOut = rows;
+    return 1;
+}
+
+void aide_vcs_graph_free(AideVcsGraphRow *rows, size_t n)
+{
+    size_t i;
+    for (i = 0; rows && i < n; i++) free(rows[i].activeLanes);
+    free(rows);
+}

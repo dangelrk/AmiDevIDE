@@ -73,6 +73,13 @@ QStringList AppSettings::migrateStaleSettings()
 
     const QString root = toolchainRoot();
 
+    const QString amivcs = s.value(QStringLiteral("vcs/amivcs")).toString();
+    if (!amivcs.isEmpty() && !QFileInfo(amivcs).isExecutable()) {
+        s.remove(QStringLiteral("vcs/amivcs"));
+        changes << QObject::tr("amivcs not found at %1 -- version control looks for it again")
+                       .arg(amivcs);
+    }
+
     // Paths derived from the old root are stale for the same reason, and a
     // stale shared directory is worse than a missing one: Run would silently
     // copy the binary somewhere the emulator does not mount.
@@ -129,6 +136,27 @@ void AppSettings::setMakeProgram(const QString &path)
 {
     QSettings s;
     s.setValue(QStringLiteral("toolchain/make"), path);
+}
+
+QString AppSettings::amivcsProgram() const
+{
+    QSettings s;
+    const QString stored = s.value(QStringLiteral("vcs/amivcs")).toString();
+    if (!stored.isEmpty())
+        return stored;
+    const QString inToolchain = QDir(toolchainRoot()).filePath(QStringLiteral("bin/amivcs"));
+    if (QFileInfo(inToolchain).isExecutable())
+        return inToolchain;
+    return QStandardPaths::findExecutable(QStringLiteral("amivcs"));
+}
+
+void AppSettings::setAmivcsProgram(const QString &path)
+{
+    QSettings s;
+    if (path.isEmpty())
+        s.remove(QStringLiteral("vcs/amivcs"));
+    else
+        s.setValue(QStringLiteral("vcs/amivcs"), path);
 }
 
 QString AppSettings::fsUaeBinary() const

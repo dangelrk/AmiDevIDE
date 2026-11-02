@@ -83,6 +83,7 @@ void ProjectTreeDock::addLeaf(QTreeWidgetItem *groupRoot, QHash<QString, QTreeWi
     QTreeWidgetItem *parent = folderItem(groupRoot, cache, dir);
     auto *item = new QTreeWidgetItem(parent, { info.fileName() });
     item->setData(0, Qt::UserRole, absPath);
+    item->setData(0, Qt::UserRole + 1, info.fileName());
     applyItemStyle(item);
 }
 
@@ -109,6 +110,19 @@ void ProjectTreeDock::applyItemStyle(QTreeWidgetItem *item)
     font.setBold(path == m_activeFile);
     font.setItalic(m_modifiedFiles.contains(path));
     item->setFont(0, font);
+
+    const QString name = item->data(0, Qt::UserRole + 1).toString();
+    const QChar state = m_vcsStates.value(path);
+    if (state.isNull()) {
+        item->setText(0, name);
+        item->setToolTip(0, QString());
+    } else {
+        item->setText(0, name + QStringLiteral("  ") + state);
+        item->setToolTip(0, state == QLatin1Char('S') ? tr("Staged for commit")
+                          : state == QLatin1Char('N') ? tr("New, not under version control yet")
+                          : state == QLatin1Char('D') ? tr("Deleted")
+                                                      : tr("Modified since the last commit"));
+    }
 }
 
 void ProjectTreeDock::setActiveFile(const QString &absPath)
@@ -135,6 +149,18 @@ void ProjectTreeDock::setFileModified(const QString &absPath, bool modified)
         m_modifiedFiles.remove(absPath);
     for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
         applyItemStyle(findItemByPath(m_tree->topLevelItem(i), absPath));
+}
+
+void ProjectTreeDock::setVcsStates(const QHash<QString, QChar> &states)
+{
+    const QHash<QString, QChar> old = m_vcsStates;
+    m_vcsStates = states;
+    QSet<QString> touched;
+    for (auto it = old.begin(); it != old.end(); ++it) touched.insert(it.key());
+    for (auto it = states.begin(); it != states.end(); ++it) touched.insert(it.key());
+    for (const QString &p : touched)
+        for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
+            applyItemStyle(findItemByPath(m_tree->topLevelItem(i), p));
 }
 
 void ProjectTreeDock::clearProject()

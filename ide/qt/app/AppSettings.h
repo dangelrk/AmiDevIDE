@@ -36,6 +36,12 @@ public:
     QString makeProgram() const;
     void setMakeProgram(const QString &path);
 
+    /* AmiVCS (optional tool, like vc or ace): the amivcs program. Stored
+     * as an absolute path -- a Finder-launched app has no shell PATH.
+     * Default: <toolchain>/bin/amivcs, else amivcs from PATH, else "". */
+    QString amivcsProgram() const;
+    void setAmivcsProgram(const QString &path);
+
     QString fsUaeBinary() const;
     void setFsUaeBinary(const QString &path);
 

@@ -53,6 +53,9 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     toolchainForm->addRow(tr("make program:"),
                            pathRow(toolchainGroup, m_makeProgramEdit, settings.makeProgram(),
                                    this, SLOT(browseMakeProgram())));
+    toolchainForm->addRow(tr("amivcs program:"),
+                           pathRow(toolchainGroup, m_amivcsEdit, settings.amivcsProgram(),
+                                   this, SLOT(browseAmivcs())));
     layout->addWidget(toolchainGroup);
 
     auto *runGroup = new QGroupBox(tr("Run (FS-UAE)"), this);
@@ -160,6 +163,13 @@ void SettingsDialog::browseToolchainRoot()
         m_toolchainRootEdit->setText(dir);
 }
 
+void SettingsDialog::browseAmivcs()
+{
+    const QString path = QFileDialog::getOpenFileName(this, tr("Select amivcs Program"), m_amivcsEdit->text());
+    if (!path.isEmpty())
+        m_amivcsEdit->setText(path);
+}
+
 void SettingsDialog::browseMakeProgram()
 {
     const QString path = QFileDialog::getOpenFileName(this, tr("Select make Program"), m_makeProgramEdit->text());
@@ -248,6 +258,7 @@ void SettingsDialog::accept()
     AppSettings &settings = AppSettings::instance();
     settings.setToolchainRoot(m_toolchainRootEdit->text());
     settings.setMakeProgram(m_makeProgramEdit->text());
+    settings.setAmivcsProgram(m_amivcsEdit->text().trimmed());
     settings.setFsUaeBinary(m_fsUaeBinaryEdit->text());
     settings.setFsUaeConfig(m_fsUaeConfigEdit->text());
     settings.setSharedDir(m_sharedDirEdit->text());

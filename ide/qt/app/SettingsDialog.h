@@ -19,6 +19,7 @@ public:
 private slots:
     void browseToolchainRoot();
     void browseMakeProgram();
+    void browseAmivcs();
     void browseFsUaeBinary();
     void browseFsUaeConfig();
     void browseSharedDir();
@@ -33,6 +34,7 @@ private:
 
     QLineEdit *m_toolchainRootEdit;
     QLineEdit *m_makeProgramEdit;
+    QLineEdit *m_amivcsEdit = nullptr;
     QLineEdit *m_fsUaeBinaryEdit;
     QLineEdit *m_fsUaeConfigEdit;
     QLineEdit *m_sharedDirEdit;

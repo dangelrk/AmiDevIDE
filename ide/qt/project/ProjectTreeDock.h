@@ -34,6 +34,10 @@ public:
     // tree previously never reflected either state at all.
     void setActiveFile(const QString &absPath);
     void setFileModified(const QString &absPath, bool modified);
+    // Version control state per file (absolute path -> 'S' staged, 'M'
+    // modified, 'N' new, 'D' deleted); shown as a marker after the name.
+    // Files not in the map are clean. Replaces the previous map.
+    void setVcsStates(const QHash<QString, QChar> &states);
 
 signals:
     void fileActivated(const QString &path);
@@ -66,4 +70,5 @@ private:
     QTreeWidget *m_tree;
     QString m_activeFile;
     QSet<QString> m_modifiedFiles;
+    QHash<QString, QChar> m_vcsStates;
 };

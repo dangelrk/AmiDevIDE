@@ -13,7 +13,10 @@
 #include <QList>
 #include <QMainWindow>
 #include <QThread>
+#include <QTimer>
 #include <memory>
+
+#include "vcs/VcsRunner.h"
 
 class EditorTabWidget;
 class EditorWidget;
@@ -29,6 +32,8 @@ class QMenu;
 class BuildManager;
 class EmulatorRunner;
 class SymbolIndexer;
+class VcsDock;
+class HistoryDock;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -38,6 +43,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 private slots:
     void newFile();
@@ -110,6 +116,31 @@ private:
     void saveEditorsBeforeBuild();
     void setBuildActionsEnabled(bool enabled);
 
+    // ---- version control (MainWindowVcs.cpp) ----
+    void createVcs();                 // docks, menu, runner
+    void vcsProjectChanged();         // after a project opened/closed
+    void vcsRefresh(bool withLog = false);
+    void vcsRefreshSoon();            // debounced, after saves/focus
+    bool vcsStartWrite(AideVcsOp op, const QStringList &items = {}, const QString &message = {},
+                       bool flag = false, const QString &workDir = {});
+    bool vcsPrepareTouch(const QString &what);  // save editors + project, ask
+    void vcsSetLocked(bool locked);
+    void vcsOnToolChecked(bool available, const QString &problem);
+    void vcsOnStarted(int op);
+    void vcsOnFinished(int op, VcsResultPtr result);
+    void vcsApplyStatus(const VcsResultPtr &status);
+    void vcsReport(const VcsResultPtr &result, const QString &what, bool requester);
+    void vcsCheckIgnore();
+    void vcsInit();
+    void vcsCommit(const QString &message, bool all);
+    void vcsChooseBranch(AideVcsOp op);
+    void vcsNewBranch();
+    void vcsPull();
+    void vcsPush();
+    void vcsClone();
+    void vcsReloadAfterTouch();
+    bool vcsTreeDirty() const;
+
     EditorTabWidget *m_editorTabs;
     ProjectTreeDock *m_projectTree;
     SymbolsDock *m_symbolsDock;
@@ -148,4 +179,19 @@ private:
     QStringList m_completionWords;
     // Filled by AppSettings::migrateStaleSettings() at startup, shown once.
     QStringList m_settingsMigrations;
+
+    VcsRunner *m_vcs = nullptr;
+    VcsDock *m_vcsDock = nullptr;
+    HistoryDock *m_historyDock = nullptr;
+    QDockWidget *m_vcsDockWidget = nullptr;
+    QDockWidget *m_historyDockWidget = nullptr;
+    QList<QAction *> m_vcsRepoActions;   // need a repository
+    QAction *m_vcsInitAct = nullptr;
+    QAction *m_vcsCloneAct = nullptr;
+    QAction *m_vcsCancelAct = nullptr;
+    VcsResultPtr m_vcsStatus;            // the newest status
+    QTimer m_vcsRefreshTimer;
+    AideVcsOp m_vcsPendingBranchOp = AIDE_VCS_SWITCH;
+    QString m_vcsCloneTarget;            // directory a running clone writes
+    bool m_vcsLocked = false;
 };
