@@ -83,7 +83,7 @@ CORE_OBJECTS = $(addprefix $(OBJDIR)/core_,$(addsuffix .o,$(basename $(notdir $(
 AMIGA_OBJECTS = $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/mui_stubs.o \
     $(OBJDIR)/aide_regex_amiga.o $(OBJDIR)/aide_fs_amiga.o \
     $(OBJDIR)/symbolindex.o $(OBJDIR)/helpwindow.o $(OBJDIR)/disasmwindow.o \
-    $(OBJDIR)/settingswindow.o
+    $(OBJDIR)/settingswindow.o $(OBJDIR)/vcspanel.o
 
 TARGET_BIN = $(BINDIR)/amigaide
 
@@ -118,6 +118,9 @@ $(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c $(BUILDSTAMP)
 
 $(OBJDIR)/prefswindow.o: $(AMIGA_SRC)/app/prefswindow.c
 	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/prefswindow.c -o $(OBJDIR)/prefswindow.o
+
+$(OBJDIR)/vcspanel.o: $(AMIGA_SRC)/vcs/vcspanel.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/vcs/vcspanel.c -o $(OBJDIR)/vcspanel.o
 
 $(OBJDIR)/mui_stubs.o: $(AMIGA_SRC)/mui/mui_stubs.c
 	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/mui/mui_stubs.c -o $(OBJDIR)/mui_stubs.o

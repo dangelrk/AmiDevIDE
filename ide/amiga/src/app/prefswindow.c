@@ -20,10 +20,11 @@
 #define ENV_MAKE       "AmigaIDE/make"
 #define ENV_SDKROOT    "AmigaIDE/sdkroot"
 #define ENV_VBCCROOT   "AmigaIDE/vbccroot"
+#define ENV_AMIVCS     "AmigaIDE/amivcs"
 
 static Object *g_app;
 static Object *g_window;
-static Object *g_makeStr, *g_sdkRootStr, *g_toolchainRootStr;
+static Object *g_makeStr, *g_sdkRootStr, *g_toolchainRootStr, *g_amivcsStr;
 static Object *g_okBtn, *g_cancelBtn;
 
 /* The persisted values themselves -- not per-project, so these live
@@ -33,6 +34,7 @@ static Object *g_okBtn, *g_cancelBtn;
 static char g_makeProgram[64]   = "make";
 static char g_sdkRoot[64]       = "SDK:";
 static char g_toolchainRoot[64] = "vbcc:";
+static char g_amivcsProgram[128] = "amivcs";
 
 static void load_var(const char *name, char *out, size_t outsz, const char *fallback)
 {
@@ -54,6 +56,7 @@ void prefswindow_load(void)
     load_var(ENV_MAKE, g_makeProgram, sizeof(g_makeProgram), "make");
     load_var(ENV_SDKROOT, g_sdkRoot, sizeof(g_sdkRoot), "SDK:");
     load_var(ENV_VBCCROOT, g_toolchainRoot, sizeof(g_toolchainRoot), "vbcc:");
+    load_var(ENV_AMIVCS, g_amivcsProgram, sizeof(g_amivcsProgram), "amivcs");
 }
 
 void prefswindow_init(Object *app)
@@ -63,6 +66,7 @@ void prefswindow_init(Object *app)
     g_makeStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_makeProgram), End;
     g_sdkRootStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_sdkRoot), End;
     g_toolchainRootStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_toolchainRoot), End;
+    g_amivcsStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_amivcsProgram), End;
     g_okBtn = SimpleButton("_OK");
     g_cancelBtn = SimpleButton("_Abbrechen");
 
@@ -75,6 +79,7 @@ void prefswindow_init(Object *app)
                 Child, Label("Make-Programm:"),  Child, g_makeStr,
                 Child, Label("SDK-Root:"),        Child, g_sdkRootStr,
                 Child, Label("Toolchain-Root:"),  Child, g_toolchainRootStr,
+                Child, Label("AmiVCS-Programm:"), Child, g_amivcsStr,
             End,
             Child, HGroup,
                 Child, g_okBtn,
@@ -103,6 +108,7 @@ void prefswindow_show(void)
     set(g_makeStr, MUIA_String_Contents, g_makeProgram);
     set(g_sdkRootStr, MUIA_String_Contents, g_sdkRoot);
     set(g_toolchainRootStr, MUIA_String_Contents, g_toolchainRoot);
+    set(g_amivcsStr, MUIA_String_Contents, g_amivcsProgram);
     set(g_window, MUIA_Window_Open, TRUE);
 }
 
@@ -119,6 +125,14 @@ int prefswindow_handle_id(long id)
         sdkRoot = aide_str_trim_dup(v ? (char *)v : "");
         get(g_toolchainRootStr, MUIA_String_Contents, &v);
         toolchainRoot = aide_str_trim_dup(v ? (char *)v : "");
+        get(g_amivcsStr, MUIA_String_Contents, &v);
+        {
+            /* optional tool: empty means the default "amivcs" */
+            char *amivcs = aide_str_trim_dup(v ? (char *)v : "");
+            strncpy(g_amivcsProgram, amivcs[0] ? amivcs : "amivcs", sizeof(g_amivcsProgram) - 1);
+            g_amivcsProgram[sizeof(g_amivcsProgram) - 1] = '\0';
+            free(amivcs);
+        }
 
         if (!make[0] || !sdkRoot[0] || !toolchainRoot[0]) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
@@ -138,6 +152,7 @@ int prefswindow_handle_id(long id)
         SetVar((CONST_STRPTR)ENV_MAKE, (CONST_STRPTR)g_makeProgram, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
         SetVar((CONST_STRPTR)ENV_SDKROOT, (CONST_STRPTR)g_sdkRoot, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
         SetVar((CONST_STRPTR)ENV_VBCCROOT, (CONST_STRPTR)g_toolchainRoot, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+        SetVar((CONST_STRPTR)ENV_AMIVCS, (CONST_STRPTR)g_amivcsProgram, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
 
         set(g_window, MUIA_Window_Open, FALSE);
         return 2;
@@ -153,3 +168,4 @@ int prefswindow_handle_id(long id)
 const char *prefs_make_program(void) { return g_makeProgram; }
 const char *prefs_sdk_root(void) { return g_sdkRoot; }
 const char *prefs_toolchain_root(void) { return g_toolchainRoot; }
+const char *prefs_amivcs_program(void) { return g_amivcsProgram; }

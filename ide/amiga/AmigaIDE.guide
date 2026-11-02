@@ -20,6 +20,7 @@
   @{" Navigation           " link Navigation}  Definition, Referenzen, Suche
   @{" Hilfe und Autodocs   " link Hilfe}  F1, Shift+F1, F2, Hilfefenster
   @{" Disassembler         " link Disassembler}  Hunk-Dateien ansehen
+  @{" Versionsverwaltung   " link Versionen}  AmiVCS: Commit, Branches, Verlauf
   @{" ACE BASIC            " link Basic}  BASIC-Projekte auf dem Amiga
   @{" Tastenkürzel         " link Tasten}  Alle Tasten auf einen Blick
   @{" Bekannte Grenzen     " link Grenzen}  Was (noch) nicht geht
@@ -566,6 +567,63 @@ im Zielverzeichnis des Projekts. Alle CODE-Hunks werden als
 
 in einem eigenen Fenster gezeigt. "Speichern..." schreibt die Liste
 in eine Datei.
+
+@endnode
+@node Versionen "Versionsverwaltung"
+
+@{b}Versionsverwaltung@{ub}
+
+AmigaIDE kann Projekte mit AmiVCS versionieren. AmiVCS ist ein eigenes
+Werkzeug wie vbcc oder ACE: die IDE ruft das Programm amivcs auf und
+zeigt das Ergebnis an. Ohne amivcs fehlt nur dieser Teil.
+
+@{u}Einrichten@{uu}
+
+  amivcs ab Version 0.6 installieren (Archiv AmiVCS). Liegt es nicht
+  in C:, den Pfad unter Projekt > Einstellungen > AmiVCS-Programm
+  eintragen. Server, Benutzer, Passwort, Autorname und Zeichensatz
+  kommen aus der AmiVCS-Konfiguration (ENV:amivcs.cfg, AMIVCSPrefs);
+  die IDE speichert keine Passwörter.
+
+@{u}Die Seite "Versionen" (links)@{uu}
+
+  Branch       der aktuelle Branch
+  Aktualisieren  Status und Verlauf neu lesen
+  Anlegen      macht das Projektverzeichnis zum Repository
+  Geändert     neue, geänderte und gelöschte Dateien
+  Bereitstellen  die markierten Dateien für den Commit vormerken
+  Alle         alles vormerken
+  Bereit       was der nächste Commit enthält
+  Zurücknehmen  Vormerkung zurücknehmen (die Datei bleibt)
+  Commit       Nachricht eingeben, "alle" merkt vorher alles vor
+
+Die Seite "Verlauf" (unten) zeigt die Commits aller Branches mit
+Zeit in UTC, Autor, Branch-Namen und der ersten Zeile der Nachricht.
+
+@{u}Menü "Versionen"@{uu}
+
+  Neuer Branch, Branch wechseln, Branch zusammenführen,
+  Gelöschte Dateien zurückholen, Pull, Push, Clone.
+
+Wechseln, Zusammenführen, Zurückholen und Pull ändern Dateien. Die
+IDE fragt vorher, speichert die geöffnete Datei und das Projekt und
+lädt beides danach neu. Während amivcs Dateien schreibt, sind Editor
+und Build gesperrt. AmiVCS lehnt Wechseln und Zusammenführen ab,
+solange es nicht committete Änderungen gibt; neue, noch nicht
+hinzugefügte Dateien stören nicht.
+
+Beim Anlegen und beim Öffnen eines Repositorys bietet die IDE an,
+build/, das Zielverzeichnis und *.aproj.user in .amivcsignore
+einzutragen. In <projekt>.aproj.user merkt sich die IDE persönliche
+Dinge, die nicht ins Repository gehören.
+
+Konflikte beim Zusammenführen stehen im Register "Ausgabe"; die
+Fassung des anderen Branches liegt als <datei>.theirs daneben. Erst
+die Konflikte lösen und die .theirs-Dateien löschen, dann committen.
+
+Clone, Push und Pull brauchen TCP/IP, AmiSSL und einen AmiVCS-Server.
+Ein Push läuft im Hintergrund; das Ergebnis erscheint im Register
+"Ausgabe".
 
 @endnode
 @node Basic "ACE BASIC"

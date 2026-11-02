@@ -150,6 +150,16 @@ layout. Text the Amiga shows (MUI strings, the guide, installer, ReadMe)
 is ISO-8859-1: in C sources write umlauts as octal escapes (`\344`),
 never as UTF-8 bytes.
 
+**AmiVCS is an external tool, never linked.** Version control runs the
+`amivcs` program for every operation (like vc or ace). `ide/core/src/aide_vcs.c`
+builds the jobs (arguments in files: `--args-from`, `commit -F`, so no
+AmigaDOS quoting) and parses `--porcelain-out` (format 1); Qt runs them in
+`qt/vcs/VcsRunner`, MUI in `amiga/src/vcs/vcspanel.c` (SystemTagList with
+NP_CurrentDir, result file polled). The IDE never converts names: amivcs
+speaks the local codeset. `tst_vcs`/`tst_vcsrunner` run against a real
+amivcs when `AIDE_TEST_AMIVCS` points to one. Editor state lives in
+`<project>.aproj.user`, never in the `.aproj`.
+
 ## Before you commit
 
 ```sh

@@ -616,6 +616,27 @@ Die MUI-IDE speichert ihre Einstellungen in `ENVARC:AmigaIDE/`:
 
 ---
 
+## 8a. Versionsverwaltung (optional, AmiVCS)
+
+Beide IDEs können Projekte mit AmiVCS versionieren. AmiVCS ist ein
+eigenes Werkzeug wie vbcc oder ACE: die IDE ruft das Programm `amivcs`
+(ab Version 0.6, mit `--porcelain-out`) im Projektverzeichnis auf, für
+jeden Vorgang, und linkt nichts davon. Fehlt es, fehlen nur die
+Versions-Ansichten.
+
+- **Qt-IDE:** Pfad unter *Options ▸ Global Settings ▸ amivcs program*
+  (Vorgabe `toolchain/bin/amivcs`, sonst `amivcs` aus dem `PATH`;
+  gespeichert wird ein absoluter Pfad). Docks *Version Control* und
+  *History*, Menü *VCS*, Kennzeichen S/M/N/D im Projektbaum.
+- **MUI-IDE:** `ENVARC:AmigaIDE/amivcs` (Einstellungsfenster, Vorgabe
+  `amivcs`). Register *Versionen* und *Verlauf*, Menü *Versionen*.
+- Server, Zugang, Autor und Zeichensatz kommen aus der
+  AmiVCS-Konfiguration (`ENV:amivcs.cfg`, `~/.amivcsrc`).
+- Der Editor-Zustand (offene Dateien) liegt in `<projekt>.aproj.user`,
+  nicht in der `.aproj`; die IDE bietet an, das samt `build/` und dem
+  Zielverzeichnis in `.amivcsignore` einzutragen.
+- Plan und Begründungen: `docs/AMIVCS-PLAN.md`.
+
 ## 9. Fehlerbilder
 
 | Meldung | Ursache |

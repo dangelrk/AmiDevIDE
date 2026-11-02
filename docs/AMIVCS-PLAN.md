@@ -1,6 +1,6 @@
 # Plan: AmiVCS in AmigaIDE (Qt und MUI)
 
-Stand 01.11.2026, Fassung 4. Fassung 2 und 3 wurden von einem Subagenten
+Stand 02.11.2026, Fassung 4, umgesetzt (AmiVCS 4b50020, AmigaIDE a231226 ff.). Fassung 2 und 3 wurden von einem Subagenten
 geprüft (Befunde eingearbeitet); umgesetzt sind die Entscheidungen des
 Nutzers:
 

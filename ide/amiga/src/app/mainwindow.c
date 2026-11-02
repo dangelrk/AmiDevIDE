@@ -104,6 +104,7 @@ typedef ULONG IPTR;
 #include "aide/aide_includegraph.h"
 #include "aide/aide_icon.h"
 #include "aide/aide_reindent.h"
+#include "vcs/vcspanel.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -201,8 +202,8 @@ static AideSearchMatchList g_searchMatches;
  * once at startup but shown much later, well after its building
  * function had already returned and its stack frame was long since
  * reused). */
-static const char *g_leftRegisterTitles[] = { "Projekt", "Symbole", NULL };
-static const char *g_bottomRegisterTitles[] = { "Ausgabe", "Issues", "Suche", "Memory Map", NULL };
+static const char *g_leftRegisterTitles[] = { "Projekt", "Symbole", "Versionen", NULL };
+static const char *g_bottomRegisterTitles[] = { "Ausgabe", "Issues", "Suche", "Memory Map", "Verlauf", NULL };
 
 /* Parallel to the Issues NList's rows (row i <-> g_issues[i]), so F4/
  * Shift+F4 and double-click can jump to an issue's file:line -- the
@@ -1296,6 +1297,7 @@ static void finish_new_project_save(void)
     rebuild_symbol_index();
     invalidate_help_index();
     set_status("Projekt angelegt");
+    vcspanel_project_changed(g_projectRoot, g_projectFile);
 }
 
 /* "Neu": directory first, then Project Settings -- no separate name
@@ -1344,13 +1346,20 @@ static void do_new_project(void)
     set_status("Projekteinstellungen: Name/Binary festlegen, dann OK");
 }
 
+static void open_project_at(const char *path);
+
 static void do_open_project(void)
 {
     char path[AIDE_MAX_PATH];
-    AideProject loaded;
 
     if (!ask_file("Projekt \366ffnen (.aproj)", 0, NULL, path, sizeof(path)))
         return;
+    open_project_at(path);
+}
+
+static void open_project_at(const char *path)
+{
+    AideProject loaded;
 
     set_status("Lade Projekt...");
 
@@ -1371,6 +1380,7 @@ static void do_open_project(void)
     rebuild_symbol_index();
     invalidate_help_index();
     set_status("Projekt geladen");
+    vcspanel_project_changed(g_projectRoot, g_projectFile);
 
     {
         AideStr list;
@@ -1480,6 +1490,8 @@ static void do_save(void)
     g_projectDirty = 0;
     refresh_tree(); /* clears the "*" markers -- must run even on a non-first save */
     set_status("Gespeichert");
+    if (firstSave) vcspanel_project_changed(g_projectRoot, g_projectFile);
+    else vcspanel_file_saved();
 }
 
 /* Asks Quelldatei/Header BEFORE the file requester (not guessed from the
@@ -2967,6 +2979,19 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "Referenzen (Shift+F3)",   0, 0, 0, (APTR)ID_FIND_REFS },
     { NM_ITEM,  "N\344chster Issue (F4)",    0, 0, 0, (APTR)ID_ISSUE_NEXT },
     { NM_ITEM,  "Voriger Issue (Shift+F4)",0, 0, 0, (APTR)ID_ISSUE_PREV },
+    { NM_TITLE, "Versionen", 0, 0, 0, (APTR)0 },
+    { NM_ITEM,  "Repository anlegen",          0, 0, 0, (APTR)ID_VCS_INIT },
+    { NM_ITEM,  "Aktualisieren",               0, 0, 0, (APTR)ID_VCS_REFRESH },
+    { NM_ITEM,  "Alles bereitstellen",         0, 0, 0, (APTR)ID_VCS_STAGE_ALL },
+    { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
+    { NM_ITEM,  "Neuer Branch...",             0, 0, 0, (APTR)ID_VCS_NEWBRANCH },
+    { NM_ITEM,  "Branch wechseln...",          0, 0, 0, (APTR)ID_VCS_SWITCH },
+    { NM_ITEM,  "Branch zusammenf\374hren...", 0, 0, 0, (APTR)ID_VCS_MERGE },
+    { NM_ITEM,  "Gel\366schte Dateien zur\374ckholen", 0, 0, 0, (APTR)ID_VCS_RESTORE },
+    { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
+    { NM_ITEM,  "Pull",                        0, 0, 0, (APTR)ID_VCS_PULL },
+    { NM_ITEM,  "Push",                        0, 0, 0, (APTR)ID_VCS_PUSH },
+    { NM_ITEM,  "Clone...",                    0, 0, 0, (APTR)ID_VCS_CLONE },
     { NM_TITLE, "Hilfe", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Hothelp (F1)",             0, 0, 0, (APTR)ID_HELP_F1 },
     { NM_ITEM,  "Struct-Layout (Shift+F1)", 0, 0, 0, (APTR)ID_HELP_SHIFT_F1 },
@@ -2975,6 +3000,97 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "\334ber AmigaIDE...", "?", 0, 0, (APTR)ID_ABOUT },
     { NM_END, NULL, 0, 0, 0, (APTR)0 },
 };
+
+/* ------------------------------------------------------------------ */
+/* Host for vcs/vcspanel.c (AmiVCS as an external tool)                 */
+/* ------------------------------------------------------------------ */
+static void open_project_at(const char *path);
+
+static int vcs_host_building(void)
+{
+    return g_build.state != BUILD_IDLE;
+}
+
+/* the editor's file and the project; 0 if something could not be saved */
+static int vcs_host_save_all(void)
+{
+    if (g_currentFile[0]) {
+        ULONG changed = FALSE;
+        get(g_editor, MUIA_TextEditor_HasChanged, &changed);
+        if (changed && !editor_save_current())
+            return 0;
+    }
+    if (!g_projectFile[0])
+        return 0;
+    if (g_projectDirty) {
+        if (!aide_project_save(&g_project, g_projectFile))
+            return 0;
+        g_projectDirty = 0;
+    }
+    refresh_tree();
+    return 1;
+}
+
+/* after amivcs rewrote files: the project (its sources may differ per
+ * branch) and the open file come back from disk */
+static void vcs_host_reload_project(void)
+{
+    char file[AIDE_MAX_PATH];
+    strncpy(file, g_currentFile, sizeof(file) - 1);
+    file[sizeof(file) - 1] = '\0';
+    if (g_projectFile[0] && aide_fs_exists(g_projectFile)) {
+        char aproj[AIDE_MAX_PATH];
+        strncpy(aproj, g_projectFile, sizeof(aproj) - 1);
+        aproj[sizeof(aproj) - 1] = '\0';
+        open_project_at(aproj);
+        if (file[0] && aide_fs_exists(file))
+            editor_open_file(file);
+    } else {
+        editor_clear();
+        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                    "Die Projektdatei geh\366rt nicht zu diesem Branch.");
+    }
+}
+
+static void vcs_host_append_output(const char *text)
+{
+    DoMethod(g_outputEditor, MUIM_TextEditor_InsertText, (ULONG)text, MUIV_TextEditor_InsertText_Bottom);
+}
+
+/* a string requester with an explanation above the field; `out` holds
+ * the initial text */
+static int vcs_host_ask_string(const char *title, const char *prompt, char *out, unsigned long outsz)
+{
+    char buffer[256];
+    struct TagItem tags[2];
+    LONG ok;
+    strncpy(buffer, out ? out : "", sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+    tags[0].ti_Tag = RTGS_TextFmt; tags[0].ti_Data = (ULONG)prompt;
+    tags[1].ti_Tag = TAG_DONE;     tags[1].ti_Data = 0;
+    ok = rtGetStringA((STRPTR)buffer, (LONG)(sizeof(buffer) - 1), (CONST_STRPTR)title, NULL, tags);
+    if (!ok)
+        return 0;
+    strncpy(out, buffer, outsz - 1);
+    out[outsz - 1] = '\0';
+    return 1;
+}
+
+static int vcs_host_ask_dir(const char *title, char *out, unsigned long outsz)
+{
+    return ask_directory(title, out, outsz);
+}
+
+/* no saving and no build while amivcs rewrites the working tree */
+static void vcs_host_set_locked(int locked, int touchesFiles)
+{
+    set(g_editor, MUIA_TextEditor_ReadOnly, (locked && touchesFiles) ? TRUE : FALSE);
+    set_build_menus_enabled(!locked && g_build.state == BUILD_IDLE);
+    if (locked && touchesFiles)
+        set_status("Versionsverwaltung \344ndert Dateien...");
+    else if (!locked)
+        set_status("");
+}
 
 int mainwindow_run(void)
 {
@@ -3111,6 +3227,7 @@ int mainwindow_run(void)
         MUIA_Register_Titles, (ULONG)g_leftRegisterTitles,
         Child, g_treeListview,
         Child, g_symbolsListview,
+        Child, vcspanel_create_page(),
     End;
 
     g_bottomRegister = RegisterObject,
@@ -3127,6 +3244,7 @@ int mainwindow_run(void)
         Child, g_issuesListview,
         Child, g_searchListview,
         Child, g_memmapListview,
+        Child, vcspanel_create_history_page(),
     End;
 
     /* Built separately (not inline as MUIA_Window_Menustrip's own tag
@@ -3217,6 +3335,19 @@ int mainwindow_run(void)
     disasmwindow_init(g_app);
     settingswindow_init(g_app, &g_sdkRegistry);
     prefswindow_init(g_app);
+    {
+        VcsHost host;
+        host.building = vcs_host_building;
+        host.save_all = vcs_host_save_all;
+        host.reload_project = vcs_host_reload_project;
+        host.open_project = open_project_at;
+        host.set_status = set_status;
+        host.append_output = vcs_host_append_output;
+        host.ask_string = vcs_host_ask_string;
+        host.ask_dir = vcs_host_ask_dir;
+        host.set_locked = vcs_host_set_locked;
+        vcspanel_init(g_app, g_window, &host);
+    }
 
     DoMethod(g_window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
             g_app, 2, MUIM_Application_ReturnID, ID_QUIT);
@@ -3268,6 +3399,7 @@ int mainwindow_run(void)
          * run every iteration this bit is set, not just when `id` is
          * some specific value: the timer signal and an MUI event can
          * both be pending in the same `got` mask at once. */
+        vcspanel_handle_signals(got);
         if (got & g_timerSig) {
             GetMsg(g_timerPort);
             g_timerArmed = 0; /* retrieved -- no longer in flight until re-armed below */
@@ -3360,16 +3492,19 @@ int mainwindow_run(void)
             prefswindow_show();
             break;
         case ID_BUILD:
-            do_build();
+            if (vcspanel_writing()) set_status("Versionsverwaltung arbeitet -- bitte gleich noch einmal.");
+            else do_build();
             break;
         case ID_CLEAN:
-            do_clean();
+            if (vcspanel_writing()) set_status("Versionsverwaltung arbeitet -- bitte gleich noch einmal.");
+            else do_clean();
             break;
         case ID_BUILD_STOP:
             do_build_stop();
             break;
         case ID_RUN:
-            do_run();
+            if (vcspanel_writing()) set_status("Versionsverwaltung arbeitet -- bitte gleich noch einmal.");
+            else do_run();
             break;
         case ID_DISASSEMBLE:
             do_disassemble();
@@ -3452,7 +3587,10 @@ int mainwindow_run(void)
             break;
         }
         default: {
-            int settingsResult = settingswindow_handle_id(id);
+            int settingsResult;
+            if (vcspanel_handle_id(id))
+                break;
+            settingsResult = settingswindow_handle_id(id);
             if (settingsResult == 2) {
                 settingswindow_take_result(&g_project);
                 if (g_newProjectAwaitingSave) {
@@ -3488,6 +3626,7 @@ int mainwindow_run(void)
                     aide_sdk_append_builtins(prefs_sdk_root(), &g_sdkRegistry);
                     aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
                     invalidate_make_availability();
+                    vcspanel_tool_changed();
                     set_status("Einstellungen \374bernommen");
                 } else if (prefsResult == 0) {
                     if (!helpwindow_handle_id(id))
@@ -3510,7 +3649,7 @@ int mainwindow_run(void)
          * signal arriving during such a burst isn't lost either way --
          * only Wait() itself clears signal bits, so it's still pending
          * next time this actually calls Wait(). */
-        if (waitMask) got = Wait(waitMask | SIGBREAKF_CTRL_C | g_timerSig);
+        if (waitMask) got = Wait(waitMask | SIGBREAKF_CTRL_C | g_timerSig | vcspanel_signal_mask());
         else          got = 0;
     }
 
@@ -3540,6 +3679,7 @@ int mainwindow_run(void)
     if (g_build.state != BUILD_IDLE)
         aide_logtail_free(&g_build.tail);
     build_timer_close();
+    vcspanel_cleanup();
 
     if (g_app)
         MUI_DisposeObject(g_app);

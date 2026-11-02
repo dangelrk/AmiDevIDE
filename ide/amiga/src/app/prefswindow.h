@@ -38,5 +38,7 @@ int prefswindow_handle_id(long id);
 const char *prefs_make_program(void);
 const char *prefs_sdk_root(void);
 const char *prefs_toolchain_root(void);
+/* AmiVCS (optional tool): the amivcs program, default "amivcs" (C:) */
+const char *prefs_amivcs_program(void);
 
 #endif /* AIDE_MUI_PREFSWINDOW_H */

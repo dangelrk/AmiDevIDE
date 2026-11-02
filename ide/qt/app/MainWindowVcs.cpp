@@ -67,7 +67,7 @@ void MainWindow::createVcs()
     menuBar()->insertMenu(menuBar()->actions().value(menuBar()->actions().size() - 2), menu);
     m_vcsInitAct = menu->addAction(tr("&Create Repository"), this, &MainWindow::vcsInit);
     m_vcsRepoActions << menu->addAction(tr("&Refresh"), this, [this] { vcsRefresh(true); });
-    m_vcsRepoActions << menu->addAction(tr("Stage &All"), this, [this] { vcsStartWrite(AIDE_VCS_ADD, { QStringLiteral(".") }); });
+    m_vcsRepoActions << menu->addAction(tr("Stage &All"), this, [this] { vcsStartWrite(AIDE_VCS_ADD, { QStringLiteral("-A") }); });
     m_vcsRepoActions << menu->addAction(tr("&Commit..."), this, [this] {
         m_vcsDockWidget->show();
         m_vcsDockWidget->raise();
@@ -107,7 +107,7 @@ void MainWindow::createVcs()
     connect(m_vcsDock, &VcsDock::initRequested, this, &MainWindow::vcsInit);
     connect(m_vcsDock, &VcsDock::stageRequested, this, [this](const QStringList &p) { vcsStartWrite(AIDE_VCS_ADD, p); });
     connect(m_vcsDock, &VcsDock::unstageRequested, this, [this](const QStringList &p) { vcsStartWrite(AIDE_VCS_UNSTAGE, p); });
-    connect(m_vcsDock, &VcsDock::stageAllRequested, this, [this] { vcsStartWrite(AIDE_VCS_ADD, { QStringLiteral(".") }); });
+    connect(m_vcsDock, &VcsDock::stageAllRequested, this, [this] { vcsStartWrite(AIDE_VCS_ADD, { QStringLiteral("-A") }); });
     connect(m_vcsDock, &VcsDock::commitRequested, this, &MainWindow::vcsCommit);
     connect(m_vcsDock, &VcsDock::fileActivated, this, [this](const QString &rel) {
         if (m_project && QFile::exists(m_project->absolutePath(rel)))
