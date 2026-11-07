@@ -4,6 +4,10 @@ A complete AmigaOS/m68k cross-development environment that works the same on
 macOS, Windows and Linux. Every tool is built from source, and no third-party
 code is checked in: the bootstrap fetches it from the official sources.
 
+> **Status:** experimental. Developed with the help of Claude (an AI assistant
+> by Anthropic), primarily for the author's own use. Try it with copies of
+> your data first; use at your own risk.
+
 **Installation, step by step for macOS, Linux, Windows and AmigaOS:
 [`INSTALL.md`](INSTALL.md)** (German).
 

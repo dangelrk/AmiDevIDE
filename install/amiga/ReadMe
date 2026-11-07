@@ -7,6 +7,13 @@ Symbolindex, Suche, Build mit Fehlerliste, Autodoc-Hilfe, Disassembler
 und Memory Map. Dieselben Projekte (.aproj) öffnet auch die Qt-Fassung
 auf macOS, Linux und Windows (AmiDevIDE).
 
+Hinweis
+-------
+Experimentelle Software, entwickelt mit Hilfe von Claude (KI-Assistent
+von Anthropic) und in erster Linie für den Eigengebrauch des Autors
+geschrieben. Bitte zuerst mit Kopien der Daten ausprobieren; Benutzung
+auf eigene Gefahr.
+
 Inhalt dieser Schublade
 -----------------------
   AmigaIDE/                Programm, Icon und Handbuch (AmigaIDE.guide)

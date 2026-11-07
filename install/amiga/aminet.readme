@@ -49,12 +49,19 @@ To build programs:
 Optional:
 - AmiVCS 0.6 or newer for version control (dev/misc/AmiVCS.lha)
 
+Status
+------
+Experimental software, developed with the help of Claude (an AI
+assistant by Anthropic) and written primarily for the author's own use.
+Try it with copies of your data first; use at your own risk.
+
 Documentation and user interface are in German.
 Die Dokumentation (AmigaIDE/AmigaIDE.guide) und die Oberfläche sind
 deutsch.
 
 History
 -------
+0.4  note on the experimental status, no program changes
 0.3  manual updated; the installer reports a wrong start directory
 0.2  version control with AmiVCS; a first push asks for the repository
      name on the server; project files read and written independent of

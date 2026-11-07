@@ -1,11 +1,15 @@
 @database AmigaIDE.guide
-@$VER: AmigaIDE.guide 0.3 (07.11.2026)
+@$VER: AmigaIDE.guide 0.4 (07.11.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
 
-                         @{b}AmigaIDE 0.3@{ub}
+                         @{b}AmigaIDE 0.4@{ub}
         Entwicklungsumgebung für vbcc, vasm, vlink und ACE BASIC
+
+Experimentelle Software: entwickelt mit Hilfe von Claude (KI-Assistent
+von Anthropic), in erster Linie für den Eigengebrauch des Autors. Bitte
+zuerst mit Kopien der Daten ausprobieren; Benutzung auf eigene Gefahr.
 
   @{" Überblick            " link Ueberblick}  Was AmigaIDE ist und kann
   @{" Voraussetzungen      " link Voraussetzungen}  Libraries, MUI-Klassen, Werkzeuge
@@ -706,6 +710,10 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
 @node Geschichte "Versionsgeschichte"
 
 @{b}Versionsgeschichte@{ub}
+
+0.4 (07.11.2026)
+  - Hinweis auf den experimentellen Status ergänzt; keine Änderungen
+    am Programm.
 
 0.3 (07.11.2026)
   - Handbuch überarbeitet.
