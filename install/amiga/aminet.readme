@@ -55,6 +55,7 @@ deutsch.
 
 History
 -------
+0.3  manual updated; the installer reports a wrong start directory
 0.2  version control with AmiVCS; a first push asks for the repository
      name on the server; project files read and written independent of
      the locale; directory requester fixes (current directory, paths

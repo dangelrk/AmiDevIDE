@@ -23,7 +23,7 @@
  * Without git the number is "0"; a missing date falls back to the
  * compiler's own __DATE__. */
 
-#define AMIGAIDE_VERSION_STRING "0.2"
+#define AMIGAIDE_VERSION_STRING "0.3"
 #define AMIGAIDE_COPYRIGHT_STRING "Copyright \xC2\xA9 2026 Ronny Kr\xC3\xBCger"
 
 #ifndef AMIGAIDE_BUILD_NUMBER

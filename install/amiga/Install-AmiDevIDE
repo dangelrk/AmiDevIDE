@@ -21,7 +21,7 @@
            "Bereits kopierte Dateien bleiben erhalten;\n"
            "ein erneuter Start setzt sie wieder ein."))
 
-(if (= 0 (exists "AmigaIDE/AmigaIDE" (noreq)))
+(if (OR (= 0 (exists "AmigaIDE/AmigaIDE" (noreq))) (= 0 (exists "Install-AmiDevIDE" (noreq))))
   (abort "AmigaIDE wurde nicht gefunden.\n\n"
          "Bitte den Installer aus der ausgepackten\n"
          "AmiDevIDE-Schublade starten."))

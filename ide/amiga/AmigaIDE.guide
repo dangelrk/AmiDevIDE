@@ -1,10 +1,10 @@
 @database AmigaIDE.guide
-@$VER: AmigaIDE.guide 0.2 (02.11.2026)
+@$VER: AmigaIDE.guide 0.3 (07.11.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
 
-                         @{b}AmigaIDE 0.2@{ub}
+                         @{b}AmigaIDE 0.3@{ub}
         Entwicklungsumgebung für vbcc, vasm, vlink und ACE BASIC
 
   @{" Überblick            " link Ueberblick}  Was AmigaIDE ist und kann
@@ -100,8 +100,7 @@ Alles davon gibt es auf Aminet:
   dev/basic/ace-basic.lha           ACE BASIC
 
 Das vbcc-Target m68k-amigaos gibt es unter
-http://sun.hasenbraten.de/vbcc/. Weitere Hinweise: INSTALL.md,
-Abschnitt 8.2, im Quellarchiv.
+http://sun.hasenbraten.de/vbcc/.
 
 @endnode
 @node Einrichtung "Einrichtung"
@@ -708,6 +707,11 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
 
 @{b}Versionsgeschichte@{ub}
 
+0.3 (07.11.2026)
+  - Handbuch überarbeitet.
+  - Der Installer meldet es, wenn er nicht aus seiner Schublade
+    gestartet wird.
+
 0.2 (02.11.2026)
   - Versionsverwaltung mit AmiVCS (ab 0.6, eigenes Programm):
     Register "Versionen" und "Verlauf", Menü "Versionen" mit
@@ -730,7 +734,7 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
 @{b}Lizenz@{ub}
 
 AmigaIDE steht unter der GNU General Public License, Version 3. Der
-Quelltext ist unter https://github.com/dangelrk/AmiDevIDE erhältlich.
+Quelltext wird später auf GitHub veröffentlicht.
 
 Im Programm enthalten ist parson (JSON-Parser, MIT-Lizenz).
 
