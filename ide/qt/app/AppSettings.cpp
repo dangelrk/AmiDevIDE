@@ -79,6 +79,12 @@ QStringList AppSettings::migrateStaleSettings()
         changes << QObject::tr("amivcs not found at %1 -- version control looks for it again")
                        .arg(amivcs);
     }
+    const QString amivcsGui = s.value(QStringLiteral("vcs/amivcsGui")).toString();
+    if (!amivcsGui.isEmpty() && !QFileInfo(amivcsGui).isExecutable()) {
+        s.remove(QStringLiteral("vcs/amivcsGui"));
+        changes << QObject::tr("amivcs-gui not found at %1 -- looking for it again")
+                       .arg(amivcsGui);
+    }
 
     // Paths derived from the old root are stale for the same reason, and a
     // stale shared directory is worse than a missing one: Run would silently
@@ -148,6 +154,33 @@ QString AppSettings::amivcsProgram() const
     if (QFileInfo(inToolchain).isExecutable())
         return inToolchain;
     return QStandardPaths::findExecutable(QStringLiteral("amivcs"));
+}
+
+QString AppSettings::amivcsGuiProgram() const
+{
+    QSettings s;
+    const QString stored = s.value(QStringLiteral("vcs/amivcsGui")).toString();
+    if (!stored.isEmpty())
+        return stored;
+    const QString cli = amivcsProgram();
+    if (!cli.isEmpty()) {
+        const QString beside = QFileInfo(cli).dir().filePath(QStringLiteral("amivcs-gui"));
+        if (QFileInfo(beside).isExecutable())
+            return beside;
+    }
+    const QString inToolchain = QDir(toolchainRoot()).filePath(QStringLiteral("bin/amivcs-gui"));
+    if (QFileInfo(inToolchain).isExecutable())
+        return inToolchain;
+    return QStandardPaths::findExecutable(QStringLiteral("amivcs-gui"));
+}
+
+void AppSettings::setAmivcsGuiProgram(const QString &path)
+{
+    QSettings s;
+    if (path.isEmpty())
+        s.remove(QStringLiteral("vcs/amivcsGui"));
+    else
+        s.setValue(QStringLiteral("vcs/amivcsGui"), path);
 }
 
 void AppSettings::setAmivcsProgram(const QString &path)

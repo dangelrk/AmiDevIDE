@@ -40,5 +40,7 @@ const char *prefs_sdk_root(void);
 const char *prefs_toolchain_root(void);
 /* AmiVCS (optional tool): the amivcs program, default "amivcs" (C:) */
 const char *prefs_amivcs_program(void);
+/* the AmiVCS GUI (amivcs-gui), started by Versionen > AmiVCS-GUI oeffnen */
+const char *prefs_amivcs_gui_program(void);
 
 #endif /* AIDE_MUI_PREFSWINDOW_H */

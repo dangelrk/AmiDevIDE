@@ -41,6 +41,7 @@
 #include <QMenuBar>
 #include <QAbstractButton>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStatusBar>
@@ -264,6 +265,9 @@ void MainWindow::createActions()
     saveProjectAct->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S));
     projectMenu->addSeparator();
     projectMenu->addAction(tr("Project &Settings..."), this, &MainWindow::openProjectSettings);
+    projectMenu->addSeparator();
+    QAction *vcsGuiAct = projectMenu->addAction(tr("Open AmiVCS &GUI"), this, &MainWindow::openVcsGui);
+    vcsGuiAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
 
     QMenu *optionsMenu = menuBar()->addMenu(tr("&Options"));
     optionsMenu->addAction(tr("&Global Settings..."), this, &MainWindow::openGlobalSettings);
@@ -1326,4 +1330,24 @@ void MainWindow::onGotoDefinitionRequested(const QString &symbol, int fromLine)
         connect(act, &QAction::triggered, this, [this, s] { gotoLocation(s.file, s.line); });
     }
     menu->popup(QCursor::pos());
+}
+
+// Project > Open AmiVCS GUI: the stand-alone amivcs-gui on the project
+// directory, detached -- it has its own window and outlives the IDE.
+void MainWindow::openVcsGui()
+{
+    if (!m_project) {
+        QMessageBox::information(this, tr("AmiVCS GUI"), tr("No project is open."));
+        return;
+    }
+    const QString program = AppSettings::instance().amivcsGuiProgram();
+    if (program.isEmpty()
+        || !QProcess::startDetached(program, { m_project->projectRoot() }, m_project->projectRoot())) {
+        QMessageBox::warning(this, tr("AmiVCS GUI"),
+                             tr("amivcs-gui could not be started%1.\n\n"
+                                "Set its path under Options > Settings (amivcs-gui program).")
+                                 .arg(program.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(program)));
+        return;
+    }
+    statusBar()->showMessage(tr("AmiVCS GUI started"), 3000);
 }

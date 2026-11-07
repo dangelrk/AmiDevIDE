@@ -64,6 +64,7 @@ private slots:
     void openProjectAt(const QString &path);
     void saveProject();
     void openProjectSettings();
+    void openVcsGui();
     void openGlobalSettings();
     void showAboutDialog();
     void focusAutodocSearch();

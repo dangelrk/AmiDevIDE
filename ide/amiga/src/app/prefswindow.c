@@ -21,10 +21,11 @@
 #define ENV_SDKROOT    "AmigaIDE/sdkroot"
 #define ENV_VBCCROOT   "AmigaIDE/vbccroot"
 #define ENV_AMIVCS     "AmigaIDE/amivcs"
+#define ENV_AMIVCSGUI  "AmigaIDE/amivcs-gui"
 
 static Object *g_app;
 static Object *g_window;
-static Object *g_makeStr, *g_sdkRootStr, *g_toolchainRootStr, *g_amivcsStr;
+static Object *g_makeStr, *g_sdkRootStr, *g_toolchainRootStr, *g_amivcsStr, *g_amivcsGuiStr;
 static Object *g_okBtn, *g_cancelBtn;
 
 /* The persisted values themselves -- not per-project, so these live
@@ -35,6 +36,7 @@ static char g_makeProgram[64]   = "make";
 static char g_sdkRoot[64]       = "SDK:";
 static char g_toolchainRoot[64] = "vbcc:";
 static char g_amivcsProgram[128] = "amivcs";
+static char g_amivcsGuiProgram[128] = "amivcs-gui";
 
 static void load_var(const char *name, char *out, size_t outsz, const char *fallback)
 {
@@ -57,6 +59,7 @@ void prefswindow_load(void)
     load_var(ENV_SDKROOT, g_sdkRoot, sizeof(g_sdkRoot), "SDK:");
     load_var(ENV_VBCCROOT, g_toolchainRoot, sizeof(g_toolchainRoot), "vbcc:");
     load_var(ENV_AMIVCS, g_amivcsProgram, sizeof(g_amivcsProgram), "amivcs");
+    load_var(ENV_AMIVCSGUI, g_amivcsGuiProgram, sizeof(g_amivcsGuiProgram), "amivcs-gui");
 }
 
 void prefswindow_init(Object *app)
@@ -67,6 +70,7 @@ void prefswindow_init(Object *app)
     g_sdkRootStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_sdkRoot), End;
     g_toolchainRootStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_toolchainRoot), End;
     g_amivcsStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_amivcsProgram), End;
+    g_amivcsGuiStr = StringObject, StringFrame, MUIA_String_MaxLen, sizeof(g_amivcsGuiProgram), End;
     g_okBtn = SimpleButton("_OK");
     g_cancelBtn = SimpleButton("_Abbrechen");
 
@@ -80,6 +84,7 @@ void prefswindow_init(Object *app)
                 Child, Label("SDK-Root:"),        Child, g_sdkRootStr,
                 Child, Label("Toolchain-Root:"),  Child, g_toolchainRootStr,
                 Child, Label("AmiVCS-Programm:"), Child, g_amivcsStr,
+                Child, Label("AmiVCS-GUI:"),      Child, g_amivcsGuiStr,
             End,
             Child, HGroup,
                 Child, g_okBtn,
@@ -109,6 +114,7 @@ void prefswindow_show(void)
     set(g_sdkRootStr, MUIA_String_Contents, g_sdkRoot);
     set(g_toolchainRootStr, MUIA_String_Contents, g_toolchainRoot);
     set(g_amivcsStr, MUIA_String_Contents, g_amivcsProgram);
+    set(g_amivcsGuiStr, MUIA_String_Contents, g_amivcsGuiProgram);
     set(g_window, MUIA_Window_Open, TRUE);
 }
 
@@ -133,6 +139,14 @@ int prefswindow_handle_id(long id)
             g_amivcsProgram[sizeof(g_amivcsProgram) - 1] = '\0';
             free(amivcs);
         }
+        get(g_amivcsGuiStr, MUIA_String_Contents, &v);
+        {
+            /* optional too: empty means the default "amivcs-gui" */
+            char *gui = aide_str_trim_dup(v ? (char *)v : "");
+            strncpy(g_amivcsGuiProgram, gui[0] ? gui : "amivcs-gui", sizeof(g_amivcsGuiProgram) - 1);
+            g_amivcsGuiProgram[sizeof(g_amivcsGuiProgram) - 1] = '\0';
+            free(gui);
+        }
 
         if (!make[0] || !sdkRoot[0] || !toolchainRoot[0]) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
@@ -153,6 +167,7 @@ int prefswindow_handle_id(long id)
         SetVar((CONST_STRPTR)ENV_SDKROOT, (CONST_STRPTR)g_sdkRoot, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
         SetVar((CONST_STRPTR)ENV_VBCCROOT, (CONST_STRPTR)g_toolchainRoot, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
         SetVar((CONST_STRPTR)ENV_AMIVCS, (CONST_STRPTR)g_amivcsProgram, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+        SetVar((CONST_STRPTR)ENV_AMIVCSGUI, (CONST_STRPTR)g_amivcsGuiProgram, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
 
         set(g_window, MUIA_Window_Open, FALSE);
         return 2;
@@ -169,3 +184,4 @@ const char *prefs_make_program(void) { return g_makeProgram; }
 const char *prefs_sdk_root(void) { return g_sdkRoot; }
 const char *prefs_toolchain_root(void) { return g_toolchainRoot; }
 const char *prefs_amivcs_program(void) { return g_amivcsProgram; }
+const char *prefs_amivcs_gui_program(void) { return g_amivcsGuiProgram; }

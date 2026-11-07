@@ -431,9 +431,12 @@ Diese Einstellungen gelten für alle Projekte.
   Make-Programm    Standard "make"
   SDK-Root         Standard "SDK:"
   Toolchain-Root   Standard "vbcc:"
+  AmiVCS-Programm  Standard "amivcs" (leer = Standard)
+  AmiVCS-GUI       Standard "amivcs-gui" (leer = Standard)
 
-Kein Feld darf leer sein. Gespeichert wird in ENVARC:AmigaIDE/ (make,
-sdkroot, vbccroot), die Werte gelten also auch nach einem Neustart.
+Make-Programm, SDK-Root und Toolchain-Root dürfen nicht leer sein.
+Gespeichert wird in ENVARC:AmigaIDE/ (make, sdkroot, vbccroot, amivcs,
+amivcs-gui), die Werte gelten also auch nach einem Neustart.
 
 @endnode
 @node Editor "Editor"
@@ -634,6 +637,11 @@ Zeit in UTC, Autor, Branch-Namen und der ersten Zeile der Nachricht.
 
   Neuer Branch, Branch wechseln, Branch zusammenführen,
   Gelöschte Dateien zurückholen, Pull, Push, Clone.
+
+  AmiVCS-GUI öffnen (Amiga-G) startet die eigenständige Oberfläche
+  amivcs-gui (im Stil von "git gui", mit Dateivorschau) auf dem
+  Projektverzeichnis, in einem eigenen Fenster. Liegt sie nicht in C:,
+  den Pfad unter Projekt > Einstellungen > AmiVCS-GUI eintragen.
 
 Wechseln, Zusammenführen, Zurückholen und Pull ändern Dateien. Die
 IDE fragt vorher, speichert die geöffnete Datei und das Projekt und

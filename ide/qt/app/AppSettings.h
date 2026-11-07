@@ -41,6 +41,11 @@ public:
      * Default: <toolchain>/bin/amivcs, else amivcs from PATH, else "". */
     QString amivcsProgram() const;
     void setAmivcsProgram(const QString &path);
+    /* The stand-alone AmiVCS GUI (amivcs-gui), started by Project >
+     * Open AmiVCS GUI. Stored under "vcs/amivcsGui". Default: amivcs-gui
+     * next to amivcs, then <toolchain>/bin, then PATH, else "". */
+    QString amivcsGuiProgram() const;
+    void setAmivcsGuiProgram(const QString &path);
 
     QString fsUaeBinary() const;
     void setFsUaeBinary(const QString &path);

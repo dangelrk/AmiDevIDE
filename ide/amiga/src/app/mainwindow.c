@@ -150,6 +150,7 @@ typedef ULONG IPTR;
 #define ID_PREFS              32
 #define ID_REMOVE_FILE        33
 #define ID_CHECK_SDKS         35
+#define ID_VCS_GUI            36
 
 #define AIDE_MAX_PATH 256
 
@@ -1339,6 +1340,41 @@ static void sdk_report_into(AideStr *out, const AideSdkDescriptor *d, int detail
         }
     }
     aide_sdk_check_free(&c);
+}
+
+/* Versionen -> "AmiVCS-GUI oeffnen": the stand-alone amivcs-gui on the
+ * project directory, started detached -- it has its own window and the
+ * IDE carries on. Program name from Einstellungen (AmiVCS-GUI). */
+static void do_open_vcs_gui(void)
+{
+    char cmd[AIDE_MAX_PATH + 160];
+    struct TagItem tags[5];
+    BPTR nilIn, nilOut;
+    LONG rc;
+
+    if (!g_projectRoot[0]) {
+        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Kein Projekt geladen.");
+        return;
+    }
+    sprintf(cmd, "%s \"%s\"", prefs_amivcs_gui_program(), g_projectRoot);
+    nilIn = Open((CONST_STRPTR)"NIL:", MODE_OLDFILE);
+    nilOut = Open((CONST_STRPTR)"NIL:", MODE_NEWFILE);
+    tags[0].ti_Tag = SYS_Input;    tags[0].ti_Data = (ULONG)nilIn;
+    tags[1].ti_Tag = SYS_Output;   tags[1].ti_Data = (ULONG)nilOut;
+    tags[2].ti_Tag = SYS_Asynch;   tags[2].ti_Data = TRUE;
+    tags[3].ti_Tag = NP_StackSize; tags[3].ti_Data = 65536;
+    tags[4].ti_Tag = TAG_DONE;     tags[4].ti_Data = 0;
+    rc = SystemTagList((CONST_STRPTR)cmd, tags);
+    if (rc == -1) {
+        if (nilIn) Close(nilIn);
+        if (nilOut) Close(nilOut);
+        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                    "\"%s\" konnte nicht gestartet werden.\n\n"
+                    "Das Programm l\344sst sich unter Projekt > Einstellungen\n"
+                    "(AmiVCS-GUI) eintragen.", prefs_amivcs_gui_program());
+        return;
+    }
+    set_status("AmiVCS-GUI gestartet");
 }
 
 /* Projekt -> "SDKs pr\374fen...": every known SDK into the Ausgabe page. */
@@ -3141,6 +3177,8 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "Pull",                        0, 0, 0, (APTR)ID_VCS_PULL },
     { NM_ITEM,  "Push",                        0, 0, 0, (APTR)ID_VCS_PUSH },
     { NM_ITEM,  "Clone...",                    0, 0, 0, (APTR)ID_VCS_CLONE },
+    { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
+    { NM_ITEM,  "AmiVCS-GUI \366ffnen",          "G", 0, 0, (APTR)ID_VCS_GUI },
     { NM_TITLE, "Hilfe", 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Hothelp (F1)",             0, 0, 0, (APTR)ID_HELP_F1 },
     { NM_ITEM,  "Struct-Layout (Shift+F1)", 0, 0, 0, (APTR)ID_HELP_SHIFT_F1 },
@@ -3636,6 +3674,9 @@ int mainwindow_run(void)
             break;
         case ID_PROJECT_SETTINGS:
             settingswindow_show(&g_project);
+            break;
+        case ID_VCS_GUI:
+            do_open_vcs_gui();
             break;
         case ID_CHECK_SDKS:
             do_check_sdks();
