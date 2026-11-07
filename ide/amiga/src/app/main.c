@@ -10,6 +10,10 @@
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/dos.h>
+#include <intuition/intuition.h>
+
+#include <stdio.h>
+#include <string.h>
 
 #include "mui/mui_stubs.h"
 #include "app/mainwindow.h"
@@ -31,39 +35,111 @@ long __stack = 65536;
  * build time on top. */
 const char amiga_ver[] = "$VER: AmigaIDE " AMIGAIDE_VERSION_STRING " (" AMIGAIDE_BUILD_DATE ")";
 
-/* Version of a foreign regex.library found in LIBS:, 0 if none. */
-static UWORD g_regexWrongVersion = 0;
+/* ---- Startup check of everything the IDE needs ----
+ * Every library and MUI class is checked up front and all problems are
+ * listed in one requester, each with the Aminet package that fixes it --
+ * instead of one generic "could not open" or, worse, a crash later on.
+ * The requester is intuition's EasyRequest, so it works without MUI. */
+typedef struct LibReq {
+    const char *name;     /* as OpenLibrary() wants it */
+    const char *altPath;  /* second place to look, or NULL */
+    UWORD minVersion;
+    const char *package;  /* Aminet path, shown when it's missing/old */
+} LibReq;
 
-static int open_libs(void)
-{
-    MUIMasterBase = OpenLibrary("muimaster.library", 19);
-    IntuitionBase = (struct IntuitionBase *)OpenLibrary("intuition.library", 37);
-    /* regex.library backs every core/ module's pattern matching (symbol
-     * parsers, SFD/autodoc lookup, project search). Required, not
-     * optional: without
-     * it every aide_regex_compile() call returns NULL and the affected
-     * feature silently does nothing rather than crashing (see
-     * amiga/src/mui/aide_regex_amiga.c), but that's most of the IDE's
-     * indexing/search functionality, so treat it as a hard dependency
-     * here and report it plainly instead of limping along degraded. */
-    RegexBase = OpenLibrary("regex.library", 0);
-    /* Only Alfonso Ranieri's POSIX regex.library (Aminet
-     * util/libs/regex_ranieri.lha, v5.x) has the entry points
-     * aide_regex_amiga.c calls. Aminet's util/libs/Regex.lha ships an
-     * unrelated GNU regex.library 1.0 (1989, 9288 bytes, "1.-1") under
+static const LibReq kLibReqs[] = {
+    { "muimaster.library", NULL, 19, "util/libs/mui38usr.lha (MUI 3.8)" },
+    { "reqtools.library",  NULL, 38, "util/libs/ReqToolsUsr.lha" },
+    /* Only Alfonso Ranieri's POSIX regex.library (v5.x) has the entry
+     * points aide_regex_amiga.c calls. Aminet's util/libs/Regex.lha ships
+     * an unrelated GNU regex.library 1.0 (1989, 9288 bytes, "1.-1") under
      * the same name; a real A1200 had it in LIBS:, and calling into it
      * ended in Guru 8100000F as soon as the first C file was indexed. */
-    if (RegexBase && RegexBase->lib_Version < 5) {
-        g_regexWrongVersion = RegexBase->lib_Version;
-        CloseLibrary(RegexBase);
-        RegexBase = NULL;
+    { "regex.library",     NULL, 5,  "util/libs/regex_ranieri.lha\n"
+                                     "      (NICHT util/libs/Regex.lha -- gleicher Name,\n"
+                                     "      andere Bibliothek; die alte vorher sichern)" },
+    /* MUI classes: LIBS: normally includes MUI:Libs (MUI's installer adds
+     * it), the explicit path covers setups where it doesn't. */
+    { "mui/NList.mcc",      "MUI:Libs/mui/NList.mcc",      0, "dev/mui/MCC_NList-0.128.lha" },
+    { "mui/NListview.mcc",  "MUI:Libs/mui/NListview.mcc",  0, "dev/mui/MCC_NList-0.128.lha" },
+    { "mui/NListtree.mcc",  "MUI:Libs/mui/NListtree.mcc",  0, "dev/mui/MCC_NList-0.128.lha" },
+    { "mui/TextEditor.mcc", "MUI:Libs/mui/TextEditor.mcc", 0, "dev/mui/MCC_TextEditor-15.56.lha" },
+};
+#define LIBREQ_COUNT (sizeof(kLibReqs) / sizeof(kLibReqs[0]))
+
+static void append(char *buf, size_t bufsz, const char *text)
+{
+    size_t len = strlen(buf);
+    if (len + 1 < bufsz) {
+        strncpy(buf + len, text, bufsz - len - 1);
+        buf[bufsz - 1] = '\0';
     }
-    /* reqtools.library backs every file/string requester (mainwindow.c's
-     * ask_string()/ask_file()) -- same "hard dependency, report plainly"
-     * reasoning as regex.library above; without it there is no way to
-     * name a project or pick a file at all. */
-    ReqToolsBase = OpenLibrary("reqtools.library", 38);
-    return MUIMasterBase && IntuitionBase && RegexBase && ReqToolsBase;
+}
+
+/* Opens one requirement (any version) to look at it; returns the base,
+ * still open, or NULL. */
+static struct Library *open_any(const LibReq *r)
+{
+    struct Library *lib = OpenLibrary((CONST_STRPTR)r->name, 0);
+    if (!lib && r->altPath)
+        lib = OpenLibrary((CONST_STRPTR)r->altPath, 0);
+    return lib;
+}
+
+/* Fills `report` with one paragraph per unmet requirement; returns how
+ * many there were. Keeps the bases the IDE uses directly open. */
+static int check_requirements(char *report, size_t reportsz)
+{
+    int problems = 0;
+    size_t i;
+    char line[160];
+
+    report[0] = '\0';
+    for (i = 0; i < LIBREQ_COUNT; ++i) {
+        const LibReq *r = &kLibReqs[i];
+        struct Library *lib = open_any(r);
+        if (lib && lib->lib_Version >= r->minVersion) {
+            if (strcmp(r->name, "muimaster.library") == 0)      MUIMasterBase = lib;
+            else if (strcmp(r->name, "reqtools.library") == 0)  ReqToolsBase = lib;
+            else if (strcmp(r->name, "regex.library") == 0)     RegexBase = lib;
+            else CloseLibrary(lib); /* MUI opens its classes itself */
+            continue;
+        }
+        if (lib) {
+            sprintf(line, "%s: Version %d gefunden, ab %d n\366tig\n",
+                    r->name, (int)lib->lib_Version, (int)r->minVersion);
+            CloseLibrary(lib);
+        } else {
+            sprintf(line, "%s: nicht gefunden\n", r->name);
+        }
+        append(report, reportsz, line);
+        append(report, reportsz, "   Aminet: ");
+        append(report, reportsz, r->package);
+        append(report, reportsz, "\n\n");
+        problems++;
+    }
+    return problems;
+}
+
+static int open_libs(char *report, size_t reportsz)
+{
+    IntuitionBase = (struct IntuitionBase *)OpenLibrary("intuition.library", 37);
+    if (!IntuitionBase)
+        return 0;
+    return check_requirements(report, reportsz) == 0;
+}
+
+static void show_requirements(const char *report)
+{
+    struct EasyStruct es;
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (UBYTE *)"AmigaIDE";
+    es.es_TextFormat = (UBYTE *)"AmigaIDE kann nicht starten, es fehlt:\n\n%s"
+                                "Alle Pakete gibt es auf Aminet; Einzelheiten im\n"
+                                "Handbuch, Abschnitt Voraussetzungen.";
+    es.es_GadgetFormat = (UBYTE *)"OK";
+    EasyRequest(NULL, &es, NULL, (ULONG)report);
 }
 
 static void close_libs(void)
@@ -80,25 +156,12 @@ static void close_libs(void)
 
 int main(void)
 {
+    static char report[1600];
     int rc;
 
-
-    if (!open_libs()) {
-        if (MUIMasterBase && g_regexWrongVersion) {
-            MUI_Request(NULL, NULL, 0, "AmigaIDE", "_OK",
-                        "In LIBS: liegt eine fremde regex.library (Version %ld).\n\n"
-                        "AmigaIDE braucht die regex.library 5.x von Alfonso Ranieri\n"
-                        "(Aminet: util/libs/regex_ranieri.lha) -- nicht die\n"
-                        "gleichnamige aus util/libs/Regex.lha.\n\n"
-                        "Achtung: Andere Programme k\366nnten die vorhandene\n"
-                        "Bibliothek brauchen -- vor dem Ersetzen sichern.",
-                        (LONG)g_regexWrongVersion);
-        } else if (MUIMasterBase) {
-            MUI_Request(NULL, NULL, 0, "AmigaIDE",
-                        "_OK", "Konnte intuition.library/regex.library/reqtools.library "
-                               "nicht \366ffnen (regex.library und reqtools.library m\374ssen "
-                               "in LIBS: installiert sein).");
-        }
+    if (!open_libs(report, sizeof(report))) {
+        if (IntuitionBase && report[0])
+            show_requirements(report);
         close_libs();
         return 20;
     }

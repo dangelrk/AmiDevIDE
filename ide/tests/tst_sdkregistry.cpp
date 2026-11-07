@@ -34,6 +34,7 @@ private slots:
     void resolveAcceptsSameOrNewerVersion();
     void registryResolvesNewerManifestSdk();
     void majorVersionJumpsAreReported();
+    void checkFindsMissingPartsAndLookAlikes();
 };
 
 namespace {
@@ -460,6 +461,59 @@ void TstSdkRegistry::majorVersionJumpsAreReported()
     reg.reload(QStringLiteral("/tc"));
     QCOMPARE(reg.majorUpgradeIds({ QStringLiteral("ndk-3.2"), QStringLiteral("NDK-2.1") }),
              QStringList{ QStringLiteral("NDK-2.1") });
+}
+
+void TstSdkRegistry::checkFindsMissingPartsAndLookAlikes()
+{
+    // The NDK unpacked as "NDK3.2" instead of "NDK_3.2": the root is
+    // missing, and the look-alike next to it is named.
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QVERIFY(QDir(tmp.path()).mkpath(QStringLiteral("NDK3.2/Include_H")));
+    QVERIFY(QDir(tmp.path()).mkpath(QStringLiteral("MUI_3.8/Developer/C/Include")));
+
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins(tmp.path().toUtf8().constData(), &list);
+    const AideSdkDescriptor *ndk = aide_sdk_list_find(&list, "ndk-3.2");
+    const AideSdkDescriptor *mui = aide_sdk_list_find(&list, "mui-3.8");
+    QVERIFY(ndk && mui);
+
+    AideSdkCheck c;
+    aide_sdk_check_init(&c);
+    aide_sdk_check(ndk, &c);
+    QVERIFY(c.count > 1);
+    QCOMPARE(c.items[0].kind, AIDE_SDK_PART_ROOT);
+    QVERIFY(!c.items[0].present);
+    QCOMPARE(c.missing, c.count);
+    QCOMPARE(QString::fromUtf8(c.items[0].similar), tmp.path() + QStringLiteral("/NDK3.2"));
+    QVERIFY(!c.items[1].similar); // only the root gets one
+
+    // Renamed into place: the root and Include_H are there now, the
+    // other parts still missing -- and no look-alike for them.
+    QVERIFY(QDir(tmp.path()).rename(QStringLiteral("NDK3.2"), QStringLiteral("NDK_3.2")));
+    aide_sdk_check(ndk, &c);
+    QVERIFY(c.items[0].present);
+    QVERIFY(c.items[1].present); // Include_H
+    QVERIFY(c.missing > 0 && c.missing < c.count);
+
+    // A part with only its case/underscores changed is a look-alike too.
+    QVERIFY(QDir(tmp.path()).mkpath(QStringLiteral("NDK_3.2/include-i")));
+    aide_sdk_check(ndk, &c);
+    bool sawAsm = false;
+    for (size_t i = 0; i < c.count; ++i) {
+        if (c.items[i].kind == AIDE_SDK_PART_ASM_INCLUDE) {
+            sawAsm = true;
+            QVERIFY(!c.items[i].present);
+            QCOMPARE(QString::fromUtf8(c.items[i].similar), tmp.path() + QStringLiteral("/NDK_3.2/include-i"));
+        }
+    }
+    QVERIFY(sawAsm);
+
+    aide_sdk_check(mui, &c);
+    QVERIFY(c.items[0].present);
+    aide_sdk_check_free(&c);
+    aide_sdk_list_free(&list);
 }
 
 QTEST_APPLESS_MAIN(TstSdkRegistry)

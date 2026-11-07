@@ -389,6 +389,22 @@ static void add_all_sdk_rows(void)
             const AideSdkDescriptor *d = &g_registry->items[i];
             const char *requested = requested_id(d);
             char *label = sdk_label(d);
+            {
+                /* say so right in the row; details: Projekt -> SDKs pruefen */
+                AideSdkCheck c;
+                aide_sdk_check_init(&c);
+                aide_sdk_check(d, &c);
+                if (c.missing > 0) {
+                    AideStr s;
+                    aide_str_init(&s);
+                    aide_str_append(&s, label);
+                    aide_str_append(&s, (c.count > 0 && !c.items[0].present)
+                                        ? " (nicht gefunden)" : " (unvollst\344ndig)");
+                    free(label);
+                    label = aide_str_take(&s);
+                }
+                aide_sdk_check_free(&c);
+            }
             if (requested && !aide_str_ieq(requested, d->id)) {
                 AideStr s;
                 aide_str_init(&s);

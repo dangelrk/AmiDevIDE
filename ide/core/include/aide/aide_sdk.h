@@ -149,6 +149,46 @@ char *aide_sdk_list_to_json_array(const AideSdkList *l);
  * array is empty), 0 if json_text isn't a valid JSON array. */
 int aide_sdk_list_append_from_json_array(AideSdkList *out, const char *json_text);
 
+
+/* ---- Is an SDK actually there? ----
+ * A descriptor only says where its parts *should* be. aide_sdk_check()
+ * looks at each of them on disk, so a frontend can show what an SDK
+ * lacks instead of a build failing on a missing include. For a missing
+ * part it also looks next to where it should be for a directory or file
+ * whose name differs only in case, '_', '-', '.' or blanks ("NDK3.2" for
+ * "NDK_3.2", "include_h" for "Include_H") and reports that as `similar`.
+ * Data only -- the frontends word it in their own language. */
+typedef enum AideSdkPartKind {
+    AIDE_SDK_PART_ROOT = 0,
+    AIDE_SDK_PART_INCLUDE,
+    AIDE_SDK_PART_ASM_INCLUDE,
+    AIDE_SDK_PART_LIB,
+    AIDE_SDK_PART_AUTODOC_DIR,
+    AIDE_SDK_PART_AUTODOC_FILE,
+    AIDE_SDK_PART_SFD
+} AideSdkPartKind;
+
+typedef struct AideSdkPart {
+    AideSdkPartKind kind;
+    char *path;
+    int present;   /* bool */
+    char *similar; /* existing look-alike if !present, else NULL */
+} AideSdkPart;
+
+typedef struct AideSdkCheck {
+    AideSdkPart *items;
+    size_t count;
+    size_t cap;
+    size_t missing; /* parts with present == 0 */
+} AideSdkCheck;
+
+void aide_sdk_check_init(AideSdkCheck *c);
+void aide_sdk_check_free(AideSdkCheck *c);
+/* Fills *out (cleared first) with the root directory and then every
+ * path the descriptor lists, in descriptor order. A missing root makes
+ * every part below it missing too; only the root then gets a `similar`. */
+void aide_sdk_check(const AideSdkDescriptor *d, AideSdkCheck *out);
+
 #ifdef __cplusplus
 }
 #endif

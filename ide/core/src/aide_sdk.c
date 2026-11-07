@@ -778,3 +778,143 @@ void aide_sdk_append_builtins(const char *sdk_root, AideSdkList *out)
 
     aide_str_free(&path);
 }
+
+/* ---- aide_sdk_check() ---- */
+
+void aide_sdk_check_init(AideSdkCheck *c)
+{
+    c->items = NULL;
+    c->count = 0;
+    c->cap = 0;
+    c->missing = 0;
+}
+
+void aide_sdk_check_free(AideSdkCheck *c)
+{
+    size_t i;
+    for (i = 0; i < c->count; ++i) {
+        free(c->items[i].path);
+        free(c->items[i].similar);
+    }
+    free(c->items);
+    aide_sdk_check_init(c);
+}
+
+/* "NDK_3.2" and "ndk 3.2" both become "ndk32". */
+static void sdk_name_key(const char *name, char *out, size_t outsz)
+{
+    size_t n = 0;
+    for (; *name && n + 1 < outsz; ++name) {
+        char c = *name;
+        if (c >= 'A' && c <= 'Z')
+            c = (char)(c - 'A' + 'a');
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+            out[n++] = c;
+    }
+    out[n] = '\0';
+}
+
+/* Splits at the last '/' or ':' -- AmigaDOS "SDK:NDK_3.2" has the parent
+ * "SDK:", POSIX "/x/NDK_3.2" the parent "/x". Returns 0 if there is no
+ * parent to look in. *dir is malloc'd; *base points into path. */
+static int sdk_split_parent(const char *path, char **dir, const char **base)
+{
+    const char *slash = strrchr(path, '/');
+    const char *colon = strrchr(path, ':');
+    const char *cut = slash > colon ? slash : colon;
+    size_t len;
+
+    if (!cut || cut[1] == '\0')
+        return 0;
+    /* keep a ':' (it is the volume), drop a '/' (it is a separator) --
+     * except a lone leading '/', the POSIX root */
+    len = (size_t)(cut - path) + ((*cut == ':' || cut == path) ? 1 : 0);
+    *dir = (char *)malloc(len + 1);
+    if (!*dir)
+        return 0;
+    memcpy(*dir, path, len);
+    (*dir)[len] = '\0';
+    *base = cut + 1;
+    return 1;
+}
+
+static char *sdk_find_similar(const char *path)
+{
+    char *dir = NULL;
+    const char *base;
+    char want[128], have[128];
+    AideStrList names;
+    char *result = NULL;
+    size_t i;
+
+    if (!sdk_split_parent(path, &dir, &base))
+        return NULL;
+    if (!aide_fs_exists(dir)) {
+        free(dir);
+        return NULL;
+    }
+    sdk_name_key(base, want, sizeof(want));
+    if (want[0]) {
+        aide_strlist_init(&names);
+        aide_fs_list_dirs(dir, &names);
+        aide_fs_list_files(dir, "", &names);
+        for (i = 0; i < names.count && !result; ++i) {
+            sdk_name_key(names.items[i], have, sizeof(have));
+            if (strcmp(have, want) == 0 && strcmp(names.items[i], base) != 0)
+                result = aide_fs_join(dir, names.items[i]);
+        }
+        aide_strlist_free(&names);
+    }
+    free(dir);
+    return result;
+}
+
+static void sdk_check_add(AideSdkCheck *c, AideSdkPartKind kind, const char *path, int rootPresent)
+{
+    AideSdkPart *p;
+
+    if (!path || !path[0])
+        return;
+    if (c->count >= c->cap) {
+        size_t newCap = c->cap ? c->cap * 2 : 16;
+        AideSdkPart *grown = (AideSdkPart *)realloc(c->items, newCap * sizeof(AideSdkPart));
+        if (!grown)
+            return;
+        c->items = grown;
+        c->cap = newCap;
+    }
+    p = &c->items[c->count++];
+    p->kind = kind;
+    p->path = aide_strdup(path);
+    p->present = rootPresent && aide_fs_exists(path);
+    p->similar = NULL;
+    if (!p->present) {
+        c->missing++;
+        if (rootPresent)
+            p->similar = sdk_find_similar(path);
+    }
+}
+
+static void sdk_check_add_list(AideSdkCheck *c, AideSdkPartKind kind, const AideStrList *l, int rootPresent)
+{
+    size_t i;
+    for (i = 0; i < l->count; ++i)
+        sdk_check_add(c, kind, l->items[i], rootPresent);
+}
+
+void aide_sdk_check(const AideSdkDescriptor *d, AideSdkCheck *out)
+{
+    int rootPresent = 1;
+
+    aide_sdk_check_free(out);
+    if (d->rootDir && d->rootDir[0]) {
+        sdk_check_add(out, AIDE_SDK_PART_ROOT, d->rootDir, 1);
+        rootPresent = out->count > 0 && out->items[0].present;
+    }
+    sdk_check_add_list(out, AIDE_SDK_PART_INCLUDE, &d->includeDirs, rootPresent);
+    sdk_check_add_list(out, AIDE_SDK_PART_ASM_INCLUDE, &d->asmIncludeDirs, rootPresent);
+    sdk_check_add_list(out, AIDE_SDK_PART_LIB, &d->libDirs, rootPresent);
+    sdk_check_add_list(out, AIDE_SDK_PART_AUTODOC_DIR, &d->autodocDirs, rootPresent);
+    sdk_check_add_list(out, AIDE_SDK_PART_AUTODOC_FILE, &d->autodocFiles, rootPresent);
+    sdk_check_add_list(out, AIDE_SDK_PART_SFD, &d->sfdDirs, rootPresent);
+}

@@ -36,6 +36,11 @@ public:
     const SdkDescriptor *resolve(const QString &id) const;
     // The ids in `ids` that nothing installed serves, in their order.
     QStringList missingIds(const QStringList &ids) const;
+    // What of `d` is not on disk, one readable line per part, with a
+    // look-alike next to it if there is one ("NDK3.2" for "NDK_3.2") --
+    // aide_sdk_check(). Empty if the SDK is complete. *rootMissing tells
+    // "not there at all" apart from "parts missing".
+    static QStringList missingParts(const SdkDescriptor &d, bool *rootMissing = nullptr);
     // The ids in `ids` served by another major version than they ask for
     // (aide_sdk_list_major_upgrades): they build, but deserve a warning.
     QStringList majorUpgradeIds(const QStringList &ids) const;

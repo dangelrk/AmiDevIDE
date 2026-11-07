@@ -1,6 +1,7 @@
 #include "SdkRegistry.h"
 #include "SdkDescriptorAide.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -183,6 +184,48 @@ QStringList SdkRegistry::missingIds(const QStringList &ids) const
             missing << id;
     }
     return missing;
+}
+
+QStringList SdkRegistry::missingParts(const SdkDescriptor &d, bool *rootMissing)
+{
+    static const char *const kPartLabels[] = {
+        QT_TRANSLATE_NOOP("SdkRegistry", "directory"),
+        QT_TRANSLATE_NOOP("SdkRegistry", "C includes"),
+        QT_TRANSLATE_NOOP("SdkRegistry", "assembler includes"),
+        QT_TRANSLATE_NOOP("SdkRegistry", "libraries"),
+        QT_TRANSLATE_NOOP("SdkRegistry", "autodocs"),
+        QT_TRANSLATE_NOOP("SdkRegistry", "autodoc"),
+        QT_TRANSLATE_NOOP("SdkRegistry", "SFD files"),
+    };
+    AideSdkDescriptor a;
+    AideSdkCheck c;
+    QStringList lines;
+
+    aide_sdk_descriptor_init(&a);
+    sdkDescriptorToAide(d, &a);
+    aide_sdk_check_init(&c);
+    aide_sdk_check(&a, &c);
+
+    const bool noRoot = c.count > 0 && !c.items[0].present && c.items[0].kind == AIDE_SDK_PART_ROOT;
+    for (size_t i = 0; i < c.count; ++i) {
+        const AideSdkPart &p = c.items[i];
+        if (p.present)
+            continue;
+        QString line = QCoreApplication::translate("SdkRegistry", "Missing %1: %2")
+                           .arg(QCoreApplication::translate("SdkRegistry", kPartLabels[p.kind]),
+                                QString::fromUtf8(p.path));
+        if (p.similar)
+            line += QCoreApplication::translate("SdkRegistry", " -- there is %1, renamed?")
+                        .arg(QString::fromUtf8(p.similar));
+        lines << line;
+        if (noRoot)
+            break; // below a missing root every part is missing
+    }
+    if (rootMissing)
+        *rootMissing = noRoot;
+    aide_sdk_check_free(&c);
+    aide_sdk_descriptor_free(&a);
+    return lines;
 }
 
 void SdkRegistry::addUserSdk(const SdkDescriptor &descriptor)

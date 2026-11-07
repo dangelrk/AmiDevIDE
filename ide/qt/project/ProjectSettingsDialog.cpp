@@ -326,6 +326,13 @@ QWidget *ProjectSettingsDialog::createSdksTab()
             check->setToolTip(tr("The Amiga system headers."));
         else if (d.fromManifest)
             check->setToolTip(tr("Described by %1/AmiDevSDK.json").arg(d.rootDir));
+        bool rootMissing = false;
+        const QStringList missing = SdkRegistry::missingParts(d, &rootMissing);
+        if (!missing.isEmpty()) {
+            check->setText(rootMissing ? tr("%1 (not found)").arg(label)
+                                       : tr("%1 (incomplete)").arg(label));
+            check->setToolTip(missing.join(QLatin1Char('\n')));
+        }
         checksLayout->addWidget(check);
         m_extraSdkChecks << check;
         m_extraSdkIds << (requested.isEmpty() ? d.id : requested);

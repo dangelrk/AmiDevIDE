@@ -149,6 +149,7 @@ typedef ULONG IPTR;
 #define ID_BUILD_STOP         31
 #define ID_PREFS              32
 #define ID_REMOVE_FILE        33
+#define ID_CHECK_SDKS         35
 
 #define AIDE_MAX_PATH 256
 
@@ -1260,6 +1261,137 @@ static size_t missing_sdks(AideStr *out)
     return n;
 }
 
+/* ---- SDK completeness (core/aide_sdk_check(), worded here) ---- */
+static const char *sdk_part_label(AideSdkPartKind k)
+{
+    switch (k) {
+    case AIDE_SDK_PART_ROOT:         return "Verzeichnis";
+    case AIDE_SDK_PART_INCLUDE:      return "C-Includes";
+    case AIDE_SDK_PART_ASM_INCLUDE:  return "ASM-Includes";
+    case AIDE_SDK_PART_LIB:          return "Libraries";
+    case AIDE_SDK_PART_AUTODOC_DIR:  return "Autodocs";
+    case AIDE_SDK_PART_AUTODOC_FILE: return "Autodoc";
+    case AIDE_SDK_PART_SFD:          return "SFD";
+    }
+    return "Teil";
+}
+
+static void sdk_name_into(AideStr *out, const AideSdkDescriptor *d)
+{
+    size_t n = strlen(d->displayName), v = strlen(d->version);
+    aide_str_append(out, d->displayName[0] ? d->displayName : d->id);
+    if (v && !(n >= v && strcmp(d->displayName + n - v, d->version) == 0)) {
+        aide_str_append_char(out, ' ');
+        aide_str_append(out, d->version);
+    }
+}
+
+static int sdk_selected_by_project(const AideSdkDescriptor *d)
+{
+    size_t i;
+    for (i = 0; i < g_project.sdks.selected.count; ++i)
+        if (aide_sdk_list_resolve(&g_sdkRegistry, g_project.sdks.selected.items[i]) == d)
+            return 1;
+    return 0;
+}
+
+/* One SDK's verdict: a headline, and with `details` every missing part
+ * plus any look-alike found next to it (a renamed directory is the
+ * usual reason). */
+static void sdk_report_into(AideStr *out, const AideSdkDescriptor *d, int details)
+{
+    AideSdkCheck c;
+    size_t i;
+    char num[32];
+
+    aide_sdk_check_init(&c);
+    aide_sdk_check(d, &c);
+    aide_str_append(out, "  ");
+    sdk_name_into(out, d);
+    if (sdk_selected_by_project(d))
+        aide_str_append(out, " [Projekt]");
+    if (c.missing == 0) {
+        aide_str_append(out, ": vollst\344ndig\n");
+    } else if (c.count > 0 && !c.items[0].present && c.items[0].kind == AIDE_SDK_PART_ROOT) {
+        aide_str_append(out, ": nicht gefunden\n");
+    } else {
+        sprintf(num, ": %lu von %lu Teilen fehlen\n", (unsigned long)c.missing, (unsigned long)c.count);
+        aide_str_append(out, num);
+    }
+    for (i = 0; i < c.count; ++i) {
+        const AideSdkPart *p = &c.items[i];
+        if (p->present)
+            continue;
+        /* below a missing root, only the root itself is worth a line */
+        if (i > 0 && !c.items[0].present && c.items[0].kind == AIDE_SDK_PART_ROOT)
+            break;
+        if (!details && !p->similar)
+            continue;
+        aide_str_append(out, "      fehlt ");
+        aide_str_append(out, sdk_part_label(p->kind));
+        aide_str_append(out, ": ");
+        aide_str_append(out, p->path);
+        aide_str_append_char(out, '\n');
+        if (p->similar) {
+            aide_str_append(out, "        vorhanden ist: ");
+            aide_str_append(out, p->similar);
+            aide_str_append(out, "  (umbenennen?)\n");
+        }
+    }
+    aide_sdk_check_free(&c);
+}
+
+/* Projekt -> "SDKs pr\374fen...": every known SDK into the Ausgabe page. */
+static void do_check_sdks(void)
+{
+    AideStr text;
+    AideStrList missing;
+    size_t i;
+
+    aide_str_init(&text);
+    aide_str_append(&text, "SDK-Pr\374fung, SDK: = ");
+    aide_str_append(&text, prefs_sdk_root());
+    aide_str_append(&text, "\n\n");
+    for (i = 0; i < g_sdkRegistry.count; ++i)
+        sdk_report_into(&text, &g_sdkRegistry.items[i], 1);
+
+    aide_strlist_init(&missing);
+    aide_sdk_list_missing(&g_sdkRegistry, &g_project.sdks.selected, &missing);
+    for (i = 0; i < missing.count; ++i) {
+        aide_str_append(&text, "  ");
+        aide_str_append(&text, missing.items[i]);
+        aide_str_append(&text, " [Projekt]: nicht installiert\n");
+    }
+    aide_strlist_free(&missing);
+
+    DoMethod(g_outputEditor, MUIM_TextEditor_ClearText);
+    DoMethod(g_outputEditor, MUIM_TextEditor_InsertText, (ULONG)text.data, MUIV_TextEditor_InsertText_Top);
+    set(g_bottomRegister, MUIA_Group_ActivePage, 0UL);
+    aide_str_free(&text);
+    set_status("SDK-Pr\374fung in Ausgabe");
+}
+
+/* The project's own SDKs that are installed but incomplete, as short
+ * lines (look-alikes included) -- for the note after loading. */
+static size_t incomplete_project_sdks(AideStr *out)
+{
+    size_t i, n = 0;
+    for (i = 0; i < g_sdkRegistry.count; ++i) {
+        const AideSdkDescriptor *d = &g_sdkRegistry.items[i];
+        AideSdkCheck c;
+        if (!sdk_selected_by_project(d))
+            continue;
+        aide_sdk_check_init(&c);
+        aide_sdk_check(d, &c);
+        if (c.missing > 0) {
+            sdk_report_into(out, d, 0);
+            n++;
+        }
+        aide_sdk_check_free(&c);
+    }
+    return n;
+}
+
 static void set_project_paths(const char *aprojPath)
 {
     STRPTR namePart;
@@ -1402,6 +1534,13 @@ static void open_project_at(const char *path)
                         "Abhilfe: ein SDK mit gleichem Namen in dieser oder\n"
                         "neuerer Version unter %s ablegen (mit AmiDevSDK.json).",
                         list.data, prefs_sdk_root());
+        }
+        aide_str_clear(&list);
+        if (incomplete_project_sdks(&list) > 0) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "Dieses Projekt benutzt SDKs, denen Teile fehlen:\n\n%s\n"
+                        "Was genau fehlt: Projekt -> SDKs pr\374fen...",
+                        list.data);
         }
         aide_str_free(&list);
     }
@@ -2971,6 +3110,7 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "Datei aus Projekt entfernen...", 0, 0, 0, (APTR)ID_REMOVE_FILE },
     { NM_ITEM,  "Projekteinstellungen...", "I", 0, 0, (APTR)ID_PROJECT_SETTINGS },
     { NM_ITEM,  "Einstellungen...", 0, 0, 0, (APTR)ID_PREFS },
+    { NM_ITEM,  "SDKs pr\374fen...", 0, 0, 0, (APTR)ID_CHECK_SDKS },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Im Projekt suchen...", "F", 0, 0, (APTR)ID_FIND_IN_PROJECT },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
@@ -3496,6 +3636,9 @@ int mainwindow_run(void)
             break;
         case ID_PROJECT_SETTINGS:
             settingswindow_show(&g_project);
+            break;
+        case ID_CHECK_SDKS:
+            do_check_sdks();
             break;
         case ID_PREFS:
             prefswindow_show();

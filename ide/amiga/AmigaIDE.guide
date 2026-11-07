@@ -79,6 +79,10 @@ Fehlt eine davon, startet AmigaIDE nicht. regex.library wird für
 Symbolindex, Suche und Hilfe gebraucht, reqtools.library für alle
 Datei- und Texteingaben.
 
+Beim Start prüft AmigaIDE alle Libraries und MUI-Klassen und nennt in
+einem Fenster jede, die fehlt oder zu alt ist, mit dem Aminet-Paket,
+das sie liefert.
+
 @{b}Achtung, Verwechslungsgefahr:@{ub} Auf Aminet gibt es zwei
 verschiedene Bibliotheken namens regex.library. Die richtige ist
 util/libs/regex_ranieri.lha (Version 5.1, 32 KB). Das Paket
@@ -141,6 +145,13 @@ Erwartete Struktur unter SDK: (nur was man braucht):
   SDK:MCC/Developer/C/include
   SDK:regex/include
   SDK:reqtools/include
+
+Ob ein SDK vollständig ist, zeigt @{b}Projekt > SDKs prüfen...@{ub}: Für
+jedes SDK steht in der Ausgabe "vollständig", "nicht gefunden" oder
+welche Teile fehlen. Liegt daneben ein Verzeichnis, dessen Name sich
+nur in Groß-/Kleinschreibung, "_", "-", "." oder Leerzeichen
+unterscheidet (etwa SDK:NDK3.2 statt SDK:NDK_3.2), wird es mit
+"umbenennen?" genannt.
 
 @{u}Andere Pfade@{uu}
 
@@ -241,7 +252,8 @@ ohne Nachfrage verloren.
 
 Benutzt das Projekt SDKs, die hier nicht installiert sind, nennt
 AmigaIDE sie in einem Hinweis. Ebenso, wenn ein SDK nur in einer
-neueren Hauptversion da ist. Siehe @{" Eigene SDKs " link EigeneSDKs}.
+neueren Hauptversion da ist oder Teile davon fehlen (Einzelheiten:
+Projekt > SDKs prüfen...). Siehe @{" Eigene SDKs " link EigeneSDKs}.
 
 @{u}Projekt > Speichern  (Amiga-S)@{uu}
 
@@ -341,6 +353,9 @@ gefunden hat, mit Name und Version.
 Verlangt das Projekt eine ältere Version, als installiert ist, steht
 das dahinter, etwa "Foo Lib 1.3 (Projekt: foo-lib-1.2)"; beim OK
 bleibt die Projektdatei bei 1.2.
+
+Fehlen einem SDK Verzeichnisse, steht hinter seinem Namen
+"(unvollständig)" oder "(nicht gefunden)".
 
 Benutzt das Projekt ein SDK, das hier nicht installiert ist, steht es
 am Ende mit dem Zusatz "(nicht installiert)" und ist angehakt. So
