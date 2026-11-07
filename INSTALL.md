@@ -232,7 +232,7 @@ der jeweils erste Pfad durch `acd-doctor`):
 | Verzeichnis unter `toolchain/sdk/` | Erwartetes Layout | Mögliche Quelle |
 |---|---|---|
 | `MCC/` (weitere Klassen) | `Developer/C/include/mui/*.h`, `Developer/Autodocs/MCC/*.doc` | BetterString, TheBar usw. installiert der Bootstrap nicht; ihre `Developer/`-Bäume von GitHub `amiga-mui` hineinkopieren |
-| `regex/` | `include/{clib,libraries,pragmas,proto}/…`, `fd/regex_lib.fd` | Aminet, z. B. `util/libs/regex_ranieri` (ungeprüft, welches Paket das Original ist). Die MUI-IDE ruft `regex.library` über eigene Stubs auf und braucht die Header zum Übersetzen nicht |
+| `regex/` | `include/{clib,libraries,pragmas,proto}/…`, `fd/regex_lib.fd` | Aminet `util/libs/regex_ranieri` (Alfonso Ranieri, 5.1) -- **nicht** `util/libs/Regex`, siehe §8.2. Die MUI-IDE ruft `regex.library` über eigene Stubs auf und braucht die Header zum Übersetzen nicht |
 | `Roadshow/` | `include/`, `netinclude/`, `sfd/` | Roadshow-SDK (ungeprüft); NDK 3.2 enthält unter `SANA+RoadshowTCP-IP/` ebenfalls `netinclude` |
 | `AmiSSL-v5/` | `Developer/include/`, `Developer/lib/AmigaOS3/` | `https://github.com/jens-maus/amissl/releases/download/5.27/AmiSSL-5.27-SDK.lha` (Layout ungeprüft) |
 | `SQLite3/` | `include/`, `lib/` | Aminet `biz/dbase/sqlite3` (ungeprüft) |
@@ -478,7 +478,7 @@ python3 emulator/acd_emu.py --serial
 | FPU | nicht nötig (`-lmieee` → `mathieeedoubbas.library` aus `LIBS:`) |
 | OS | AmigaOS 3.x; die IDE öffnet `intuition.library` v37 (≥ 2.04). Mit NDK 3.2 gebaut; getestet ist kein OS-Stand (ungeprüft: 3.1 / 3.2) |
 | MUI | `muimaster.library` ≥ v19 (MUI 3.8) |
-| Libraries | `reqtools.library` ≥ v38, `regex.library` in `LIBS:` |
+| Libraries | `reqtools.library` ≥ v38, `regex.library` ≥ v5 (Ranieri) in `LIBS:` |
 | MCCs (in `MUI:Libs/mui/`) | NList (`NList`, `NListview`, `NListtree`), `TextEditor` |
 | make | GNU make für Amiga von Darren Coles (`gnu_make_amiga`, 4.4.1) |
 | Speicher / Stack | ungeprüft; ACE-Upstream setzt `stack 65000` in seiner User-Startup |
@@ -494,7 +494,7 @@ python3 emulator/acd_emu.py --serial
 | MUI 3.8 Developer | `https://aminet.net/dev/mui/mui38dev.lha` | Inhalt von `MUI/` nach `SDK:MUI_3.8/` (→ `SDK:MUI_3.8/Developer/C/Include`) |
 | MUI 3.8 User (Runtime) | `https://aminet.net/util/libs/mui38usr.lha` | per Installer, `MUI:` |
 | MCCs Developer + Runtime | siehe §1 (GitHub `amiga-mui`) | Header nach `SDK:MCC/Developer/C/include/mui/`, Klassen nach `MUI:Libs/mui/` |
-| regex.library 5.1 (POSIX, Alfonso Ranieri) | `https://aminet.net/util/libs/regex_ranieri.lha` (Einsprünge passen zu `ide/amiga/src/mui/aide_regex_amiga.c`) | `Libs/regex.library` nach `LIBS:`; Header nur für eigene Programme nach `SDK:regex/include/` |
+| regex.library 5.1 (POSIX, Alfonso Ranieri) | `https://aminet.net/util/libs/regex_ranieri.lha` (Einsprünge passen zu `ide/amiga/src/mui/aide_regex_amiga.c`) | `Libs/regex.library` nach `LIBS:`; Header nur für eigene Programme nach `SDK:regex/include/`. **Verwechslungsgefahr:** `util/libs/Regex.lha` enthält eine *andere* `regex.library` (GNU, 1.0 von 1989, 9288 Bytes, `Version` meldet `1.-1`) mit anderen Einsprüngen; mit ihr stürzte die IDE beim ersten Indizieren einer C-Datei ab (Guru `8100000F`). Seit 0.5 lehnt die IDE Versionen unter 5 beim Start mit einer Meldung ab, der Installer warnt |
 | reqtools | `https://aminet.net/util/libs/ReqToolsDev.lha` (Header), `https://aminet.net/util/libs/ReqToolsUsr.lha` (Library) | Header nach `SDK:reqtools/include/`, Library nach `LIBS:` |
 | GNU make | `https://github.com/dmcoles/gnu_make_amiga/releases/download/4.4.1-26022026/make441-26022026.lha` oder `https://aminet.net/dev/c/make-4.4.1.lha` | `make` nach `C:` oder in einen Pfad im `PATH` |
 | ACE BASIC 3.0.1 (Original, **ungepatcht**) | `https://aminet.net/dev/basic/ace-basic.lha` | z. B. `Work:ACE`, mit den Assigns `ACE:`, `ACElib:`, `ACEinclude:`, `ACEbmaps:` (§8.3) |

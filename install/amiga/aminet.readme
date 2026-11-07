@@ -37,8 +37,9 @@ Requirements
 - AmigaOS 3.x, 68020 or better, no FPU needed
 - MUI 3.8 or newer (util/libs/mui38usr.lha)
 - reqtools.library (util/libs/ReqToolsUsr.lha)
-- regex.library, the POSIX one by Alfonso Ranieri
-  (util/libs/regex_ranieri.lha)
+- regex.library 5.x, the POSIX one by Alfonso Ranieri
+  (util/libs/regex_ranieri.lha). Not the unrelated GNU regex.library 1.0
+  from util/libs/Regex.lha, which has the same name.
 - MUI classes NList, NListview, NListtree (dev/mui/MCC_NList-0.128.lha)
   and TextEditor (dev/mui/MCC_TextEditor-15.56.lha)
 To build programs:

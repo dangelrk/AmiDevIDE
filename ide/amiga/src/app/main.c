@@ -31,6 +31,9 @@ long __stack = 65536;
  * build time on top. */
 const char amiga_ver[] = "$VER: AmigaIDE " AMIGAIDE_VERSION_STRING " (" AMIGAIDE_BUILD_DATE ")";
 
+/* Version of a foreign regex.library found in LIBS:, 0 if none. */
+static UWORD g_regexWrongVersion = 0;
+
 static int open_libs(void)
 {
     MUIMasterBase = OpenLibrary("muimaster.library", 19);
@@ -44,6 +47,17 @@ static int open_libs(void)
      * indexing/search functionality, so treat it as a hard dependency
      * here and report it plainly instead of limping along degraded. */
     RegexBase = OpenLibrary("regex.library", 0);
+    /* Only Alfonso Ranieri's POSIX regex.library (Aminet
+     * util/libs/regex_ranieri.lha, v5.x) has the entry points
+     * aide_regex_amiga.c calls. Aminet's util/libs/Regex.lha ships an
+     * unrelated GNU regex.library 1.0 (1989, 9288 bytes, "1.-1") under
+     * the same name; a real A1200 had it in LIBS:, and calling into it
+     * ended in Guru 8100000F as soon as the first C file was indexed. */
+    if (RegexBase && RegexBase->lib_Version < 5) {
+        g_regexWrongVersion = RegexBase->lib_Version;
+        CloseLibrary(RegexBase);
+        RegexBase = NULL;
+    }
     /* reqtools.library backs every file/string requester (mainwindow.c's
      * ask_string()/ask_file()) -- same "hard dependency, report plainly"
      * reasoning as regex.library above; without it there is no way to
@@ -70,7 +84,16 @@ int main(void)
 
 
     if (!open_libs()) {
-        if (MUIMasterBase) {
+        if (MUIMasterBase && g_regexWrongVersion) {
+            MUI_Request(NULL, NULL, 0, "AmigaIDE", "_OK",
+                        "In LIBS: liegt eine fremde regex.library (Version %ld).\n\n"
+                        "AmigaIDE braucht die regex.library 5.x von Alfonso Ranieri\n"
+                        "(Aminet: util/libs/regex_ranieri.lha) -- nicht die\n"
+                        "gleichnamige aus util/libs/Regex.lha.\n\n"
+                        "Achtung: Andere Programme k\366nnten die vorhandene\n"
+                        "Bibliothek brauchen -- vor dem Ersetzen sichern.",
+                        (LONG)g_regexWrongVersion);
+        } else if (MUIMasterBase) {
             MUI_Request(NULL, NULL, 0, "AmigaIDE",
                         "_OK", "Konnte intuition.library/regex.library/reqtools.library "
                                "nicht \366ffnen (regex.library und reqtools.library m\374ssen "

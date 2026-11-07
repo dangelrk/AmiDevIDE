@@ -32,7 +32,9 @@ Voraussetzungen (alle auf Aminet)
   68020 oder besser, AmigaOS 3.x, MUI 3.8 oder neuer
   util/libs/mui38usr.lha            MUI (muimaster.library)
   util/libs/ReqToolsUsr.lha         reqtools.library
-  util/libs/regex_ranieri.lha       regex.library (POSIX, von A. Ranieri)
+  util/libs/regex_ranieri.lha       regex.library 5.1 (POSIX, von A. Ranieri)
+                                    -- NICHT util/libs/Regex.lha: gleicher
+                                    Name, aber eine andere Bibliothek
   dev/mui/MCC_NList-0.128.lha       NList, NListview, NListtree
   dev/mui/MCC_TextEditor-15.56.lha  TextEditor
 

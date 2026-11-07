@@ -40,7 +40,12 @@
 (if (= 0 (exists "LIBS:reqtools.library" (noreq)))
   (set #fehlt (cat #fehlt "reqtools.library (util/libs/ReqToolsUsr.lha)\n")))
 (if (= 0 (exists "LIBS:regex.library" (noreq)))
-  (set #fehlt (cat #fehlt "regex.library (util/libs/regex_ranieri.lha)\n")))
+  (set #fehlt (cat #fehlt "regex.library (util/libs/regex_ranieri.lha)\n"))
+  ; gleichnamige fremde Bibliotheken (z.B. Version 1) passen nicht
+  (if (< (getversion "LIBS:regex.library") (* 5 65536))
+    (set #fehlt (cat #fehlt "regex.library 5.x - die vorhandene ist eine\n"
+                     "  andere, z.B. aus util/libs/Regex.lha\n"
+                     "  (richtig: util/libs/regex_ranieri.lha)\n"))))
 (if (= 0 (exists "MUI:Libs/mui/NListtree.mcc" (noreq)))
   (set #fehlt (cat #fehlt "NList-Klassen (dev/mui/MCC_NList-0.128.lha)\n")))
 (if (= 0 (exists "MUI:Libs/mui/TextEditor.mcc" (noreq)))

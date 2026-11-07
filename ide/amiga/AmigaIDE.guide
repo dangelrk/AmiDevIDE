@@ -73,11 +73,22 @@ Was die Amiga-Version kann:
 
   muimaster.library    ab V19 (MUI 3.8)
   reqtools.library     ab V38
-  regex.library        beliebige Version
+  regex.library        ab V5 (POSIX, Alfonso Ranieri)
 
 Fehlt eine davon, startet AmigaIDE nicht. regex.library wird für
 Symbolindex, Suche und Hilfe gebraucht, reqtools.library für alle
 Datei- und Texteingaben.
+
+@{b}Achtung, Verwechslungsgefahr:@{ub} Auf Aminet gibt es zwei
+verschiedene Bibliotheken namens regex.library. Die richtige ist
+util/libs/regex_ranieri.lha (Version 5.1, 32 KB). Das Paket
+util/libs/Regex.lha enthält eine ganz andere (GNU, Version 1.0
+von 1989, 9 KB) mit anderen Funktionen. Mit ihr endete das erste
+Indizieren einer C-Datei früher im Guru 8100000F; heute meldet
+AmigaIDE beim Start "fremde regex.library". Prüfen mit
+  Version LIBS:regex.library
+Die alte Bibliothek vor dem Ersetzen sichern, falls ein anderes
+Programm (etwa tinygrep aus demselben Paket) sie braucht.
 
 @{u}MUI-Klassen in MUI:Libs/mui/@{uu}
 
