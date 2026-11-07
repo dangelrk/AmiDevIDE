@@ -163,6 +163,7 @@ void helpwindow_init(Object *app, const char *cacheDir, void (*ensureIndex)(void
     End;
 
     DoMethod(g_app, OM_ADDMEMBER, g_window);
+    AIDE_REMEMBER_WINDOW(g_window);
 
     /* Secondary window: close hides it directly, no main-loop round trip
      * (the usual MUI idiom for secondary windows). */

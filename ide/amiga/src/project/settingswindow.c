@@ -612,6 +612,7 @@ void settingswindow_init(Object *app, const AideSdkList *registry)
     End;
 
     DoMethod(g_app, OM_ADDMEMBER, g_window);
+    AIDE_REMEMBER_WINDOW(g_window);
     DoMethod(g_window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
             g_app, 2, MUIM_Application_ReturnID, ID_SETTINGS_CANCEL);
     DoMethod(g_okBtn, MUIM_Notify, MUIA_Pressed, FALSE,

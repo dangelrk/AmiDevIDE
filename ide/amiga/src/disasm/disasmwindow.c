@@ -67,6 +67,7 @@ void disasmwindow_init(Object *app)
     End;
 
     DoMethod(g_app, OM_ADDMEMBER, g_window);
+    AIDE_REMEMBER_WINDOW(g_window);
     DoMethod(g_window, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
             g_window, 3, MUIM_Set, MUIA_Window_Open, FALSE);
     DoMethod(g_saveBtn, MUIM_Notify, MUIA_Pressed, FALSE,

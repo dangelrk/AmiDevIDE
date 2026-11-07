@@ -68,4 +68,16 @@ LONG    MUI_Request(APTR app, APTR win, LONGBITS flags, char *title,
                      char *gadgets, char *format, ...);
 Object *MUI_MakeObject(LONG type, ...);
 
+/* Window position memory: MUI keeps a window's place and size for the
+ * session if it has a MUIA_Window_ID; a snapshot (the method behind the
+ * snapshot gadget, V11, missing from the 3.8 headers) makes it permanent
+ * in ENVARC:MUI/. AIDE_REMEMBER_WINDOW() snapshots `win` whenever it is
+ * closed -- by the user or on quit -- so every window reopens where it
+ * was left. Use after the window has been added to the application. */
+#ifndef MUIM_Window_Snapshot
+#define MUIM_Window_Snapshot 0x8042945e
+#endif
+#define AIDE_REMEMBER_WINDOW(win) \
+    DoMethod((win), MUIM_Notify, MUIA_Window_Open, FALSE, (win), 2, MUIM_Window_Snapshot, 1)
+
 #endif /* AIDE_MUI_STUBS_H */
