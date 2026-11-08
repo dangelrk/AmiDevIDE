@@ -11,7 +11,7 @@
  *     so nothing on an AmigaDOS command line needs quoting;
  *   - reading the result: amivcs --porcelain-out writes one record per
  *     line (format, branch/detached, change, ref, commit, committed, msg,
- *     progress, end), fields separated by tabs, escaped (\\ \t \n \r),
+ *     progress, auth-required, end), fields separated by tabs, escaped (\\ \t \n \r),
  *     all text in the local codeset;
  *   - file states for the project tree, the IDE's .amivcsignore lines.
  *
@@ -45,7 +45,7 @@ typedef enum AideVcsOp {
     AIDE_VCS_CHECKOUT,
     AIDE_VCS_PUSH,
     AIDE_VCS_PULL,
-    AIDE_VCS_CLONE      /* repository name, target directory */
+    AIDE_VCS_CLONE      /* remote URL, target directory */
 } AideVcsOp;
 
 /* 1 for an operation that changes the repository or the working tree:
@@ -69,10 +69,11 @@ typedef struct AideVcsJob {
  * for the job's files (e.g. "T:aide-vcs" or "/tmp/aide-vcs-123"; the
  * module appends ".pc", ".args", ".msg"). `items`: paths (relative to the
  * project, local codeset) for add/unstage; the branch name for
- * branch/switch/merge/pull (optional for pull); the repository name on
- * the server for push (optional: amivcs remembers it after the first push
- * or a clone); for clone the repository name and the target directory. `message` for commit. `flag`: commit
- * -a. `logLimit` for log (0 = all). Writes the args/message files.
+ * branch/switch/merge/pull (optional for pull); the remote URL
+ * (https://server/<name>) for push (optional: amivcs remembers it after
+ * the first push or a clone); for clone the URL and the target directory.
+ * Login data goes in front of the items, aide_vcs_items_with_login().
+ * `message` for commit. `flag`: commit -a. `logLimit` for log (0 = all). Writes the args/message files.
  * Returns 1, or 0 if a file could not be written. */
 int  aide_vcs_job_build(AideVcsJob *job, AideVcsOp op, const char *program,
                         const char *tmpBase, const AideStrList *items,
@@ -123,6 +124,9 @@ typedef struct AideVcsResult {
     AideVcsMessage *messages; size_t messageCount;
     long  progressDone, progressTotal;
     char *progressLabel;
+    int   authRequired;   /* an auth-required record: ask and run again */
+    char *authUrl;        /* the remote URL it was about */
+    char *authUser;       /* the user amivcs had ("" if none) */
 } AideVcsResult;
 
 void aide_vcs_result_init(AideVcsResult *r);
@@ -153,10 +157,26 @@ void aide_vcs_ignore_missing(const AideProject *p, const char *existingText, Aid
 /* Appends lines to <projectRoot>/.amivcsignore. Returns 1 on success. */
 int  aide_vcs_ignore_append(const char *projectRoot, const AideStrList *lines);
 
-/* 1 if a failed push only lacked the repository name on the server (a
- * repository created locally, never pushed or cloned): ask for it and
- * push again with the name as the item. */
-int  aide_vcs_needs_remote_name(const AideVcsResult *r);
+/* 1 if a failed push only lacked the remote URL (a repository created
+ * locally, never pushed or cloned): ask for it and push again with the
+ * URL as the item. */
+int  aide_vcs_needs_remote_url(const AideVcsResult *r);
+
+/* ---- remotes and login ---- */
+
+/* 1 if `url` looks like a remote URL: scheme://host/<name> */
+int  aide_vcs_is_url(const char *url);
+/* The repository's name on the server, the last path element of a remote
+ * URL ("https://host/a/proj/" -> "proj"); the default folder for a clone.
+ * malloc'd, "" if there is none. */
+char *aide_vcs_url_name(const char *url);
+/* *out = --user/--password/--remember-password for amivcs (only the ones
+ * given: user/pass NULL or "" are left out), followed by `items`. They
+ * travel in the job's --args-from file, never on a command line; the file
+ * is removed with the job. Retry a network job after an auth-required
+ * result with these items. */
+void aide_vcs_items_with_login(const AideStrList *items, const char *user, const char *pass,
+                               int remember, AideStrList *out);
 
 /* 1 if a status result lists `.theirs` copies (an unresolved merge) */
 int  aide_vcs_has_theirs(const AideVcsResult *status);

@@ -42,8 +42,13 @@ ist; ohne `amivcs` sieht die IDE aus wie heute.
     die MUI-Oberfläche blockiert nie, auch nicht beim Status über viele
     Dateien.
   - Zeichensatz, Autor, Zugangsdaten bleiben ganz bei `amivcs`
-    (`ENV:amivcs.cfg`, `~/.amivcsrc`): IDE und CLI können sich nicht
-    widersprechen. Auf dem Amiga sieht die IDE nur lokale Namen
+    (seit AmiVCS nach 0.9: `ENV:AmiVCS/config` bzw. `~/.amivcsconfig`
+    global, `.amivcs/config` pro Repository mit Remote-URL; früher
+    `ENV:amivcs.cfg`, `~/.amivcsrc`): IDE und CLI können sich nicht
+    widersprechen. Fehlt ein Login, meldet `amivcs` den Datensatz
+    `auth-required <url> <benutzer>`; die IDE fragt und wiederholt den
+    Auftrag mit `--user`/`--password`/`--remember-password` in der
+    `--args-from`-Datei (siehe AmiVCS `docs/design/remotes-plan.md`). Auf dem Amiga sieht die IDE nur lokale Namen
     (Latin-1 usw.), die Umwandlung nach UTF-8 macht `amivcs`.
 - Kein Submodul, keine gemeinsamen Quellen, keine Build-Änderungen an der
   IDE für AmiVCS. Der Bootstrap kann `amivcs` später (wenn AmiVCS

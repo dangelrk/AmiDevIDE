@@ -630,8 +630,17 @@ Versions-Ansichten.
   *History*, Menü *VCS*, Kennzeichen S/M/N/D im Projektbaum.
 - **MUI-IDE:** `ENVARC:AmigaIDE/amivcs` (Einstellungsfenster, Vorgabe
   `amivcs`). Register *Versionen* und *Verlauf*, Menü *Versionen*.
-- Server, Zugang, Autor und Zeichensatz kommen aus der
-  AmiVCS-Konfiguration (`ENV:amivcs.cfg`, `~/.amivcsrc`).
+- Remote-URL, Zugangsdaten, Autor und Zeichensatz verwaltet `amivcs`
+  selbst (ab AmiVCS nach 0.9): global `ENV:AmiVCS/config` bzw.
+  `~/.amivcsconfig` (Name, E-Mail), pro Repository `.amivcs/config`
+  (Remote-URL, Benutzer, auf Wunsch Passwort). *Clone* fragt die URL
+  (`https://server/name`), *Push* ohne Remote ebenso; fehlen Benutzer
+  oder Passwort, fragt die IDE danach (Qt: Dialog *AmiVCS Login*, MUI:
+  Requester mit verdeckter Passworteingabe) und gibt sie über
+  `--args-from` weiter, nie auf der Kommandozeile. *VCS ▸ Settings...*
+  (Qt, eigener Dialog über `amivcs config`) bzw. *Versionen ▸
+  Einstellungen...* (MUI, startet `SYS:Prefs/AmiVCSConfig`) bearbeiten
+  Remote-URL, Benutzer, Name und E-Mail.
 - Der Editor-Zustand (offene Dateien) liegt in `<projekt>.aproj.user`,
   nicht in der `.aproj`; die IDE bietet an, das samt `build/` und dem
   Zielverzeichnis in `.amivcsignore` einzutragen.

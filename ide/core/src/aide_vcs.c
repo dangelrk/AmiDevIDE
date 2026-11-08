@@ -213,6 +213,8 @@ void aide_vcs_result_free(AideVcsResult *r)
     free(r->committed);
     free(r->currentRef);
     free(r->progressLabel);
+    free(r->authUrl);
+    free(r->authUser);
     aide_strlist_free(&r->refs);
     aide_vcs_result_init(r);
 }
@@ -305,6 +307,12 @@ int aide_vcs_parse(AideVcsResult *r, const char *text)
             r->progressTotal = atol(f[2]);
             free(r->progressLabel);
             r->progressLabel = aide_strdup(f[3]);
+        } else if (strcmp(f[0], "auth-required") == 0 && n >= 2) {
+            r->authRequired = 1;
+            free(r->authUrl);
+            free(r->authUser);
+            r->authUrl = aide_strdup(f[1]);
+            r->authUser = aide_strdup(n >= 3 ? f[2] : "");
         }
         /* anything else: a newer amivcs, skipped */
         free(line);
@@ -363,12 +371,49 @@ int aide_vcs_present(const char *projectRoot)
     return ok;
 }
 
-int aide_vcs_needs_remote_name(const AideVcsResult *r)
+int aide_vcs_needs_remote_url(const AideVcsResult *r)
 {
     size_t i;
     for (i = 0; r && i < r->messageCount; i++)
-        if (strstr(r->messages[i].text, "no remote repository configured")) return 1;
+        if (strstr(r->messages[i].text, "no remote URL set")) return 1;
     return 0;
+}
+
+char *aide_vcs_url_name(const char *url)
+{
+    const char *p = url ? strstr(url, "://") : NULL;
+    const char *end, *start;
+    if (!p) return aide_strdup("");
+    p += 3;
+    end = p + strlen(p);
+    while (end > p && end[-1] == '/') end--;   /* trailing '/' */
+    start = end;
+    while (start > p && start[-1] != '/') start--;
+    if (start == p) return aide_strdup("");    /* only the host */
+    return aide_strndup(start, (size_t)(end - start));
+}
+
+int aide_vcs_is_url(const char *url)
+{
+    const char *p = url ? strstr(url, "://") : NULL;
+    char *name;
+    int ok;
+    if (!p || p == url || p[3] == '/' || p[3] == '\0') return 0;   /* scheme and host */
+    name = aide_vcs_url_name(url);
+    ok = name && name[0];
+    free(name);
+    return ok;
+}
+
+void aide_vcs_items_with_login(const AideStrList *items, const char *user, const char *pass,
+                               int remember, AideStrList *out)
+{
+    size_t i;
+    aide_strlist_init(out);
+    if (user && user[0]) { aide_strlist_push(out, "--user"); aide_strlist_push(out, user); }
+    if (pass && pass[0]) { aide_strlist_push(out, "--password"); aide_strlist_push(out, pass); }
+    if (remember) aide_strlist_push(out, "--remember-password");
+    for (i = 0; items && i < items->count; i++) aide_strlist_push(out, items->items[i]);
 }
 
 int aide_vcs_has_theirs(const AideVcsResult *status)

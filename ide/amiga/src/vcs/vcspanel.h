@@ -29,6 +29,7 @@
 #define ID_VCS_STAGE     4010
 #define ID_VCS_UNSTAGE   4011
 #define ID_VCS_COMMIT    4012
+#define ID_VCS_SETTINGS  4013   /* AmiVCSConfig on the project */
 #define ID_VCS_LAST      4019
 
 typedef struct VcsHost {
@@ -41,6 +42,10 @@ typedef struct VcsHost {
     int  (*ask_string)(const char *title, const char *prompt, char *out, unsigned long outsz);
     int  (*ask_dir)(const char *title, char *out, unsigned long outsz);
     void (*set_locked)(int locked, int touchesFiles); /* editor read-only, build menus */
+    /* user, password (hidden) and "remember" for a remote URL; `user`
+     * holds the initial user; refused: the last try was turned down */
+    int  (*ask_login)(const char *url, int refused, char *user, unsigned long usz,
+                      char *pass, unsigned long psz, int *remember);
 } VcsHost;
 
 /* Before the application object exists: the two register pages. */

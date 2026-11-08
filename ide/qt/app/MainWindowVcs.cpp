@@ -11,6 +11,7 @@
 #include "panes/OutputPane.h"
 #include "project/ProjectTreeDock.h"
 #include "vcs/HistoryDock.h"
+#include "vcs/VcsDialogs.h"
 #include "vcs/VcsDock.h"
 
 #include <QAction>
@@ -24,6 +25,8 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
+
+#include <cstdlib>
 
 static QString opName(int op)
 {
@@ -84,6 +87,7 @@ void MainWindow::createVcs()
     m_vcsRepoActions << menu->addAction(tr("P&ull"), this, &MainWindow::vcsPull);
     m_vcsRepoActions << menu->addAction(tr("&Push"), this, &MainWindow::vcsPush);
     m_vcsCloneAct = menu->addAction(tr("C&lone..."), this, &MainWindow::vcsClone);
+    m_vcsRepoActions << menu->addAction(tr("S&ettings..."), this, [this] { vcsSettings(); });
     m_vcsCancelAct = menu->addAction(tr("Cancel &Transfer"), m_vcs, &VcsRunner::cancel);
     m_vcsCancelAct->setEnabled(false);
 
@@ -331,15 +335,34 @@ void MainWindow::vcsOnFinished(int opInt, VcsResultPtr res)
         break;
     }
 
-    // a first push needs the repository name on the server
-    if (op == AIDE_VCS_PUSH && !res->ok() && aide_vcs_needs_remote_name(&res->r)) {
+    // amivcs needs a user and password for the remote: ask, run again
+    if (aide_vcs_op_network(op) && !res->ok() && res->parsed && res->r.authRequired) {
+        if (vcsAskLogin(op, res)) return;
+        if (op == AIDE_VCS_CLONE) m_vcsCloneTarget.clear();
+        statusBar()->showMessage(tr("%1: cancelled.").arg(opName(op)), 4000);
+        return;
+    }
+
+    // a first push needs the remote URL
+    if (op == AIDE_VCS_PUSH && !res->ok() && aide_vcs_needs_remote_url(&res->r)) {
         bool ok = false;
-        const QString name = QInputDialog::getText(
-            this, opName(op), tr("This repository has not been pushed yet. Name of the repository "
-                                 "on the server (it is created if it does not exist):"),
-            QLineEdit::Normal, m_project ? m_project->name : QString(), &ok).trimmed();
-        if (ok && !name.isEmpty())
-            vcsStartWrite(AIDE_VCS_PUSH, { name });
+        const QString url = QInputDialog::getText(
+            this, opName(op), tr("This repository has no remote yet. Its URL on the AmiVCS server "
+                                 "(https://server/name; the repository is created if it does not exist):"),
+            QLineEdit::Normal, QString(), &ok).trimmed();
+        if (!ok || url.isEmpty()) return;
+        if (!aide_vcs_is_url(url.toUtf8().constData())) {
+            QMessageBox::warning(this, opName(op), tr("'%1' is not a repository URL (https://server/name).").arg(url));
+            return;
+        }
+        vcsStartNet(AIDE_VCS_PUSH, { url });
+        return;
+    }
+
+    // a commit without a name for the author
+    if (op == AIDE_VCS_COMMIT && !res->ok() && res->error().contains(QStringLiteral("who are you"))) {
+        vcsSettings(tr("AmiVCS needs a name (and an e-mail) for the author of your commits. "
+                       "Enter them below, then commit again."));
         return;
     }
 
@@ -476,22 +499,68 @@ void MainWindow::vcsPull()
         return;
     }
     if (vcsPrepareTouch(opName(AIDE_VCS_PULL)))
-        vcsStartWrite(AIDE_VCS_PULL);
+        vcsStartNet(AIDE_VCS_PULL);
 }
 
 void MainWindow::vcsPush()
 {
-    vcsStartWrite(AIDE_VCS_PUSH);
+    vcsStartNet(AIDE_VCS_PUSH);
+}
+
+// Network jobs remember what they were started with: an auth-required
+// answer runs them again with the login in front (vcsAskLogin()).
+bool MainWindow::vcsStartNet(AideVcsOp op, const QStringList &items, const QString &workDir)
+{
+    m_vcsNetItems = items;
+    m_vcsNetWorkDir = workDir;
+    m_vcsLoginTries = 0;
+    return vcsStartWrite(op, items, {}, false, workDir);
+}
+
+bool MainWindow::vcsAskLogin(AideVcsOp op, const VcsResultPtr &res)
+{
+    const QString url = QString::fromUtf8(res->r.authUrl ? res->r.authUrl : "");
+    VcsLoginDialog dlg(url, QString::fromUtf8(res->r.authUser ? res->r.authUser : ""), m_vcsLoginTries > 0, this);
+    if (dlg.exec() != QDialog::Accepted || dlg.password().isEmpty())
+        return false;
+    ++m_vcsLoginTries;
+    AideStrList items, withLogin;
+    aide_strlist_init(&items);
+    for (const QString &s : m_vcsNetItems) aide_strlist_push(&items, s.toUtf8().constData());
+    aide_vcs_items_with_login(&items, dlg.user().toUtf8().constData(), dlg.password().toUtf8().constData(),
+                              dlg.remember() ? 1 : 0, &withLogin);
+    QStringList args;
+    for (size_t i = 0; i < withLogin.count; ++i) args << QString::fromUtf8(withLogin.items[i]);
+    aide_strlist_free(&items);
+    aide_strlist_free(&withLogin);
+    return vcsStartWrite(op, args, {}, false, m_vcsNetWorkDir);
+}
+
+// remote URL, user, name/e-mail: the repository's and the defaults
+void MainWindow::vcsSettings(const QString &intro)
+{
+    const QString root = m_project && aide_vcs_present(m_project->projectRoot().toUtf8().constData())
+                             ? m_project->projectRoot() : QString();
+    VcsSettingsDialog dlg(AppSettings::instance().amivcsProgram(), root, intro, this);
+    dlg.exec();
 }
 
 void MainWindow::vcsClone()
 {
     bool ok = false;
-    const QString repo = QInputDialog::getText(this, opName(AIDE_VCS_CLONE),
-                                               tr("Repository name on the server (server, user and password "
-                                                  "come from the AmiVCS configuration):"),
-                                               QLineEdit::Normal, QString(), &ok).trimmed();
-    if (!ok || repo.isEmpty()) return;
+    const QString url = QInputDialog::getText(this, opName(AIDE_VCS_CLONE),
+                                              tr("URL of the repository on the AmiVCS server "
+                                                 "(https://server/name; user and password are asked for):"),
+                                              QLineEdit::Normal, QString(), &ok).trimmed();
+    if (!ok || url.isEmpty()) return;
+    const QByteArray url8 = url.toUtf8();
+    if (!aide_vcs_is_url(url8.constData())) {
+        QMessageBox::warning(this, opName(AIDE_VCS_CLONE), tr("'%1' is not a repository URL (https://server/name).").arg(url));
+        return;
+    }
+    char *repoName = aide_vcs_url_name(url8.constData());
+    const QString repo = QString::fromUtf8(repoName);
+    free(repoName);
     const QString parent = QFileDialog::getExistingDirectory(this, tr("Clone into which directory?"));
     if (parent.isEmpty()) return;
     const QString name = QInputDialog::getText(this, opName(AIDE_VCS_CLONE), tr("Name of the new folder:"),
@@ -502,6 +571,6 @@ void MainWindow::vcsClone()
         return;
     }
     m_vcsCloneTarget = QDir(parent).filePath(name);
-    if (!vcsStartWrite(AIDE_VCS_CLONE, { repo, name }, {}, false, parent))
+    if (!vcsStartNet(AIDE_VCS_CLONE, { url, name }, parent))
         m_vcsCloneTarget.clear();
 }

@@ -139,6 +139,9 @@ private:
     void vcsPull();
     void vcsPush();
     void vcsClone();
+    void vcsSettings(const QString &intro = {});
+    bool vcsStartNet(AideVcsOp op, const QStringList &items = {}, const QString &workDir = {});
+    bool vcsAskLogin(AideVcsOp op, const VcsResultPtr &res);
     void vcsReloadAfterTouch();
     bool vcsTreeDirty() const;
 
@@ -194,5 +197,8 @@ private:
     QTimer m_vcsRefreshTimer;
     AideVcsOp m_vcsPendingBranchOp = AIDE_VCS_SWITCH;
     QString m_vcsCloneTarget;            // directory a running clone writes
+    QStringList m_vcsNetItems;           // the last network job, for a retry after a login
+    QString m_vcsNetWorkDir;
+    int m_vcsLoginTries = 0;
     bool m_vcsLocked = false;
 };

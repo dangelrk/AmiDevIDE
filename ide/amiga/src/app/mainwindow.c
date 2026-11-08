@@ -3177,6 +3177,7 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "Pull",                        0, 0, 0, (APTR)ID_VCS_PULL },
     { NM_ITEM,  "Push",                        0, 0, 0, (APTR)ID_VCS_PUSH },
     { NM_ITEM,  "Clone...",                    0, 0, 0, (APTR)ID_VCS_CLONE },
+    { NM_ITEM,  "Einstellungen...",            0, 0, 0, (APTR)ID_VCS_SETTINGS },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "AmiVCS-GUI \366ffnen",          "G", 0, 0, (APTR)ID_VCS_GUI },
     { NM_TITLE, "Hilfe", 0, 0, 0, (APTR)0 },
@@ -3260,6 +3261,36 @@ static int vcs_host_ask_string(const char *title, const char *prompt, char *out,
         return 0;
     strncpy(out, buffer, outsz - 1);
     out[outsz - 1] = '\0';
+    return 1;
+}
+
+/* AmiVCS login: user, password (typed invisibly, RTGS_Invisible V38),
+ * then whether amivcs should remember the password */
+static int vcs_host_ask_login(const char *url, int refused, char *user, unsigned long usz,
+                              char *pass, unsigned long psz, int *remember)
+{
+    char prompt[400], buffer[128];
+    struct TagItem tags[3];
+    LONG ok;
+
+    sprintf(prompt, "%sAnmeldung f\374r\n%.300s\n\nBenutzer:",
+            refused ? "Anmeldung abgelehnt -- falscher\nBenutzer oder falsches Passwort?\n\n" : "", url);
+    if (!vcs_host_ask_string("AmiVCS-Login", prompt, user, usz) || !user[0])
+        return 0;
+    buffer[0] = '\0';
+    sprintf(prompt, "Passwort f\374r %.60s:", user);
+    tags[0].ti_Tag = RTGS_TextFmt;   tags[0].ti_Data = (ULONG)prompt;
+    tags[1].ti_Tag = RTGS_Invisible; tags[1].ti_Data = TRUE;
+    tags[2].ti_Tag = TAG_DONE;       tags[2].ti_Data = 0;
+    ok = rtGetStringA((STRPTR)buffer, (LONG)(sizeof(buffer) - 1), (CONST_STRPTR)"AmiVCS-Login", NULL, tags);
+    if (!ok || !buffer[0])
+        return 0;
+    strncpy(pass, buffer, psz - 1);
+    pass[psz - 1] = '\0';
+    memset(buffer, 0, sizeof(buffer));
+    *remember = MUI_Request(g_app, g_window, 0, "AmiVCS-Login", "_Merken|_Nicht merken",
+                            "Passwort f\374r dieses Repository merken?\n"
+                            "(im Klartext in .amivcs/config)") == 1;
     return 1;
 }
 
@@ -3525,6 +3556,7 @@ int mainwindow_run(void)
     prefswindow_init(g_app);
     {
         VcsHost host;
+        memset(&host, 0, sizeof(host));
         host.building = vcs_host_building;
         host.save_all = vcs_host_save_all;
         host.reload_project = vcs_host_reload_project;
@@ -3534,6 +3566,7 @@ int mainwindow_run(void)
         host.ask_string = vcs_host_ask_string;
         host.ask_dir = vcs_host_ask_dir;
         host.set_locked = vcs_host_set_locked;
+        host.ask_login = vcs_host_ask_login;
         vcspanel_init(g_app, g_window, &host);
     }
 

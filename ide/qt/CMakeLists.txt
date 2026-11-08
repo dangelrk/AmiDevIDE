@@ -25,6 +25,8 @@ set(AMIGAIDE_CORE_SOURCES
     vcs/VcsRunner.h
     vcs/VcsDock.cpp
     vcs/VcsDock.h
+    vcs/VcsDialogs.cpp
+    vcs/VcsDialogs.h
     vcs/HistoryDock.cpp
     vcs/HistoryDock.h
     app/SettingsDialog.h

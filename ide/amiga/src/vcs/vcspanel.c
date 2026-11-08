@@ -68,6 +68,15 @@ static int g_timerOpen, g_timerArmed;
 
 static AideVcsOp g_pendingBranchOp = AIDE_VCS_SWITCH;
 
+/* the last network job (push, pull, clone) as it was started: an
+ * auth-required answer runs it again with the login in front */
+static struct {
+    AideVcsOp   op;
+    AideStrList items;
+    char        workDir[256];
+    int         tries;
+} g_net;
+
 static void timer_arm(void)
 {
     if (!g_timerOpen || g_timerArmed) return;
@@ -208,6 +217,75 @@ static int run_one(AideVcsOp op, const char *item)
     ok = run_job(op, &l, NULL, 0, NULL);
     aide_strlist_free(&l);
     return ok;
+}
+
+static int run_net(AideVcsOp op, const AideStrList *items, const char *workDir)
+{
+    size_t i;
+    aide_strlist_free(&g_net.items);
+    aide_strlist_init(&g_net.items);
+    for (i = 0; items && i < items->count; i++) aide_strlist_push(&g_net.items, items->items[i]);
+    g_net.op = op;
+    g_net.workDir[0] = '\0';
+    if (workDir) strncpy(g_net.workDir, workDir, sizeof(g_net.workDir) - 1);
+    g_net.tries = 0;
+    return run_job(op, items, NULL, 0, workDir);
+}
+
+/* asks for the login and starts the network job again; 0 if cancelled */
+static int retry_with_login(const AideVcsResult *r)
+{
+    char user[64], pass[128];
+    int remember = 0, ok;
+    AideStrList l;
+
+    if (!g_host.ask_login) return 0;
+    strncpy(user, r->authUser ? r->authUser : "", sizeof(user) - 1);
+    user[sizeof(user) - 1] = '\0';
+    pass[0] = '\0';
+    if (!g_host.ask_login(r->authUrl ? r->authUrl : "", g_net.tries > 0, user, sizeof(user),
+                          pass, sizeof(pass), &remember) || !pass[0])
+        return 0;
+    g_net.tries++;
+    aide_vcs_items_with_login(&g_net.items, user, pass, remember, &l);
+    memset(pass, 0, sizeof(pass));
+    ok = run_job(g_net.op, &l, NULL, 0, g_net.workDir[0] ? g_net.workDir : NULL);
+    aide_strlist_free(&l);
+    return ok;
+}
+
+/* Versionen > Einstellungen: AmiVCSConfig (remote URL, user, name and
+ * e-mail) on the project, detached; Aktualisieren after saving */
+static void start_settings(void)
+{
+    static const char *const progs[] = { "SYS:Prefs/AmiVCSConfig", "AmiVCSConfig", NULL };
+    char cmd[400];
+    struct TagItem tags[5];
+    int i;
+
+    for (i = 0; progs[i]; i++) {
+        BPTR nilIn, nilOut;
+        BPTR lock = Lock((CONST_STRPTR)progs[i], ACCESS_READ);
+        if (!lock && i == 0) continue;
+        if (lock) UnLock(lock);
+        sprintf(cmd, "%s \"%s\"", progs[i], g_root);
+        nilIn = Open((CONST_STRPTR)"NIL:", MODE_OLDFILE);
+        nilOut = Open((CONST_STRPTR)"NIL:", MODE_NEWFILE);
+        tags[0].ti_Tag = SYS_Input;    tags[0].ti_Data = (ULONG)nilIn;
+        tags[1].ti_Tag = SYS_Output;   tags[1].ti_Data = (ULONG)nilOut;
+        tags[2].ti_Tag = SYS_Asynch;   tags[2].ti_Data = TRUE;
+        tags[3].ti_Tag = NP_StackSize; tags[3].ti_Data = 65536;
+        tags[4].ti_Tag = TAG_DONE;     tags[4].ti_Data = 0;
+        if (SystemTagList((CONST_STRPTR)cmd, tags) != -1) {
+            status("AmiVCSConfig gestartet -- nach dem Speichern Aktualisieren.");
+            return;
+        }
+        if (nilIn) Close(nilIn);
+        if (nilOut) Close(nilOut);
+    }
+    MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                "AmiVCSConfig wurde nicht gefunden (SYS:Prefs/).\n"
+                "Es geh\366rt zu AmiVCS.");
 }
 
 static void start_next(void)
@@ -418,22 +496,57 @@ static void job_done(void)
         else show_messages(&r);
         break;
     default:
-        if (op == AIDE_VCS_PUSH && !ok && aide_vcs_needs_remote_name(&r)) {
-            /* a first push needs the repository name on the server */
-            char name[128];
-            const char *base = strrchr(g_root, '/');
-            base = base ? base + 1 : (strchr(g_root, ':') ? strchr(g_root, ':') + 1 : g_root);
-            strncpy(name, base, sizeof(name) - 1);
-            name[sizeof(name) - 1] = '\0';
-            if (g_host.ask_string && g_host.ask_string("Push", "Dieses Repository wurde noch nie gepusht.\n"
-                                                       "Name des Repositorys auf dem Server\n"
-                                                       "(wird angelegt, wenn es fehlt):", name, sizeof(name))
-                && name[0]) {
-                aide_vcs_result_free(&r);
-                set_enabled(1);
-                run_one(AIDE_VCS_PUSH, name);
+        if (aide_vcs_op_network(op) && !ok && parsed && r.authRequired) {
+            /* amivcs needs a user and password for the remote */
+            AideVcsResult copy = r;
+            aide_vcs_result_init(&r);   /* the login dialog may take a while */
+            set_enabled(1);
+            if (retry_with_login(&copy)) {
+                aide_vcs_result_free(&copy);
                 return;
             }
+            aide_vcs_result_free(&copy);
+            if (op == AIDE_VCS_CLONE) g_run.cloneTarget[0] = '\0';
+            status("Abgebrochen.");
+            start_next();
+            return;
+        }
+        if (op == AIDE_VCS_PUSH && !ok && aide_vcs_needs_remote_url(&r)) {
+            /* a first push needs the remote URL */
+            char url[256];
+            url[0] = '\0';
+            if (g_host.ask_string && g_host.ask_string("Push", "Dieses Repository hat noch keine Remote-URL.\n"
+                                                       "Adresse auf dem AmiVCS-Server\n"
+                                                       "(https://server/name, wird angelegt,\n"
+                                                       "wenn es fehlt):", url, sizeof(url))
+                && url[0]) {
+                aide_vcs_result_free(&r);
+                set_enabled(1);
+                if (aide_vcs_is_url(url)) {
+                    AideStrList l;
+                    aide_strlist_init(&l);
+                    aide_strlist_push(&l, url);
+                    run_net(AIDE_VCS_PUSH, &l, NULL);
+                    aide_strlist_free(&l);
+                } else {
+                    MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                                "\"%s\" ist keine Repository-Adresse\n(https://server/name).", url);
+                }
+                return;
+            }
+        }
+        if (op == AIDE_VCS_COMMIT && !ok && aide_vcs_result_error(&r)
+            && strstr(aide_vcs_result_error(&r), "who are you")) {
+            if (MUI_Request(g_app, g_window, 0, "AmigaIDE", "_Einstellungen|_Abbrechen",
+                            "AmiVCS braucht einen Namen (und eine E-Mail)\n"
+                            "f\374r den Autor Ihrer Commits.\n\n"
+                            "AmiVCSConfig jetzt starten? Danach erneut\n"
+                            "committen.") == 1)
+                start_settings();
+            aide_vcs_result_free(&r);
+            set_enabled(1);
+            start_next();
+            return;
         }
         show_messages(&r);
         if (!ok) {
@@ -595,6 +708,8 @@ void vcspanel_cleanup(void)
     if (g_timerPort) DeleteMsgPort(g_timerPort);
     g_timerOpen = g_timerArmed = 0;
     while (g_queued > 0) pending_free(&g_queue[--g_queued]);
+    aide_strlist_free(&g_net.items);
+    aide_strlist_init(&g_net.items);
     /* a running amivcs finishes on its own; only its files stay in T: */
     if (g_haveStatus) aide_vcs_result_free(&g_status);
     g_haveStatus = 0;
@@ -758,22 +873,34 @@ int vcspanel_handle_id(long id)
                         "Es gibt ungesicherte \304nderungen.\nErst committen, dann Pull.");
             break;
         }
-        if (prepare_touch("Pull")) run_simple(AIDE_VCS_PULL);
+        if (prepare_touch("Pull")) run_net(AIDE_VCS_PULL, NULL, NULL);
         break;
     case ID_VCS_PUSH:
-        run_simple(AIDE_VCS_PUSH);
+        run_net(AIDE_VCS_PUSH, NULL, NULL);
+        break;
+    case ID_VCS_SETTINGS:
+        start_settings();
         break;
     case ID_VCS_CLONE: {
-        char repo[128], parent[200], name[64];
-        repo[0] = parent[0] = name[0] = '\0';
+        char url[256], parent[200], name[64];
+        char *repo;
+        url[0] = parent[0] = name[0] = '\0';
         if (!g_available) { status("amivcs ist nicht verf\374gbar."); break; }
-        if (!g_host.ask_string || !g_host.ask_string("Clone", "Name des Repositorys auf dem Server\n"
-                                                     "(Server und Zugang aus ENV:amivcs.cfg):",
-                                                     repo, sizeof(repo)) || !repo[0])
+        if (!g_host.ask_string || !g_host.ask_string("Clone", "Adresse des Repositorys auf dem\n"
+                                                     "AmiVCS-Server (https://server/name;\n"
+                                                     "Benutzer und Passwort werden gefragt):",
+                                                     url, sizeof(url)) || !url[0])
             break;
+        if (!aide_vcs_is_url(url)) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "\"%s\" ist keine Repository-Adresse\n(https://server/name).", url);
+            break;
+        }
         if (!g_host.ask_dir || !g_host.ask_dir("Clone: in welches Verzeichnis?", parent, sizeof(parent)) || !parent[0])
             break;
-        strncpy(name, repo, sizeof(name) - 1);
+        repo = aide_vcs_url_name(url);
+        strncpy(name, repo ? repo : "", sizeof(name) - 1);
+        free(repo);
         if (!g_host.ask_string("Clone", "Name der neuen Schublade:", name, sizeof(name)) || !name[0])
             break;
         {
@@ -786,9 +913,9 @@ int vcspanel_handle_id(long id)
             strncpy(g_run.cloneTarget, target ? target : "", sizeof(g_run.cloneTarget) - 1);
             free(target);
         }
-        aide_strlist_push(&l, repo);
+        aide_strlist_push(&l, url);
         aide_strlist_push(&l, name);
-        if (!run_job(AIDE_VCS_CLONE, &l, NULL, 0, parent)) g_run.cloneTarget[0] = '\0';
+        if (!run_net(AIDE_VCS_CLONE, &l, parent)) g_run.cloneTarget[0] = '\0';
         else status("Clone l\344uft...");
         break;
     }

@@ -23,6 +23,7 @@ private:
     VcsResultPtr runAndWait(VcsRunner &r, AideVcsOp op, const QStringList &items = {},
                             const QString &msg = {}, bool flag = false);
     QString m_amivcs;
+    QTemporaryDir m_home;
 };
 
 void TstVcsRunner::initTestCase()
@@ -32,6 +33,15 @@ void TstVcsRunner::initTestCase()
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings().clear();
     m_amivcs = QString::fromUtf8(qgetenv("AIDE_TEST_AMIVCS"));
+    // commits need an author (AmiVCS after 0.9): global defaults in a
+    // HOME of our own, never the real ~/.amivcsconfig
+    QVERIFY(m_home.isValid());
+    qputenv("HOME", m_home.path().toUtf8());
+    qputenv("USERPROFILE", m_home.path().toUtf8());
+    QFile cfg(QDir(m_home.path()).filePath(QStringLiteral(".amivcsconfig")));
+    QVERIFY(cfg.open(QFile::WriteOnly));
+    cfg.write("name=Test Person\nemail=test@example.org\nverify_ssl=0\n");
+    cfg.close();
 }
 
 VcsResultPtr TstVcsRunner::runAndWait(VcsRunner &r, AideVcsOp op, const QStringList &items,

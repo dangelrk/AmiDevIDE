@@ -4,6 +4,7 @@
 #include "editor/EditorWidget.h"
 #include "project/Project.h"
 #include "vcs/HistoryDock.h"
+#include "vcs/VcsDialogs.h"
 #include "vcs/VcsDock.h"
 
 #include <QAbstractButton>
@@ -35,7 +36,9 @@
 // branch, switch with an unsaved editor (saved first, refused while the
 // change is uncommitted, then switched and reloaded), merge. With
 // AIDE_TEST_AMIVCS (an amivcs) and AIDE_TEST_AMIVCS_NET=1 also push,
-// clone and pull against the server of the AmiVCS configuration.
+// clone and pull against the AmiVCS server AIDE_TEST_AMIVCS_URL (its base
+// URL) as AIDE_TEST_AMIVCS_USER / AIDE_TEST_AMIVCS_PASS -- the URL and
+// login dialogs are answered like a user would.
 class TstVcsGui : public QObject {
     Q_OBJECT
 private slots:
@@ -57,6 +60,7 @@ private:
     QStringList m_seen;   // texts of answered dialogs, for the checks
     QStringList m_unexpected;
     QString m_amivcs;
+    QTemporaryDir m_home;
 };
 
 static bool yes(QWidget *w)
@@ -68,6 +72,22 @@ static bool yes(QWidget *w)
     if (!b) return false;
     b->click();
     return true;
+}
+
+// the AmiVCS login dialog: user, password, remember
+static std::function<bool(QWidget *)> login(const QString &user, const QString &pass)
+{
+    return [user, pass](QWidget *w) {
+        auto *d = qobject_cast<VcsLoginDialog *>(w);
+        if (!d) return false;
+        const QList<QLineEdit *> edits = d->findChildren<QLineEdit *>();
+        if (edits.size() < 2) return false;
+        edits[0]->setText(user);
+        edits[1]->setText(pass);
+        d->findChild<QCheckBox *>()->setChecked(true);
+        d->accept();
+        return true;
+    };
 }
 
 static std::function<bool(QWidget *)> text(const QString &value)
@@ -88,6 +108,15 @@ void TstVcsGui::initTestCase()
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings().clear();
     m_amivcs = QString::fromUtf8(qgetenv("AIDE_TEST_AMIVCS"));
+    // commits need an author (AmiVCS after 0.9): global defaults in a
+    // HOME of our own, never the real ~/.amivcsconfig
+    QVERIFY(m_home.isValid());
+    qputenv("HOME", m_home.path().toUtf8());
+    qputenv("USERPROFILE", m_home.path().toUtf8());
+    QFile cfg(QDir(m_home.path()).filePath(QStringLiteral(".amivcsconfig")));
+    QVERIFY(cfg.open(QFile::WriteOnly));
+    cfg.write("name=Test Person\nemail=test@example.org\nverify_ssl=0\n");
+    cfg.close();
 }
 
 void TstVcsGui::answerDialogs()
@@ -102,6 +131,9 @@ void TstVcsGui::answerDialogs()
             if (QAbstractButton *b = box->button(QMessageBox::Ok)) b->click();
             else if (QAbstractButton *b2 = box->button(QMessageBox::No)) b2->click();
             else box->reject();
+        } else if (auto *d = qobject_cast<QDialog *>(w)) {
+            m_unexpected << d->windowTitle();   // a dialog of ours: never hang on it
+            d->reject();
         }
         return;
     }
@@ -259,21 +291,34 @@ void TstVcsGui::workflow()
     ed = tabs->editorForPath(root + QStringLiteral("/src/main.c"));
     QVERIFY(ed && ed->toPlainText().contains(QStringLiteral("geändert")));
 
-    // ---- network: push (asks for the server name), clone, pull
+    // ---- network: push (asks for the URL, then the login), clone, pull
     if (qgetenv("AIDE_TEST_AMIVCS_NET") != "1")
         return;
-    const QString remote = QStringLiteral("ide-gui-%1").arg(QDateTime::currentSecsSinceEpoch());
-    queue(text(remote));                          // name on the server
+    const QString base = QString::fromUtf8(qgetenv("AIDE_TEST_AMIVCS_URL"));
+    const QString user = QString::fromUtf8(qgetenv("AIDE_TEST_AMIVCS_USER"));
+    const QString pass = QString::fromUtf8(qgetenv("AIDE_TEST_AMIVCS_PASS"));
+    QVERIFY2(!base.isEmpty() && !user.isEmpty(), "AIDE_TEST_AMIVCS_URL/_USER/_PASS");
+    const QString remote = QStringLiteral("%1/ide-gui-%2").arg(base).arg(QDateTime::currentSecsSinceEpoch());
+    queue(text(remote));                          // the remote URL
+    queue(login(user, QStringLiteral("falsch"))); // refused ...
+    queue(login(user, pass));                     // ... asked again
     action(QStringLiteral("&Push"))->trigger();
     QVERIFY(waitIdle(60000));
-    QVERIFY(m_seen.last().contains(QStringLiteral("not been pushed yet")));
-    QVERIFY(m_answers.isEmpty());
+    QVERIFY2(m_answers.isEmpty(), qPrintable(m_seen.join(QStringLiteral(" | ")) + QStringLiteral(" || ")
+                                             + m_unexpected.join(QStringLiteral(" | "))));
+    QVERIFY(m_seen.join(QLatin1Char(' ')).contains(QStringLiteral("has no remote yet")));
+    {
+        QFile c(root + QStringLiteral("/.amivcs/config"));
+        QVERIFY(c.open(QFile::ReadOnly));
+        const QByteArray cfgText = c.readAll();
+        QVERIFY2(cfgText.contains("remote=" + remote.toUtf8()) && cfgText.contains("pass="), cfgText.constData());
+    }
 
     // clone into a second directory; opens its project
     const QString parent = dir.filePath(QStringLiteral("clones"));
     QDir().mkpath(parent);
     // the directory dialog is native-free in offscreen tests: answer it too
-    queue(text(remote));                          // repository name
+    queue(text(remote));                          // the remote URL
     queue([parent](QWidget *w) {                  // directory
         auto *d = qobject_cast<QFileDialog *>(w);
         if (!d) return false;
@@ -285,6 +330,7 @@ void TstVcsGui::workflow()
         return true;
     });
     queue(text(QStringLiteral("klon")));          // folder name
+    queue(login(user, pass));                     // a clone has no login yet
     action(QStringLiteral("C&lone..."))->trigger();
     QVERIFY(waitIdle(60000));
     {

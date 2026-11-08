@@ -25,6 +25,7 @@ private slots:
     void cmdlineQuoting();
     void ignoreLines();
     void opClasses();
+    void remotesAndLogin();
     void realAmivcs();
 };
 
@@ -230,8 +231,68 @@ void TstVcs::opClasses()
     QVERIFY(!aide_vcs_op_network(AIDE_VCS_MERGE));
 }
 
+// Remote URLs (one per repository, AmiVCS after 0.9), the auth-required
+// record and the login items that go into --args-from.
+void TstVcs::remotesAndLogin()
+{
+    QVERIFY(aide_vcs_is_url("https://amivcs.example.com/proj"));
+    QVERIFY(aide_vcs_is_url("https://host/sub/dir/proj/"));
+    QVERIFY(!aide_vcs_is_url("https://amivcs.example.com"));
+    QVERIFY(!aide_vcs_is_url("https://amivcs.example.com/"));
+    QVERIFY(!aide_vcs_is_url("proj"));
+    QVERIFY(!aide_vcs_is_url("://host/proj"));
+    char *n = aide_vcs_url_name("https://host/sub/proj/");
+    QCOMPARE(QByteArray(n), QByteArray("proj"));
+    free(n);
+    n = aide_vcs_url_name("https://host");
+    QCOMPARE(QByteArray(n), QByteArray(""));
+    free(n);
+
+    AideVcsResult r;
+    aide_vcs_result_init(&r);
+    QVERIFY(aide_vcs_parse(&r, "format\t1\nauth-required\thttps://h/p\tbob\n"
+                               "msg\terror\tamivcs: https://h/p needs a user and password\nend\t1\n"));
+    QVERIFY(r.authRequired);
+    QCOMPARE(QByteArray(r.authUrl), QByteArray("https://h/p"));
+    QCOMPARE(QByteArray(r.authUser), QByteArray("bob"));
+    QVERIFY(!aide_vcs_needs_remote_url(&r));
+    aide_vcs_result_free(&r);
+    aide_vcs_result_init(&r);
+    QVERIFY(aide_vcs_parse(&r, "format\t1\nmsg\terror\tamivcs: no remote URL set -- give one\nend\t1\n"));
+    QVERIFY(!r.authRequired);
+    QVERIFY(aide_vcs_needs_remote_url(&r));
+    aide_vcs_result_free(&r);
+
+    AideStrList items, out;
+    aide_strlist_init(&items);
+    aide_strlist_push(&items, "https://h/p");
+    aide_vcs_items_with_login(&items, "bob", "ge\theim", 1, &out);
+    QStringList got;
+    for (size_t i = 0; i < out.count; i++) got << QString::fromUtf8(out.items[i]);
+    QCOMPARE(got, (QStringList{ "--user", "bob", "--password", "ge\theim", "--remember-password", "https://h/p" }));
+    aide_strlist_free(&out);
+    aide_vcs_items_with_login(&items, "", nullptr, 0, &out);
+    QCOMPARE(out.count, size_t(1));
+    aide_strlist_free(&out);
+
+    // a push with login items: --args-from carries everything, escaped
+    QTemporaryDir dir;
+    const QByteArray base = dir.filePath(QStringLiteral("job")).toUtf8();
+    aide_vcs_items_with_login(&items, "bob", "ge\theim", 0, &out);
+    AideVcsJob job;
+    QVERIFY(aide_vcs_job_build(&job, AIDE_VCS_PUSH, "amivcs", base.constData(), &out, nullptr, 0, 0));
+    QFile args(QString::fromUtf8(job.argsPath));
+    QVERIFY(args.open(QFile::ReadOnly));
+    QCOMPARE(args.readAll(), QByteArray("--user\nbob\n--password\nge\\theim\nhttps://h/p\n"));
+    args.close();
+    aide_vcs_job_free(&job);
+    aide_strlist_free(&out);
+    aide_strlist_free(&items);
+}
+
 // Runs the jobs against a real amivcs if AIDE_TEST_AMIVCS names one
-// (skipped otherwise): init, add, commit, status, log.
+// (skipped otherwise): init, add, commit, status, log, and a push that
+// has no login yet.
 void TstVcs::realAmivcs()
 {
     const QByteArray prog = qgetenv("AIDE_TEST_AMIVCS");
@@ -239,6 +300,14 @@ void TstVcs::realAmivcs()
         QSKIP("AIDE_TEST_AMIVCS not set");
     QTemporaryDir dir;
     QVERIFY(QDir::setCurrent(dir.path()));
+    // commits need a name (~/.amivcsconfig); keep the real one out of it
+    QTemporaryDir home;
+    qputenv("HOME", home.path().toUtf8());
+    qputenv("USERPROFILE", home.path().toUtf8());
+    QFile cfg(QDir(home.path()).filePath(QStringLiteral(".amivcsconfig")));
+    QVERIFY(cfg.open(QFile::WriteOnly));
+    cfg.write("name=Test Person\nemail=test@example.org\n");
+    cfg.close();
     QFile src(QStringLiteral("main.c"));
     QVERIFY(src.open(QFile::WriteOnly));
     src.write("int main(void){return 0;}\n");
@@ -274,6 +343,18 @@ void TstVcs::realAmivcs()
     QVERIFY(run(AIDE_VCS_LOG, {}, nullptr, &r));
     QCOMPARE(r.commitCount, size_t(1));
     QCOMPARE(QString::fromUtf8(r.commits[0].message), QStringLiteral("Erster Stand\nmit zwei Zeilen"));
+    QCOMPARE(QByteArray(r.commits[0].author), QByteArray("Test Person <test@example.org>"));
+    aide_vcs_result_free(&r);
+    // no remote yet
+    QVERIFY(run(AIDE_VCS_PUSH, {}, nullptr, &r));
+    QVERIFY(r.rc != 0);
+    QVERIFY(aide_vcs_needs_remote_url(&r));
+    aide_vcs_result_free(&r);
+    // a URL but no login: amivcs asks the program instead of the network
+    QVERIFY(run(AIDE_VCS_PUSH, { "https://amivcs.invalid/proj" }, nullptr, &r));
+    QVERIFY(r.rc != 0);
+    QVERIFY(r.authRequired);
+    QCOMPARE(QByteArray(r.authUrl), QByteArray("https://amivcs.invalid/proj"));
     aide_vcs_result_free(&r);
 }
 
