@@ -1,10 +1,10 @@
 @database AmigaIDE.guide
-@$VER: AmigaIDE.guide 0.4 (07.11.2026)
+@$VER: AmigaIDE.guide 0.5 (08.11.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
 
-                         @{b}AmigaIDE 0.4@{ub}
+                         @{b}AmigaIDE 0.5@{ub}
         Entwicklungsumgebung für vbcc, vasm, vlink und ACE BASIC
 
 Experimentelle Software: entwickelt mit Hilfe von Claude (KI-Assistent
@@ -612,11 +612,11 @@ zeigt das Ergebnis an. Ohne amivcs fehlt nur dieser Teil.
 
 @{u}Einrichten@{uu}
 
-  amivcs ab Version 0.6 installieren (Archiv AmiVCS). Liegt es nicht
+  amivcs ab Version 0.10 installieren (Archiv AmiVCS). Liegt es nicht
   in C:, den Pfad unter Projekt > Einstellungen > AmiVCS-Programm
-  eintragen. Server, Benutzer, Passwort, Autorname und Zeichensatz
-  kommen aus der AmiVCS-Konfiguration (ENV:amivcs.cfg, AMIVCSPrefs);
-  die IDE speichert keine Passwörter.
+  eintragen. Name und E-Mail für die Commits, Remote-URL und
+  Benutzer verwaltet AmiVCS selbst (AmiVCSConfig, Menü Versionen >
+  Einstellungen...); die IDE speichert keine Passwörter.
 
 @{u}Die Seite "Versionen" (links)@{uu}
 
@@ -636,7 +636,14 @@ Zeit in UTC, Autor, Branch-Namen und der ersten Zeile der Nachricht.
 @{u}Menü "Versionen"@{uu}
 
   Neuer Branch, Branch wechseln, Branch zusammenführen,
-  Gelöschte Dateien zurückholen, Pull, Push, Clone.
+  Gelöschte Dateien zurückholen, Pull, Push, Clone, Einstellungen.
+
+  Clone fragt die Adresse des Repositorys (https://server/name) und
+  das Zielverzeichnis. Ein erster Push ohne Remote fragt die Adresse
+  und legt das Repository auf dem Server an. Fehlen Benutzer oder
+  Passwort, fragt die IDE danach (das Passwort verdeckt) und auf
+  Wunsch merkt AmiVCS es sich im Repository. Einstellungen startet
+  AmiVCSConfig auf dem Projekt.
 
   AmiVCS-GUI öffnen (Amiga-G) startet die eigenständige Oberfläche
   amivcs-gui (im Stil von "git gui", mit Dateivorschau) auf dem
@@ -745,6 +752,16 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
 
 @{b}Versionsgeschichte@{ub}
 
+0.5 (08.11.2026)
+  - Versionsverwaltung für AmiVCS 0.10: Clone und erster Push fragen
+    die Adresse des Repositorys, Anmeldung bei Bedarf (Passwort
+    verdeckt, auf Wunsch gemerkt), Menü Versionen > Einstellungen.
+  - AmiVCS-GUI öffnen (Amiga-G) startet amivcs-gui auf dem Projekt.
+  - Alle Fenster merken Position und Größe.
+  - Prüfung der SDKs und beim Start aller Bibliotheken und
+    MUI-Klassen; eine fremde regex.library wird abgelehnt statt
+    abzustürzen.
+
 0.4 (07.11.2026)
   - Hinweis auf den experimentellen Status ergänzt; keine Änderungen
     am Programm.
@@ -776,7 +793,7 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
 @{b}Lizenz@{ub}
 
 AmigaIDE steht unter der GNU General Public License, Version 3. Der
-Quelltext wird später auf GitHub veröffentlicht.
+Quelltext liegt auf GitHub: https://github.com/dangelrk/AmiDevIDE
 
 Im Programm enthalten ist parson (JSON-Parser, MIT-Lizenz).
 

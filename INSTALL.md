@@ -631,7 +631,7 @@ Versions-Ansichten.
 - **MUI-IDE:** `ENVARC:AmigaIDE/amivcs` (Einstellungsfenster, Vorgabe
   `amivcs`). Register *Versionen* und *Verlauf*, Menü *Versionen*.
 - Remote-URL, Zugangsdaten, Autor und Zeichensatz verwaltet `amivcs`
-  selbst (ab AmiVCS nach 0.9): global `ENV:AmiVCS/config` bzw.
+  selbst (ab AmiVCS 0.10): global `ENV:AmiVCS/config` bzw.
   `~/.amivcsconfig` (Name, E-Mail), pro Repository `.amivcs/config`
   (Remote-URL, Benutzer, auf Wunsch Passwort). *Clone* fragt die URL
   (`https://server/name`), *Push* ohne Remote ebenso; fehlen Benutzer

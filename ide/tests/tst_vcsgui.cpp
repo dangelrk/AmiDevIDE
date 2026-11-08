@@ -108,7 +108,7 @@ void TstVcsGui::initTestCase()
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings().clear();
     m_amivcs = QString::fromUtf8(qgetenv("AIDE_TEST_AMIVCS"));
-    // commits need an author (AmiVCS after 0.9): global defaults in a
+    // commits need an author (AmiVCS 0.10): global defaults in a
     // HOME of our own, never the real ~/.amivcsconfig
     QVERIFY(m_home.isValid());
     qputenv("HOME", m_home.path().toUtf8());

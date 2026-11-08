@@ -13,9 +13,15 @@ function(amigaide_add_deploy_target target)
   if(APPLE)
     find_program(MACDEPLOYQT_EXECUTABLE macdeployqt HINTS "${QT6_INSTALL_PREFIX}/bin" "/opt/homebrew/opt/qt/bin")
     if(MACDEPLOYQT_EXECUTABLE)
+      # macdeployqt rewrites binaries, which breaks the linker's ad-hoc
+      # signature ("code has no resources but signature indicates they
+      # must be present"). On Apple Silicon the kernel then kills the
+      # program at launch with SIGKILL and no message -- so sign the
+      # bundle again, ad hoc, right after.
       add_custom_command(TARGET ${target} POST_BUILD
         COMMAND ${MACDEPLOYQT_EXECUTABLE} $<TARGET_BUNDLE_DIR:${target}>
-        COMMENT "Bundling Qt frameworks into $<TARGET_BUNDLE_DIR:${target}> via macdeployqt"
+        COMMAND codesign --force --deep --sign - $<TARGET_BUNDLE_DIR:${target}>
+        COMMENT "Bundling Qt frameworks into $<TARGET_BUNDLE_DIR:${target}> via macdeployqt, signing ad hoc"
         VERBATIM
       )
     else()

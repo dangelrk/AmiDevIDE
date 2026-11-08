@@ -135,11 +135,19 @@ add_executable(amigaide MACOSX_BUNDLE main.cpp)
 target_link_libraries(amigaide PRIVATE amigaide_core)
 amigaide_set_warnings(amigaide)
 
+# the bundle version is the program version from aide_version.h (it was
+# a second, forgotten copy here)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../core/include/aide/aide_version.h"
+     _aide_version_line REGEX "^#define AMIGAIDE_VERSION_STRING ")
+string(REGEX REPLACE ".*\"([0-9.]+)\".*" "\\1" AMIGAIDE_BUNDLE_VERSION "${_aide_version_line}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${CMAKE_CURRENT_SOURCE_DIR}/../core/include/aide/aide_version.h")
+
 set_target_properties(amigaide PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "AmigaIDE"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.amigaide.AmigaIDE"
-    MACOSX_BUNDLE_BUNDLE_VERSION "0.4"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.4"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${AMIGAIDE_BUNDLE_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${AMIGAIDE_BUNDLE_VERSION}"
     MACOSX_BUNDLE_COPYRIGHT "Copyright © 2026 Ronny Krüger"
 )
 
@@ -166,7 +174,10 @@ if(APPLE)
     add_custom_command(TARGET amigaide POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "${AMIGAIDE_TOOLCHAIN_ROOT}/bin"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${AMIGAIDE_TOOLCHAIN_ROOT}/bin/AmigaIDE.app"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_BUNDLE_DIR:amigaide> "${AMIGAIDE_TOOLCHAIN_ROOT}/bin/AmigaIDE.app"
+        # ditto, not "cmake -E copy_directory": that resolves the symlinks
+        # inside the frameworks, leaving an ambiguous bundle whose signature
+        # no longer verifies (macOS then kills it at launch)
+        COMMAND ditto $<TARGET_BUNDLE_DIR:amigaide> "${AMIGAIDE_TOOLCHAIN_ROOT}/bin/AmigaIDE.app"
         COMMAND ${CMAKE_COMMAND}
                 -DDEST=${AMIGAIDE_TOOLCHAIN_ROOT}/bin/amigaide
                 -P "${AMIGAIDE_ROOT}/cmake/WriteBundleLauncher.cmake"

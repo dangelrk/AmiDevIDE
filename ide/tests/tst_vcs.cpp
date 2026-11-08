@@ -231,7 +231,7 @@ void TstVcs::opClasses()
     QVERIFY(!aide_vcs_op_network(AIDE_VCS_MERGE));
 }
 
-// Remote URLs (one per repository, AmiVCS after 0.9), the auth-required
+// Remote URLs (one per repository, AmiVCS 0.10), the auth-required
 // record and the login items that go into --args-from.
 void TstVcs::remotesAndLogin()
 {

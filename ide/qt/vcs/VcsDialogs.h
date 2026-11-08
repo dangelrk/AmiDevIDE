@@ -1,6 +1,6 @@
 #pragma once
 
-// Dialogs for AmiVCS remotes (AmiVCS after 0.9: a remote URL and a login
+// Dialogs for AmiVCS remotes (AmiVCS 0.10: a remote URL and a login
 // per repository, the author like git's user.name/user.email):
 //
 //   VcsLoginDialog     user, password, "remember" -- after amivcs

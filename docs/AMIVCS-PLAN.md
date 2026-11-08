@@ -42,7 +42,7 @@ ist; ohne `amivcs` sieht die IDE aus wie heute.
     die MUI-Oberfläche blockiert nie, auch nicht beim Status über viele
     Dateien.
   - Zeichensatz, Autor, Zugangsdaten bleiben ganz bei `amivcs`
-    (seit AmiVCS nach 0.9: `ENV:AmiVCS/config` bzw. `~/.amivcsconfig`
+    (seit AmiVCS 0.10: `ENV:AmiVCS/config` bzw. `~/.amivcsconfig`
     global, `.amivcs/config` pro Repository mit Remote-URL; früher
     `ENV:amivcs.cfg`, `~/.amivcsrc`): IDE und CLI können sich nicht
     widersprechen. Fehlt ein Login, meldet `amivcs` den Datensatz
