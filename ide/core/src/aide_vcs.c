@@ -13,7 +13,7 @@ int aide_vcs_op_writes(AideVcsOp op)
 {
     switch (op) {
     case AIDE_VCS_VERSION: case AIDE_VCS_STATUS: case AIDE_VCS_LOG:
-    case AIDE_VCS_BRANCHES: case AIDE_VCS_PUSH:
+    case AIDE_VCS_BRANCHES: case AIDE_VCS_PUSH: case AIDE_VCS_DIFF:
         return 0;
     default:
         return 1;
@@ -23,7 +23,8 @@ int aide_vcs_op_writes(AideVcsOp op)
 int aide_vcs_op_touches_files(AideVcsOp op)
 {
     return op == AIDE_VCS_SWITCH || op == AIDE_VCS_MERGE || op == AIDE_VCS_CHECKOUT
-        || op == AIDE_VCS_PULL || op == AIDE_VCS_CLONE;
+        || op == AIDE_VCS_PULL || op == AIDE_VCS_CLONE || op == AIDE_VCS_MERGE_ABORT
+        || op == AIDE_VCS_RESOLVE;
 }
 
 int aide_vcs_op_network(AideVcsOp op)
@@ -111,6 +112,9 @@ int aide_vcs_job_build(AideVcsJob *job, AideVcsOp op, const char *program,
     case AIDE_VCS_PUSH:       cmd = "push"; wantArgs = items && items->count > 0; break;
     case AIDE_VCS_PULL:       cmd = "pull"; wantArgs = items && items->count > 0; break;
     case AIDE_VCS_CLONE:      cmd = "clone"; wantArgs = 1; break;
+    case AIDE_VCS_MERGE_ABORT: cmd = "merge"; break;
+    case AIDE_VCS_RESOLVE:    cmd = "resolve"; wantArgs = 1; break;
+    case AIDE_VCS_DIFF:       cmd = "diff"; wantArgs = 1; break;
     }
 
     aide_strlist_push(&job->argv, program);
@@ -153,6 +157,13 @@ int aide_vcs_job_build(AideVcsJob *job, AideVcsOp op, const char *program,
         aide_strlist_push(&job->argv, "-F");
         aide_strlist_push(&job->argv, job->messagePath);
         if (flag) aide_strlist_push(&job->argv, "-a");
+    } else if (op == AIDE_VCS_MERGE_ABORT) {
+        aide_strlist_push(&job->argv, "--abort");
+    } else if (op == AIDE_VCS_RESOLVE) {
+        aide_strlist_push(&job->argv, flag ? "--theirs" : "--ours");   /* the paths follow from --args-from */
+    } else if (op == AIDE_VCS_DIFF) {
+        if (flag) aide_strlist_push(&job->argv, "--staged");
+        aide_strlist_push(&job->argv, "--");   /* a deleted file is still a path */
     }
     return 1;
 }
@@ -206,6 +217,11 @@ void aide_vcs_result_free(AideVcsResult *r)
         free(r->commits[i].refs); free(r->commits[i].message);
     }
     for (i = 0; i < r->messageCount; i++) free(r->messages[i].text);
+    for (i = 0; i < r->conflictCount; i++) { free(r->conflicts[i].kind); free(r->conflicts[i].path); }
+    for (i = 0; i < r->diffCount; i++) free(r->diff[i].text);
+    free(r->conflicts);
+    free(r->diff);
+    free(r->mergeLabel);
     free(r->changes);
     free(r->commits);
     free(r->messages);
@@ -307,6 +323,53 @@ int aide_vcs_parse(AideVcsResult *r, const char *text)
             r->progressTotal = atol(f[2]);
             free(r->progressLabel);
             r->progressLabel = aide_strdup(f[3]);
+        } else if (strcmp(f[0], "merging") == 0 && n >= 4) {
+            r->merging = 1;
+            free(r->mergeLabel);
+            r->mergeLabel = aide_strdup(f[1]);
+            r->conflictsOpen = atoi(f[3]);
+        } else if (strcmp(f[0], "conflict") == 0 && n >= 4) {
+            void *g = grow(r->conflicts, r->conflictCount, sizeof(AideVcsConflict));
+            if (g) {
+                AideVcsConflict *c;
+                r->conflicts = (AideVcsConflict *)g;
+                c = &r->conflicts[r->conflictCount++];
+                c->state = f[1][0];
+                c->kind = aide_strdup(f[2]);
+                c->path = aide_strdup(f[3]);
+                c->theirsFile = n >= 5 && f[4][0] == '1';
+            }
+        } else if ((strcmp(f[0], "file") == 0 && n >= 3) || (strcmp(f[0], "hunk") == 0 && n >= 5)
+                   || (strcmp(f[0], "line") == 0 && n >= 3)) {
+            int extra = strcmp(f[0], "line") == 0 && n >= 4 && f[3][0] == '0';   /* no newline at end */
+            void *g = grow(r->diff, r->diffCount + (size_t)extra, sizeof(AideVcsDiffLine));
+            if (g) {
+                AideVcsDiffLine *d;
+                r->diff = (AideVcsDiffLine *)g;
+                d = &r->diff[r->diffCount++];
+                if (f[0][0] == 'f') {
+                    AideStr t;
+                    aide_str_init(&t);
+                    aide_str_append(&t, f[2]);
+                    if (n >= 6 && f[5][0] == '1') aide_str_append(&t, "  (binary)");
+                    d->op = 'F';
+                    d->text = aide_str_take(&t);
+                } else if (f[0][0] == 'h') {
+                    AideStr t;
+                    aide_str_init(&t);
+                    aide_str_appendf(&t, "@@ -%s,%s +%s,%s @@", f[1], f[2], f[3], f[4]);
+                    d->op = '@';
+                    d->text = aide_str_take(&t);
+                } else {
+                    d->op = f[1][0] ? f[1][0] : ' ';
+                    d->text = aide_strdup(f[2]);
+                    if (extra) {
+                        d = &r->diff[r->diffCount++];
+                        d->op = '\\';
+                        d->text = aide_strdup("\\ No newline at end of file");
+                    }
+                }
+            }
         } else if (strcmp(f[0], "auth-required") == 0 && n >= 2) {
             r->authRequired = 1;
             free(r->authUrl);
@@ -424,6 +487,13 @@ int aide_vcs_has_theirs(const AideVcsResult *status)
         if (n > 7 && strcmp(status->changes[i].path + n - 7, ".theirs") == 0) return 1;
     }
     return 0;
+}
+
+int aide_vcs_conflicts_open(const AideVcsResult *status)
+{
+    if (!status) return 0;
+    if (status->merging) return status->conflictsOpen;
+    return aide_vcs_has_theirs(status);
 }
 
 /* ------------------------------------------------------------------ */

@@ -30,6 +30,10 @@
 #define ID_VCS_UNSTAGE   4011
 #define ID_VCS_COMMIT    4012
 #define ID_VCS_SETTINGS  4013   /* AmiVCSConfig on the project */
+#define ID_VCS_MERGE_ABORT 4014
+#define ID_VCS_TAKE_OURS   4015 /* selected conflicts of the change list */
+#define ID_VCS_TAKE_THEIRS 4016
+#define ID_VCS_DIFF        4017 /* selected file -> output window */
 #define ID_VCS_LAST      4019
 
 typedef struct VcsHost {

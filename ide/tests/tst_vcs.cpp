@@ -26,6 +26,7 @@ private slots:
     void ignoreLines();
     void opClasses();
     void remotesAndLogin();
+    void mergeAndDiffRecords();
     void realAmivcs();
 };
 
@@ -231,6 +232,76 @@ void TstVcs::opClasses()
     QVERIFY(!aide_vcs_op_network(AIDE_VCS_MERGE));
 }
 
+// AmiVCS 0.11: merge state, conflicts and diff lines in the porcelain
+void TstVcs::mergeAndDiffRecords()
+{
+    AideVcsResult r;
+    aide_vcs_result_init(&r);
+    const char *t =
+        "format\t1\n"
+        "branch\tmain\n"
+        "change\tU\tM\tmain.c\n"
+        "merging\tfeature\t0123456789abcdef0123456789abcdef\t2\n"
+        "conflict\tU\tcontent\tmain.c\t0\n"
+        "conflict\tU\tbinary\tlogo.iff\t1\n"
+        "conflict\tR\tadd-add\tneu.c\t0\n"
+        "file\tM\tmain.c\tA\tB\t0\n"
+        "hunk\t1\t2\t1\t3\n"
+        "line\t \tint x;\t1\n"
+        "line\t-\talt\t1\n"
+        "line\t+\tneu\t0\n"
+        "end\t1\n";
+    QVERIFY(aide_vcs_parse(&r, t));
+    QVERIFY(r.merging);
+    QCOMPARE(QByteArray(r.mergeLabel), QByteArray("feature"));
+    QCOMPARE(r.conflictsOpen, 2);
+    QCOMPARE(r.conflictCount, size_t(3));
+    QCOMPARE(r.conflicts[1].state, 'U');
+    QCOMPARE(QByteArray(r.conflicts[1].kind), QByteArray("binary"));
+    QVERIFY(r.conflicts[1].theirsFile);
+    QCOMPARE(r.conflicts[2].state, 'R');
+    QCOMPARE(aide_vcs_conflicts_open(&r), 2);
+    QCOMPARE(r.diffCount, size_t(6));
+    QCOMPARE(r.diff[0].op, 'F');
+    QCOMPARE(QByteArray(r.diff[1].text), QByteArray("@@ -1,2 +1,3 @@"));
+    QCOMPARE(r.diff[3].op, '-');
+    QCOMPARE(r.diff[4].op, '+');
+    QCOMPARE(r.diff[5].op, '\\');
+    aide_vcs_result_free(&r);
+
+    // an older amivcs: only .theirs copies tell of a merge
+    aide_vcs_result_init(&r);
+    QVERIFY(aide_vcs_parse(&r, "format\t1\nchange\tU\tN\ta.c.theirs\nend\t0\n"));
+    QCOMPARE(aide_vcs_conflicts_open(&r), 1);
+    aide_vcs_result_free(&r);
+
+    // the new jobs
+    QTemporaryDir dir;
+    const QByteArray base = dir.filePath(QStringLiteral("job")).toUtf8();
+    AideStrList items;
+    aide_strlist_init(&items);
+    aide_strlist_push(&items, "main.c");
+    AideVcsJob job;
+    auto argvOf = [](const AideVcsJob &j) {
+        QStringList a;
+        for (size_t i = 0; i < j.argv.count; i++) a << QString::fromUtf8(j.argv.items[i]);
+        return a;
+    };
+    QVERIFY(aide_vcs_job_build(&job, AIDE_VCS_MERGE_ABORT, "amivcs", base.constData(), nullptr, nullptr, 0, 0));
+    QCOMPARE(argvOf(job).mid(3), (QStringList{ "merge", "--abort" }));
+    aide_vcs_job_free(&job);
+    QVERIFY(aide_vcs_job_build(&job, AIDE_VCS_RESOLVE, "amivcs", base.constData(), &items, nullptr, 1, 0));
+    QCOMPARE(argvOf(job).mid(5), (QStringList{ "resolve", "--theirs" }));
+    aide_vcs_job_free(&job);
+    QVERIFY(aide_vcs_job_build(&job, AIDE_VCS_DIFF, "amivcs", base.constData(), &items, nullptr, 1, 0));
+    QCOMPARE(argvOf(job).mid(5), (QStringList{ "diff", "--staged", "--" }));
+    aide_vcs_job_free(&job);
+    aide_strlist_free(&items);
+    QVERIFY(!aide_vcs_op_writes(AIDE_VCS_DIFF));
+    QVERIFY(aide_vcs_op_touches_files(AIDE_VCS_MERGE_ABORT));
+    QVERIFY(aide_vcs_op_touches_files(AIDE_VCS_RESOLVE));
+}
+
 // Remote URLs (one per repository, AmiVCS 0.10), the auth-required
 // record and the login items that go into --args-from.
 void TstVcs::remotesAndLogin()
@@ -312,13 +383,15 @@ void TstVcs::realAmivcs()
     QVERIFY(src.open(QFile::WriteOnly));
     src.write("int main(void){return 0;}\n");
     src.close();
-    const QByteArray base = dir.filePath(QStringLiteral("job")).toUtf8();
+    QTemporaryDir jobDir;   // job files outside the repository (commit -a would take them)
+    const QByteArray base = jobDir.filePath(QStringLiteral("job")).toUtf8();
+    int runFlag = 0;
     auto run = [&](AideVcsOp op, const QStringList &items, const char *msg, AideVcsResult *r) {
         AideStrList l;
         aide_strlist_init(&l);
         for (const QString &s : items) aide_strlist_push(&l, s.toUtf8().constData());
         AideVcsJob job;
-        if (!aide_vcs_job_build(&job, op, prog.constData(), base.constData(), &l, msg, 0, 50)) return false;
+        if (!aide_vcs_job_build(&job, op, prog.constData(), base.constData(), &l, msg, runFlag, 50)) return false;
         QStringList args;
         for (size_t i = 1; i < job.argv.count; i++) args << QString::fromUtf8(job.argv.items[i]);
         QProcess p;
@@ -356,6 +429,52 @@ void TstVcs::realAmivcs()
     QVERIFY(r.authRequired);
     QCOMPARE(QByteArray(r.authUrl), QByteArray("https://amivcs.invalid/proj"));
     aide_vcs_result_free(&r);
+
+    // a merge with a conflict: state, diff, resolve, abort (AmiVCS 0.11)
+    auto write = [](const char *name, const char *text) {
+        QFile f(QString::fromUtf8(name));
+        if (!f.open(QFile::WriteOnly)) return false;
+        f.write(text);
+        return true;
+    };
+    QVERIFY(run(AIDE_VCS_BRANCH_NEW, { "other" }, nullptr, &r)); aide_vcs_result_free(&r);
+    QVERIFY(run(AIDE_VCS_SWITCH, { "other" }, nullptr, &r)); aide_vcs_result_free(&r);
+    QVERIFY(write("main.c", "int main(void){return 1;}\n"));
+    runFlag = 1;
+    QVERIFY(run(AIDE_VCS_COMMIT, {}, "other", &r)); QVERIFY(r.committed); aide_vcs_result_free(&r);
+    runFlag = 0;
+    QVERIFY(run(AIDE_VCS_SWITCH, { "main" }, nullptr, &r)); aide_vcs_result_free(&r);
+    QVERIFY(write("main.c", "int main(void){return 2;}\n"));
+    runFlag = 1;
+    QVERIFY(run(AIDE_VCS_COMMIT, {}, "main", &r)); QVERIFY(r.committed); aide_vcs_result_free(&r);
+    runFlag = 0;
+    QVERIFY(run(AIDE_VCS_MERGE, { "other" }, nullptr, &r));
+    QVERIFY(r.rc != 0);
+    QVERIFY2(QByteArray(aide_vcs_result_error(&r)).contains("conflict(s)"), aide_vcs_result_error(&r));
+    aide_vcs_result_free(&r);
+    QVERIFY(run(AIDE_VCS_STATUS, {}, nullptr, &r));
+    QVERIFY(r.merging);
+    QCOMPARE(QByteArray(r.mergeLabel), QByteArray("other"));
+    QCOMPARE(aide_vcs_conflicts_open(&r), 1);
+    QCOMPARE(QByteArray(r.conflicts[0].path), QByteArray("main.c"));
+    aide_vcs_result_free(&r);
+    QVERIFY(run(AIDE_VCS_DIFF, { "main.c" }, nullptr, &r));
+    QVERIFY(r.diffCount > 2);
+    QCOMPARE(r.diff[0].op, 'F');
+    aide_vcs_result_free(&r);
+    runFlag = 1;   // take theirs
+    QVERIFY(run(AIDE_VCS_RESOLVE, { "main.c" }, nullptr, &r)); QCOMPARE(r.rc, 0); aide_vcs_result_free(&r);
+    runFlag = 0;
+    QVERIFY(run(AIDE_VCS_STATUS, {}, nullptr, &r));
+    QCOMPARE(aide_vcs_conflicts_open(&r), 0);
+    aide_vcs_result_free(&r);
+    QVERIFY(run(AIDE_VCS_MERGE_ABORT, {}, nullptr, &r)); QCOMPARE(r.rc, 0); aide_vcs_result_free(&r);
+    QVERIFY(run(AIDE_VCS_STATUS, {}, nullptr, &r));
+    QVERIFY(!r.merging);
+    aide_vcs_result_free(&r);
+    QFile back(QStringLiteral("main.c"));
+    QVERIFY(back.open(QFile::ReadOnly));
+    QCOMPARE(back.readAll(), QByteArray("int main(void){return 2;}\n"));
 }
 
 QTEST_MAIN(TstVcs)

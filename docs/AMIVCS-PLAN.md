@@ -182,6 +182,17 @@ ist; ohne `amivcs` sieht die IDE aus wie heute.
 - **Konflikte:** vollständige Liste aus den `msg warn`-Datensätzen im
   Ausgabe-Bereich; `.theirs`-Dateien erscheinen als neu; vor dem Commit
   Warnung, solange `.theirs`-Dateien da sind.
+- **Konflikte ab AmiVCS 0.11 (2026-11):** amivcs speichert den Merge-Zustand
+  und meldet ihn bei `status` als `merging <label> <id> <offen>` plus je
+  Konflikt `conflict U|R <art> <pfad> <theirs>`. Die IDE zeigt die offenen
+  Konflikte (Qt: eigene Liste im Dock mit Take Ours/Take Theirs/Mark
+  Resolved/Abort Merge; MUI: als „Konflikt“-Einträge in „Geändert“ plus
+  Menüpunkte), sperrt Commit, solange welche offen sind, und erlaubt dann
+  eine leere Nachricht. Neue Aufträge `AIDE_VCS_MERGE_ABORT`
+  (`merge --abort`), `AIDE_VCS_RESOLVE` (`resolve --ours|--theirs`) und
+  `AIDE_VCS_DIFF` (`diff [--staged] -- <pfad>`, Datensätze `file`/`hunk`/
+  `line`; Qt: eigenes Fenster, MUI: Register „Ausgabe“). Ohne
+  `merging`-Datensatz (älteres amivcs) bleibt die `.theirs`-Warnung.
 
 ## 7. Refresh
 

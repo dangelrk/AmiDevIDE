@@ -144,6 +144,8 @@ private:
     bool vcsAskLogin(AideVcsOp op, const VcsResultPtr &res);
     void vcsReloadAfterTouch();
     bool vcsTreeDirty() const;
+    void vcsAbortMerge();
+    void vcsShowDiff(const VcsResultPtr &res);
 
     EditorTabWidget *m_editorTabs;
     ProjectTreeDock *m_projectTree;
@@ -201,4 +203,5 @@ private:
     QString m_vcsNetWorkDir;
     int m_vcsLoginTries = 0;
     bool m_vcsLocked = false;
+    QString m_vcsDiffTitle;              // file of the diff job running
 };

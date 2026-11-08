@@ -9,6 +9,7 @@
 #include <QWidget>
 
 class QCheckBox;
+class QFrame;
 class QLabel;
 class QListWidget;
 class QPlainTextEdit;
@@ -36,6 +37,10 @@ signals:
     void stageAllRequested();
     void commitRequested(const QString &message, bool all);
     void fileActivated(const QString &relPath);
+    void diffRequested(const QString &relPath, bool staged);
+    void abortMergeRequested();
+    void resolveRequested(const QStringList &paths, bool theirs);
+    void markResolvedRequested(const QStringList &paths);
 
 private:
     QStringList selectedPaths(QListWidget *list) const;
@@ -48,6 +53,13 @@ private:
     QListWidget *m_staged;
     QPushButton *m_stage, *m_stageAll, *m_unstage, *m_commit, *m_refresh;
     QPlainTextEdit *m_message;
+    QFrame *m_mergeBox;
+    QLabel *m_mergeLabel;
+    QListWidget *m_conflicts;
+    QPushButton *m_abortMerge, *m_takeOurs, *m_takeTheirs, *m_resolved, *m_diff;
+    bool m_merging = false;
+    QListWidget *m_lastList = nullptr;   // the change list clicked last (Diff)
+    int m_conflictsOpen = 0;
     QCheckBox *m_all;
     bool m_busy = false;
 };

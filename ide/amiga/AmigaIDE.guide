@@ -612,7 +612,8 @@ zeigt das Ergebnis an. Ohne amivcs fehlt nur dieser Teil.
 
 @{u}Einrichten@{uu}
 
-  amivcs ab Version 0.10 installieren (Archiv AmiVCS). Liegt es nicht
+  amivcs ab Version 0.10 installieren (für Konflikte, Merge abbrechen
+  und Diff die nächste Version) (Archiv AmiVCS). Liegt es nicht
   in C:, den Pfad unter Projekt > Einstellungen > AmiVCS-Programm
   eintragen. Name und E-Mail für die Commits, Remote-URL und
   Benutzer verwaltet AmiVCS selbst (AmiVCSConfig, Menü Versionen >
@@ -636,7 +637,12 @@ Zeit in UTC, Autor, Branch-Namen und der ersten Zeile der Nachricht.
 @{u}Menü "Versionen"@{uu}
 
   Neuer Branch, Branch wechseln, Branch zusammenführen,
-  Gelöschte Dateien zurückholen, Pull, Push, Clone, Einstellungen.
+  Konflikt: unsere/ihre übernehmen, Merge abbrechen, Diff der
+  Auswahl, Gelöschte Dateien zurückholen, Pull, Push, Clone,
+  Einstellungen.
+
+  Diff der Auswahl schreibt die Änderungen der markierten Datei
+  zeilenweise ins Register "Ausgabe" ("+" hinzugefügt, "-" entfernt).
 
   Clone fragt die Adresse des Repositorys (https://server/name) und
   das Zielverzeichnis. Ein erster Push ohne Remote fragt die Adresse
@@ -662,9 +668,28 @@ build/, das Zielverzeichnis und *.aproj.user in .amivcsignore
 einzutragen. In <projekt>.aproj.user merkt sich die IDE persönliche
 Dinge, die nicht ins Repository gehören.
 
-Konflikte beim Zusammenführen stehen im Register "Ausgabe"; die
-Fassung des anderen Branches liegt als <datei>.theirs daneben. Erst
-die Konflikte lösen und die .theirs-Dateien löschen, dann committen.
+@{u}Konflikte@{uu}
+
+  AmiVCS führt Textdateien zeilenweise zusammen. Wo beide Branches
+  dieselben Zeilen verschieden geändert haben, bleibt der Merge
+  stehen: Die Datei enthält Konfliktmarker
+
+    <<<<<<< ours (main)
+    eigene Zeilen
+    =======
+    Zeilen des anderen Branches
+    >>>>>>> theirs (feature)
+
+  und steht als "Konflikt" in der Liste "Geändert"; die Zeile oben
+  sagt "Merge von '...': n Konflikt(e)". Bei Binärdateien liegt die
+  andere Fassung als <datei>.theirs daneben.
+
+  Lösen: die Datei öffnen, die Blöcke bereinigen, speichern und mit
+  "Bereitstellen" vormerken - oder den Konflikt markieren und im Menü
+  "Konflikt: unsere übernehmen" bzw. "ihre übernehmen" wählen. Sind
+  alle gelöst, committen (die Nachricht darf leer bleiben); der Commit
+  verbindet beide Branches. "Merge abbrechen" stellt den Stand vor dem
+  Merge wieder her.
 
 Clone, Push und Pull brauchen TCP/IP, AmiSSL und einen AmiVCS-Server.
 Ein Push läuft im Hintergrund; das Ergebnis erscheint im Register

@@ -1,6 +1,7 @@
 #include "VcsDock.h"
 
 #include <QCheckBox>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -50,20 +51,56 @@ VcsDock::VcsDock(QWidget *parent)
     top->addWidget(m_refresh);
     layout->addLayout(top);
 
+    // a merge that stopped on conflicts
+    m_mergeBox = new QFrame(page);
+    m_mergeBox->setFrameShape(QFrame::StyledPanel);
+    m_mergeBox->setStyleSheet(QStringLiteral("QFrame { background: rgba(230, 160, 0, 60); }"));
+    auto *mergeLayout = new QVBoxLayout(m_mergeBox);
+    m_mergeLabel = new QLabel(m_mergeBox);
+    m_mergeLabel->setWordWrap(true);
+    mergeLayout->addWidget(m_mergeLabel);
+    m_conflicts = new QListWidget(m_mergeBox);
+    m_conflicts->setObjectName(QStringLiteral("conflicts"));
+    m_conflicts->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_conflicts->setToolTip(tr("Double-click opens the file: fix the <<<<<<< ======= >>>>>>> blocks, "
+                               "save, then Mark Resolved"));
+    mergeLayout->addWidget(m_conflicts);
+    auto *mergeRow = new QHBoxLayout;
+    m_takeOurs = new QPushButton(tr("Take Ours"), m_mergeBox);
+    m_takeTheirs = new QPushButton(tr("Take Theirs"), m_mergeBox);
+    m_resolved = new QPushButton(tr("Mark Resolved"), m_mergeBox);
+    m_takeOurs->setToolTip(tr("Keep this branch's version of the whole file"));
+    m_takeTheirs->setToolTip(tr("Use the merged branch's version of the whole file"));
+    m_resolved->setToolTip(tr("The file is fixed -- stage it as it is now"));
+    mergeRow->addWidget(m_takeOurs);
+    mergeRow->addWidget(m_takeTheirs);
+    mergeRow->addWidget(m_resolved);
+    mergeLayout->addLayout(mergeRow);
+    m_abortMerge = new QPushButton(tr("Abort Merge"), m_mergeBox);
+    m_abortMerge->setToolTip(tr("Give up the merge: every file goes back to how it was before"));
+    mergeLayout->addWidget(m_abortMerge);
+    m_mergeBox->hide();
+    layout->addWidget(m_mergeBox, 2);
+
     layout->addWidget(new QLabel(tr("Changes"), page));
     m_unstaged = new QListWidget(page);
+    m_unstaged->setObjectName(QStringLiteral("changes"));
     m_unstaged->setSelectionMode(QAbstractItemView::ExtendedSelection);
     layout->addWidget(m_unstaged, 2);
     auto *row1 = new QHBoxLayout;
     m_stage = new QPushButton(tr("Stage"), page);
     m_stageAll = new QPushButton(tr("Stage All"), page);
+    m_diff = new QPushButton(tr("Diff"), page);
+    m_diff->setToolTip(tr("Show what changed in the selected file"));
     row1->addWidget(m_stage);
     row1->addWidget(m_stageAll);
+    row1->addWidget(m_diff);
     row1->addStretch(1);
     layout->addLayout(row1);
 
     layout->addWidget(new QLabel(tr("Staged"), page));
     m_staged = new QListWidget(page);
+    m_staged->setObjectName(QStringLiteral("staged"));
     m_staged->setSelectionMode(QAbstractItemView::ExtendedSelection);
     layout->addWidget(m_staged, 1);
     auto *row2 = new QHBoxLayout;
@@ -97,7 +134,31 @@ VcsDock::VcsDock(QWidget *parent)
     connect(m_commit, &QPushButton::clicked, this, [this] {
         emit commitRequested(m_message->toPlainText().trimmed(), m_all->isChecked());
     });
+    connect(m_diff, &QPushButton::clicked, this, [this] {
+        // the selected file of either list; staged if it was picked there
+        QListWidget *list = m_lastList ? m_lastList : m_unstaged;
+        QListWidgetItem *item = list->currentItem();
+        if (!item) item = (list == m_staged ? m_unstaged : m_staged)->currentItem();
+        if (item) emit diffRequested(item->data(Qt::UserRole).toString(), item->listWidget() == m_staged);
+    });
+    connect(m_abortMerge, &QPushButton::clicked, this, &VcsDock::abortMergeRequested);
+    connect(m_takeOurs, &QPushButton::clicked, this, [this] {
+        const QStringList p = selectedPaths(m_conflicts);
+        if (!p.isEmpty()) emit resolveRequested(p, false);
+    });
+    connect(m_takeTheirs, &QPushButton::clicked, this, [this] {
+        const QStringList p = selectedPaths(m_conflicts);
+        if (!p.isEmpty()) emit resolveRequested(p, true);
+    });
+    connect(m_resolved, &QPushButton::clicked, this, [this] {
+        const QStringList p = selectedPaths(m_conflicts);
+        if (!p.isEmpty()) emit markResolvedRequested(p);
+    });
+    connect(m_conflicts, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+        emit fileActivated(item->data(Qt::UserRole).toString());
+    });
     for (QListWidget *l : { m_unstaged, m_staged }) {
+        connect(l, &QListWidget::itemPressed, this, [this, l] { m_lastList = l; });
         connect(l, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
             emit fileActivated(item->data(Qt::UserRole).toString());
         });
@@ -141,14 +202,40 @@ void VcsDock::showStatus(const AideVcsResult *s)
         item->setData(Qt::UserRole, path);
         (c.staged == 'S' ? m_staged : m_unstaged)->addItem(item);
     }
+    m_conflicts->clear();
+    m_merging = s->merging != 0;
+    m_conflictsOpen = s->merging ? s->conflictsOpen : 0;
+    for (size_t i = 0; i < s->conflictCount; ++i) {
+        const AideVcsConflict &c = s->conflicts[i];
+        const QString path = QString::fromUtf8(c.path);
+        QString text = QStringLiteral("%1  %2").arg(QString::fromUtf8(c.kind), -13).arg(path);
+        if (c.state != 'U') text += tr("  (resolved)");
+        else if (c.theirsFile) text += tr("  (+ .theirs)");
+        auto *item = new QListWidgetItem(text);
+        item->setData(Qt::UserRole, path);
+        if (c.state != 'U') item->setForeground(palette().color(QPalette::Disabled, QPalette::Text));
+        m_conflicts->addItem(item);
+    }
+    if (m_merging) {
+        const QString label = QString::fromUtf8(s->mergeLabel ? s->mergeLabel : "");
+        m_mergeLabel->setText(m_conflictsOpen
+            ? tr("Merging '%1': %2 conflict(s). Fix each file (double-click) and mark it resolved, "
+                 "or take one side -- then commit.").arg(label).arg(m_conflictsOpen)
+            : tr("Merging '%1': all conflicts resolved. Commit to finish the merge.").arg(label));
+        if (m_message->toPlainText().trimmed().isEmpty())
+            m_message->setPlainText(QStringLiteral("Merge branch '%1'").arg(label));
+    }
+    m_mergeBox->setVisible(m_merging);
     setBusy(m_busy);
 }
 
 void VcsDock::setBusy(bool busy)
 {
     m_busy = busy;
-    for (QWidget *w : std::initializer_list<QWidget *>{ m_stage, m_stageAll, m_unstage, m_commit, m_initButton })
+    for (QWidget *w : std::initializer_list<QWidget *>{ m_stage, m_stageAll, m_unstage, m_commit, m_initButton,
+                                                        m_abortMerge, m_takeOurs, m_takeTheirs, m_resolved })
         w->setEnabled(!busy);
+    if (!busy && m_conflictsOpen > 0) m_commit->setEnabled(false);   // amivcs would refuse
 }
 
 void VcsDock::clearMessage()

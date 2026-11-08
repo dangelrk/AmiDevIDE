@@ -25,6 +25,13 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFontDatabase>
+#include <QPlainTextEdit>
+#include <QTextCursor>
+#include <QTextCharFormat>
+#include <QVBoxLayout>
 
 #include <cstdlib>
 
@@ -42,6 +49,9 @@ static QString opName(int op)
     case AIDE_VCS_PUSH:       return QObject::tr("Push");
     case AIDE_VCS_PULL:       return QObject::tr("Pull");
     case AIDE_VCS_CLONE:      return QObject::tr("Clone");
+    case AIDE_VCS_MERGE_ABORT: return QObject::tr("Abort merge");
+    case AIDE_VCS_RESOLVE:    return QObject::tr("Resolve conflict");
+    case AIDE_VCS_DIFF:       return QObject::tr("Diff");
     default:                  return QObject::tr("Version control");
     }
 }
@@ -79,6 +89,7 @@ void MainWindow::createVcs()
     m_vcsRepoActions << menu->addAction(tr("&New Branch..."), this, &MainWindow::vcsNewBranch);
     m_vcsRepoActions << menu->addAction(tr("&Switch Branch..."), this, [this] { vcsChooseBranch(AIDE_VCS_SWITCH); });
     m_vcsRepoActions << menu->addAction(tr("&Merge Branch..."), this, [this] { vcsChooseBranch(AIDE_VCS_MERGE); });
+    m_vcsRepoActions << menu->addAction(tr("&Abort Merge"), this, &MainWindow::vcsAbortMerge);
     m_vcsRepoActions << menu->addAction(tr("Restore &Deleted Files"), this, [this] {
         if (vcsPrepareTouch(tr("Restore the committed versions of deleted files")))
             vcsStartWrite(AIDE_VCS_CHECKOUT);
@@ -113,6 +124,23 @@ void MainWindow::createVcs()
     connect(m_vcsDock, &VcsDock::unstageRequested, this, [this](const QStringList &p) { vcsStartWrite(AIDE_VCS_UNSTAGE, p); });
     connect(m_vcsDock, &VcsDock::stageAllRequested, this, [this] { vcsStartWrite(AIDE_VCS_ADD, { QStringLiteral("-A") }); });
     connect(m_vcsDock, &VcsDock::commitRequested, this, &MainWindow::vcsCommit);
+    connect(m_vcsDock, &VcsDock::diffRequested, this, [this](const QString &rel, bool staged) {
+        m_vcsDiffTitle = rel + (staged ? tr(" (staged)") : QString());
+        m_vcs->run(AIDE_VCS_DIFF, { rel }, {}, staged);
+    });
+    connect(m_vcsDock, &VcsDock::abortMergeRequested, this, &MainWindow::vcsAbortMerge);
+    connect(m_vcsDock, &VcsDock::resolveRequested, this, [this](const QStringList &p, bool theirs) {
+        if (!m_editorTabs->saveAllModified()) return;
+        saveProject();   // the open tabs come back after the reload
+        vcsStartWrite(AIDE_VCS_RESOLVE, p, {}, theirs);
+    });
+    connect(m_vcsDock, &VcsDock::markResolvedRequested, this, [this](const QStringList &p) {
+        if (!m_editorTabs->saveAllModified()) {   // stage what the editor shows
+            QMessageBox::warning(this, opName(AIDE_VCS_ADD), tr("Not every file could be saved; nothing was marked."));
+            return;
+        }
+        vcsStartWrite(AIDE_VCS_ADD, p);
+    });
     connect(m_vcsDock, &VcsDock::fileActivated, this, [this](const QString &rel) {
         if (m_project && QFile::exists(m_project->absolutePath(rel)))
             openFileAt(m_project->absolutePath(rel));
@@ -309,6 +337,10 @@ void MainWindow::vcsOnFinished(int opInt, VcsResultPtr res)
     case AIDE_VCS_LOG:
         if (res->ok()) m_historyDock->showLog(res);
         return;
+    case AIDE_VCS_DIFF:
+        if (res->ok()) vcsShowDiff(res);
+        else vcsReport(res, opName(op), true);
+        return;
     case AIDE_VCS_BRANCHES: {
         if (!res->ok()) { vcsReport(res, opName(m_vcsPendingBranchOp), true); return; }
         QStringList names;
@@ -366,6 +398,21 @@ void MainWindow::vcsOnFinished(int opInt, VcsResultPtr res)
         return;
     }
 
+    // a merge (or pull) that stopped on conflicts: not an error to shout about
+    if ((op == AIDE_VCS_MERGE || op == AIDE_VCS_PULL) && !res->ok() && res->parsed
+        && res->error().contains(QStringLiteral("conflict(s)"))) {
+        vcsReport(res, opName(op), false);
+        if (res->r.haveHead) vcsApplyStatus(res);   // the merge state, at once
+        vcsReloadAfterTouch();                      // reopens the project: status and log again
+        m_vcsDockWidget->show();
+        m_vcsDockWidget->raise();
+        QMessageBox::information(this, opName(op),
+            tr("The merge stopped on conflicts. They are listed in the Version Control panel: open each "
+               "file, fix the <<<<<<< / ======= / >>>>>>> blocks and mark it resolved, or take one side "
+               "as a whole. Then commit -- or abort the merge."));
+        return;
+    }
+
     // writing jobs
     vcsReport(res, opName(op), true);
     if (op == AIDE_VCS_CLONE) {
@@ -398,6 +445,8 @@ void MainWindow::vcsOnFinished(int opInt, VcsResultPtr res)
         m_vcsDock->clearMessage();
     if (aide_vcs_op_touches_files(op))
         vcsReloadAfterTouch();
+    if ((op == AIDE_VCS_ADD || op == AIDE_VCS_COMMIT) && !(res->parsed && res->r.haveHead))
+        m_vcs->run(AIDE_VCS_STATUS);   // the merge state changed
     if (op == AIDE_VCS_COMMIT || op == AIDE_VCS_BRANCH_NEW || op == AIDE_VCS_PUSH || aide_vcs_op_touches_files(op))
         m_vcs->run(AIDE_VCS_LOG);
     if (res->ok())
@@ -461,11 +510,18 @@ void MainWindow::vcsInit()
 
 void MainWindow::vcsCommit(const QString &message, bool all)
 {
-    if (message.isEmpty()) {
+    const bool merging = m_vcsStatus && m_vcsStatus->r.merging;
+    if (message.isEmpty() && !merging) {
         QMessageBox::information(this, opName(AIDE_VCS_COMMIT), tr("Enter a commit message first."));
         return;
     }
-    if (m_vcsStatus && aide_vcs_has_theirs(&m_vcsStatus->r)
+    if (merging && m_vcsStatus->r.conflictsOpen > 0) {
+        QMessageBox::information(this, opName(AIDE_VCS_COMMIT),
+                                 tr("%1 conflict(s) of the merge are not resolved yet. Fix them and mark them "
+                                    "resolved (or take one side) first.").arg(m_vcsStatus->r.conflictsOpen));
+        return;
+    }
+    if (!merging && m_vcsStatus && aide_vcs_has_theirs(&m_vcsStatus->r)
         && QMessageBox::question(this, opName(AIDE_VCS_COMMIT),
                                  tr("There are still .theirs files from a merge with conflicts. Resolve the "
                                     "conflicts and delete those files before committing.\n\nCommit anyway?"))
@@ -473,6 +529,76 @@ void MainWindow::vcsCommit(const QString &message, bool all)
         return;
     m_editorTabs->saveAllModified();   // commit what the editor shows
     vcsStartWrite(AIDE_VCS_COMMIT, {}, message, all);
+}
+
+void MainWindow::vcsAbortMerge()
+{
+    if (!m_vcsStatus || !m_vcsStatus->r.merging) {
+        QMessageBox::information(this, opName(AIDE_VCS_MERGE_ABORT), tr("No merge is in progress."));
+        return;
+    }
+    if (QMessageBox::question(this, opName(AIDE_VCS_MERGE_ABORT),
+            tr("Give up merging '%1'?\n\nEvery file the merge changed goes back to how it was before, "
+               "including your edits to conflicting files. Files not under version control stay.")
+                .arg(QString::fromUtf8(m_vcsStatus->r.mergeLabel ? m_vcsStatus->r.mergeLabel : "")))
+        != QMessageBox::Yes)
+        return;
+    if (!m_editorTabs->saveAllModified()) return;
+    saveProject();   // the open tabs come back after the reload
+    m_vcsDock->clearMessage();
+    vcsStartWrite(AIDE_VCS_MERGE_ABORT);
+}
+
+// The diff of one file in a window of its own, coloured like the
+// AmiVCS GUI (tinted backgrounds work on light and dark palettes).
+void MainWindow::vcsShowDiff(const VcsResultPtr &res)
+{
+    auto *dlg = new QDialog(this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QString title = m_vcsDiffTitle;   // the file the result is about, if it says
+    for (size_t i = 0; i < res->r.diffCount; ++i)
+        if (res->r.diff[i].op == 'F') { title = QString::fromUtf8(res->r.diff[i].text).remove(QStringLiteral("  (binary)")); break; }
+    dlg->setWindowTitle(tr("Diff: %1").arg(title));
+    dlg->resize(760, 520);
+    auto *layout = new QVBoxLayout(dlg);
+    auto *view = new QPlainTextEdit(dlg);
+    view->setReadOnly(true);
+    view->setLineWrapMode(QPlainTextEdit::NoWrap);
+    view->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    layout->addWidget(view);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, dlg);
+    connect(buttons, &QDialogButtonBox::rejected, dlg, &QDialog::close);
+    layout->addWidget(buttons);
+
+    QTextCursor c(view->document());
+    QTextCharFormat plain, add, del, hunk, note;
+    add.setBackground(QColor(40, 170, 60, 60));
+    del.setBackground(QColor(220, 50, 50, 60));
+    hunk.setForeground(QColor(120, 120, 200));
+    note.setFontItalic(true);
+    const AideVcsResult &r = res->r;
+    bool first = true;
+    for (size_t i = 0; i < r.diffCount; ++i) {
+        const AideVcsDiffLine &l = r.diff[i];
+        const QString t = QString::fromUtf8(l.text ? l.text : "");
+        if (l.op == 'F') {
+            if (t.endsWith(QStringLiteral("(binary)")))
+                { if (!first) c.insertText(QStringLiteral("\n")); c.insertText(tr("(binary file -- no line diff)"), note); first = false; }
+            continue;
+        }
+        if (!first) c.insertText(QStringLiteral("\n"), plain);
+        first = false;
+        switch (l.op) {
+        case '+': c.insertText(QStringLiteral("+") + t, add); break;
+        case '-': c.insertText(QStringLiteral("-") + t, del); break;
+        case '@': c.insertText(t, hunk); break;
+        case '\\': c.insertText(t, note); break;
+        default: c.insertText(QStringLiteral(" ") + t, plain); break;
+        }
+    }
+    if (first) c.insertText(tr("(no changes)"), note);
+    view->moveCursor(QTextCursor::Start);
+    dlg->show();
 }
 
 void MainWindow::vcsChooseBranch(AideVcsOp op)

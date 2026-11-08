@@ -11,7 +11,8 @@
  *     so nothing on an AmigaDOS command line needs quoting;
  *   - reading the result: amivcs --porcelain-out writes one record per
  *     line (format, branch/detached, change, ref, commit, committed, msg,
- *     progress, auth-required, end), fields separated by tabs, escaped (\\ \t \n \r),
+ *     progress, auth-required, merging, conflict, file, hunk, line, end),
+ *     fields separated by tabs, escaped (\\ \t \n \r),
  *     all text in the local codeset;
  *   - file states for the project tree, the IDE's .amivcsignore lines.
  *
@@ -45,7 +46,10 @@ typedef enum AideVcsOp {
     AIDE_VCS_CHECKOUT,
     AIDE_VCS_PUSH,
     AIDE_VCS_PULL,
-    AIDE_VCS_CLONE      /* remote URL, target directory */
+    AIDE_VCS_CLONE,     /* remote URL, target directory */
+    AIDE_VCS_MERGE_ABORT,/* give up a merge with conflicts */
+    AIDE_VCS_RESOLVE,   /* paths, flag 0 = take ours, 1 = take theirs */
+    AIDE_VCS_DIFF       /* one path, flag 1 = staged (vs HEAD), 0 = not staged */
 } AideVcsOp;
 
 /* 1 for an operation that changes the repository or the working tree:
@@ -104,6 +108,22 @@ typedef struct AideVcsCommit {
     char *message;        /* may contain newlines */
 } AideVcsCommit;
 
+/* A conflict of a merge in progress (status). */
+typedef struct AideVcsConflict {
+    char  state;          /* 'U' unresolved, 'R' resolved */
+    char *kind;           /* content, binary, add-add, modify-delete, delete-modify */
+    char *path;           /* relative, local codeset */
+    int   theirsFile;     /* 1: the other side is beside it as <path>.theirs */
+} AideVcsConflict;
+
+/* One line of a diff result: 'F' file head (text = path, kind/binary in
+ * diffKind/diffBinary), '@' hunk head (text = "@@ -a,b +c,d @@"),
+ * ' ', '+', '-' lines (text without the line end), '\\' "no newline". */
+typedef struct AideVcsDiffLine {
+    char  op;
+    char *text;
+} AideVcsDiffLine;
+
 typedef struct AideVcsMessage {
     int   level;          /* 0 info, 1 warn, 2 error */
     char *text;
@@ -124,6 +144,11 @@ typedef struct AideVcsResult {
     AideVcsMessage *messages; size_t messageCount;
     long  progressDone, progressTotal;
     char *progressLabel;
+    int   merging;        /* a merge with conflicts is in progress (status) */
+    char *mergeLabel;     /* the branch being merged */
+    int   conflictsOpen;  /* unresolved conflicts, from the merging record */
+    AideVcsConflict *conflicts; size_t conflictCount;
+    AideVcsDiffLine *diff; size_t diffCount;   /* diff result */
     int   authRequired;   /* an auth-required record: ask and run again */
     char *authUrl;        /* the remote URL it was about */
     char *authUser;       /* the user amivcs had ("" if none) */
@@ -178,8 +203,12 @@ char *aide_vcs_url_name(const char *url);
 void aide_vcs_items_with_login(const AideStrList *items, const char *user, const char *pass,
                                int remember, AideStrList *out);
 
-/* 1 if a status result lists `.theirs` copies (an unresolved merge) */
+/* 1 if a status result lists `.theirs` copies (an unresolved merge of an
+ * older amivcs, which had no merge state) */
 int  aide_vcs_has_theirs(const AideVcsResult *status);
+/* Unresolved conflicts of a status result: from the merge state, or (an
+ * older amivcs) 1 if `.theirs` copies are lying around, else 0. */
+int  aide_vcs_conflicts_open(const AideVcsResult *status);
 
 /* Branch graph for a log result (commit records, newest first), same
  * lane layout as AmiVCS's own GUI: per row the commit's lane, the lanes

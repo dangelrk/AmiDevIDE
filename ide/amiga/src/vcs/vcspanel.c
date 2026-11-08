@@ -335,10 +335,30 @@ static void show_status(const AideVcsResult *r)
     set(g_staged, MUIA_NList_Quiet, TRUE);
     DoMethod(g_unstaged, MUIM_NList_Clear);
     DoMethod(g_staged, MUIM_NList_Clear);
+    /* conflicts of a merge first, 9 columns of kind like the changes
+     * ("Bereitstellen" marks them resolved) */
+    for (i = 0; i < r->conflictCount; i++) {
+        if (r->conflicts[i].state != 'U') continue;
+        snprintf(line, sizeof(line), "Konflikt %s", r->conflicts[i].path);
+        DoMethod(g_unstaged, MUIM_NList_InsertSingle, (ULONG)line, MUIV_NList_Insert_Bottom);
+    }
     for (i = 0; i < r->changeCount; i++) {
+        size_t k;
+        int open = 0;
+        for (k = 0; k < r->conflictCount; k++)   /* listed above already */
+            if (r->conflicts[k].state == 'U' && r->changes[i].staged == 'U'
+                && strcmp(r->conflicts[k].path, r->changes[i].path) == 0) open = 1;
+        if (open) continue;
         snprintf(line, sizeof(line), "%s%s", kind_text(r->changes[i].kind), r->changes[i].path);
         DoMethod(r->changes[i].staged == 'S' ? g_staged : g_unstaged, MUIM_NList_InsertSingle,
                  (ULONG)line, MUIV_NList_Insert_Bottom);
+    }
+    if (r->merging) {
+        snprintf(line, sizeof(line), r->conflictsOpen
+                     ? "%s  \33bMerge von '%s': %d Konflikt(e)"
+                     : "%s  \33bMerge von '%s': gel\366st, committen",
+                 r->branch ? r->branch : "", r->mergeLabel ? r->mergeLabel : "", r->conflictsOpen);
+        set(g_branch, MUIA_Text_Contents, line);
     }
     set(g_unstaged, MUIA_NList_Quiet, FALSE);
     set(g_staged, MUIA_NList_Quiet, FALSE);
@@ -377,6 +397,23 @@ static void show_log(const AideVcsResult *r)
         DoMethod(g_historyList, MUIM_NList_InsertSingle, (ULONG)line, MUIV_NList_Insert_Bottom);
     }
     set(g_historyList, MUIA_NList_Quiet, FALSE);
+}
+
+/* a diff result into the output window */
+static void show_diff(const AideVcsResult *r)
+{
+    size_t i;
+    AideStr s;
+    aide_str_init(&s);
+    for (i = 0; i < r->diffCount; i++) {
+        const AideVcsDiffLine *d = &r->diff[i];
+        if (d->op == 'F') { aide_str_append(&s, "--- "); aide_str_append(&s, d->text); }
+        else if (d->op == '@' || d->op == '\\') aide_str_append(&s, d->text);
+        else { aide_str_append_char(&s, d->op); aide_str_append(&s, d->text); }
+        aide_str_append_char(&s, '\n');
+    }
+    output(s.len ? s.data : "(keine \304nderungen)\n");
+    aide_str_free(&s);
 }
 
 static void refresh(int withLog)
@@ -495,6 +532,10 @@ static void job_done(void)
         if (ok) choose_branch(&r);
         else show_messages(&r);
         break;
+    case AIDE_VCS_DIFF:
+        if (ok) show_diff(&r);
+        else show_messages(&r);
+        break;
     default:
         if (aide_vcs_op_network(op) && !ok && parsed && r.authRequired) {
             /* amivcs needs a user and password for the remote */
@@ -549,6 +590,24 @@ static void job_done(void)
             return;
         }
         show_messages(&r);
+        if (!ok && (op == AIDE_VCS_MERGE || op == AIDE_VCS_PULL) && aide_vcs_result_error(&r)
+            && strstr(aide_vcs_result_error(&r), "conflict(s)")) {
+            /* stopped on conflicts: not a failure, the next step is the user's */
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "Der Merge ist bei Konflikten stehen geblieben.\n"
+                        "Sie stehen als \"Konflikt\" in der Liste: Datei\n"
+                        "\366ffnen, die <<<<<<< ======= >>>>>>> Bl\366cke\n"
+                        "aufl\366sen und bereitstellen -- oder im Men\374\n"
+                        "eine Seite \374bernehmen. Dann committen\n"
+                        "(oder \"Merge abbrechen\").");
+            if (r.haveHead) take_status(&r);   /* the merge state, at once */
+            if (g_host.reload_project) g_host.reload_project();   /* status and log again */
+            else { run_simple(AIDE_VCS_STATUS); run_simple(AIDE_VCS_LOG); }
+            aide_vcs_result_free(&r);
+            set_enabled(1);
+            start_next();
+            return;
+        }
         if (!ok) {
             const char *e = aide_vcs_result_error(&r);
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "%s",
@@ -577,7 +636,14 @@ static void job_done(void)
             if (g_repo) { check_ignore(); refresh(1); }
             break;
         }
-        if (parsed) take_status(&r);
+        {
+            int hadHead = r.haveHead;   /* take_status() empties r */
+            if (parsed) take_status(&r);
+            /* an older amivcs without status after add/commit; touching
+             * jobs reload the project, which reads the status anyway */
+            if (parsed && !hadHead && (op == AIDE_VCS_ADD || op == AIDE_VCS_COMMIT))
+                run_simple(AIDE_VCS_STATUS);
+        }
         if (op == AIDE_VCS_COMMIT && ok) {
             set(g_message, MUIA_String_Contents, "");
             set(g_all, MUIA_Selected, FALSE);
@@ -838,18 +904,25 @@ int vcspanel_handle_id(long id)
         ULONG all = FALSE;
         get(g_message, MUIA_String_Contents, &msg);
         get(g_all, MUIA_Selected, &all);
-        if (!msg || !msg[0]) {
+        if (g_haveStatus && g_status.merging && g_status.conflictsOpen > 0) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "%ld Konflikt(e) des Merges sind noch offen.\n"
+                        "Erst aufl\366sen und bereitstellen (oder eine\n"
+                        "Seite \374bernehmen).", (long)g_status.conflictsOpen);
+            break;
+        }
+        if ((!msg || !msg[0]) && !(g_haveStatus && g_status.merging)) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Bitte zuerst eine Commit-Nachricht eingeben.");
             break;
         }
-        if (g_haveStatus && aide_vcs_has_theirs(&g_status)
+        if (g_haveStatus && !g_status.merging && aide_vcs_has_theirs(&g_status)
             && MUI_Request(g_app, g_window, 0, "AmigaIDE", "_Trotzdem|_Abbrechen",
                            "Es gibt noch .theirs-Dateien von einem Merge mit\n"
                            "Konflikten. Erst die Konflikte l\366sen und die\n"
                            "Dateien l\366schen.") != 1)
             break;
         if (g_host.save_all) g_host.save_all();   /* commit what the editor shows */
-        run_job(AIDE_VCS_COMMIT, NULL, (const char *)msg, all ? 1 : 0, NULL);
+        run_job(AIDE_VCS_COMMIT, NULL, msg ? (const char *)msg : "", all ? 1 : 0, NULL);
         break;
     }
     case ID_VCS_NEWBRANCH:
@@ -881,6 +954,59 @@ int vcspanel_handle_id(long id)
     case ID_VCS_SETTINGS:
         start_settings();
         break;
+    case ID_VCS_MERGE_ABORT:
+        if (!g_haveStatus || !g_status.merging) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Es l\344uft kein Merge.");
+            break;
+        }
+        if (MUI_Request(g_app, g_window, 0, "AmigaIDE", "_Merge abbrechen|_Zur\374ck",
+                        "Merge von '%s' abbrechen?\n\n"
+                        "Alle Dateien, die der Merge ge\344ndert hat, kommen\n"
+                        "in den Stand davor zur\374ck -- auch Ihre\n"
+                        "\304nderungen an Konfliktdateien. Dateien ohne\n"
+                        "Versionsverwaltung bleiben.",
+                        g_status.mergeLabel ? g_status.mergeLabel : "") != 1)
+            break;
+        if (g_host.save_all && !g_host.save_all()) break;
+        set(g_message, MUIA_String_Contents, "");
+        run_simple(AIDE_VCS_MERGE_ABORT);
+        break;
+    case ID_VCS_TAKE_OURS:
+    case ID_VCS_TAKE_THEIRS: {
+        LONG pos = MUIV_NList_NextSelected_Start;
+        for (;;) {   /* only the conflict entries of the selection */
+            char *entry = NULL;
+            DoMethod(g_unstaged, MUIM_NList_NextSelected, &pos);
+            if (pos == MUIV_NList_NextSelected_End) break;
+            DoMethod(g_unstaged, MUIM_NList_GetEntry, pos, &entry);
+            if (entry && strncmp(entry, "Konflikt ", 9) == 0) aide_strlist_push(&l, entry + 9);
+        }
+        if (!l.count) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "Erst einen Konflikt in der Liste\n\"Ge\344ndert\" ausw\344hlen.");
+            break;
+        }
+        if (g_host.save_all && !g_host.save_all()) break;
+        run_job(AIDE_VCS_RESOLVE, &l, NULL, id == ID_VCS_TAKE_THEIRS, NULL);
+        break;
+    }
+    case ID_VCS_DIFF: {
+        int staged = 0;
+        selected_paths(g_unstaged, &l);
+        if (!l.count) { selected_paths(g_staged, &l); staged = 1; }
+        if (!l.count) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "Erst eine Datei in den Listen ausw\344hlen.");
+            break;
+        }
+        {
+            AideStrList one;   /* the first selected file */
+            aide_strlist_init(&one);
+            aide_strlist_push(&one, l.items[0]);
+            run_job(AIDE_VCS_DIFF, &one, NULL, staged, NULL);
+            aide_strlist_free(&one);
+        }
+        break;
+    }
     case ID_VCS_CLONE: {
         char url[256], parent[200], name[64];
         char *repo;

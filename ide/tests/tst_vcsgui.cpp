@@ -175,7 +175,9 @@ QAction *TstVcsGui::action(const QString &t) const
 
 QListWidget *TstVcsGui::list(int i) const
 {
-    return m_win->findChild<VcsDock *>()->findChildren<QListWidget *>().value(i);
+    // by name: the dock also has a conflict list (shown during a merge)
+    return m_win->findChild<VcsDock *>()->findChild<QListWidget *>(
+        i == 0 ? QStringLiteral("changes") : QStringLiteral("staged"));
 }
 
 QString TstVcsGui::branchText() const
