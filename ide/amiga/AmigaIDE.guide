@@ -150,12 +150,24 @@ Erwartete Struktur unter SDK: (nur was man braucht):
   SDK:regex/include
   SDK:reqtools/include
 
-Ob ein SDK vollständig ist, zeigt @{b}Projekt > SDKs prüfen...@{ub}: Für
-jedes SDK steht in der Ausgabe "vollständig", "nicht gefunden" oder
-welche Teile fehlen. Liegt daneben ein Verzeichnis, dessen Name sich
-nur in Groß-/Kleinschreibung, "_", "-", "." oder Leerzeichen
-unterscheidet (etwa SDK:NDK3.2 statt SDK:NDK_3.2), wird es mit
-"umbenennen?" genannt.
+Was da ist und was fehlt, zeigt @{b}Projekt > Installation prüfen...@{ub}
+in einem eigenen Fenster, als Tabelle mit Name, Zustand, Version und
+Ort bzw. Abhilfe:
+
+  Ordner        vbcc:, das vbcc-Target, SDK-Root, ACE:
+  Werkzeuge     vc, vbccm68k, vasmm68k_mot, vlink, startup.o, make,
+                ace, amivcs, amivcs-gui (jeweils mit Version)
+  Libraries     muimaster, reqtools, regex, die MUI-Klassen und
+                asl.library, mit Version und Mindestversion
+  SDKs          jedes SDK: vorhanden, nicht installiert oder
+                unvollständig; die des Projekts sind markiert
+
+Fehlt etwas, steht rechts das Aminet-Paket, das es liefert. "optional"
+heißt: nur für bestimmte Projekte nötig (ACE BASIC, AmiVCS). Oben steht,
+wie viele Punkte fehlen. "Erneut prüfen" prüft nach einer Installation
+noch einmal. Liegt neben einem fehlenden SDK ein Verzeichnis, dessen
+Name sich nur in Groß-/Kleinschreibung, "_", "-", "." oder Leerzeichen
+unterscheidet (etwa SDK:NDK3.2 statt SDK:NDK_3.2), wird es genannt.
 
 @{u}Andere Pfade@{uu}
 
@@ -263,7 +275,7 @@ ohne Nachfrage verloren.
 Benutzt das Projekt SDKs, die hier nicht installiert sind, nennt
 AmigaIDE sie in einem Hinweis. Ebenso, wenn ein SDK nur in einer
 neueren Hauptversion da ist oder Teile davon fehlen (Einzelheiten:
-Projekt > SDKs prüfen...). Siehe @{" Eigene SDKs " link EigeneSDKs}.
+Projekt > Installation prüfen...). Siehe @{" Eigene SDKs " link EigeneSDKs}.
 
 @{u}Projekt > Speichern  (Amiga-S)@{uu}
 
@@ -466,7 +478,7 @@ genommen.
 Ein leeres Feld heißt "Standard" (die Hilfeblase am Feld zeigt ihn).
 Nichts davon ist Pflicht. Gespeichert wird je SDK in
 ENVARC:AmigaIDE/sdkroot-<id>, z. B. sdkroot-ndk-3.2. Ob alles gefunden
-wird, zeigt Projekt > SDKs prüfen...
+wird, zeigt Projekt > Installation prüfen...
 
 @endnode
 @node Editor "Editor"

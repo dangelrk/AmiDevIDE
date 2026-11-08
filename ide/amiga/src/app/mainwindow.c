@@ -86,6 +86,7 @@ typedef ULONG IPTR;
 #include "disasm/disasmwindow.h"
 #include "project/settingswindow.h"
 #include "app/prefswindow.h"
+#include "app/checkwindow.h"
 
 /* Build stamp, generated into $(OBJDIR) by amiga/Makefile.amiga-cross --
 ** see the comment there for why it is a header and not a -D define. */
@@ -1475,34 +1476,22 @@ static void do_open_vcs_gui(void)
     set_status("AmiVCS-GUI gestartet");
 }
 
-/* Projekt -> "SDKs pr\374fen...": every known SDK into the Ausgabe page. */
+/* Projekt -> "Installation pr\374fen...": drawers, compiler and tools,
+ * make, libraries and SDKs with their versions, in a window of its own
+ * (checkwindow.c) -- no longer as text in the Ausgabe page. */
 static void do_check_sdks(void)
 {
-    AideStr text;
-    AideStrList missing;
-    size_t i;
-
-    aide_str_init(&text);
-    aide_str_append(&text, "SDK-Pr\374fung, SDK: = ");
-    aide_str_append(&text, prefs_sdk_root());
-    aide_str_append(&text, "\n\n");
-    for (i = 0; i < g_sdkRegistry.count; ++i)
-        sdk_report_into(&text, &g_sdkRegistry.items[i], 1);
-
-    aide_strlist_init(&missing);
-    aide_sdk_list_missing(&g_sdkRegistry, &g_project.sdks.selected, &missing);
-    for (i = 0; i < missing.count; ++i) {
-        aide_str_append(&text, "  ");
-        aide_str_append(&text, missing.items[i]);
-        aide_str_append(&text, " [Projekt]: nicht installiert\n");
-    }
-    aide_strlist_free(&missing);
-
-    DoMethod(g_outputEditor, MUIM_TextEditor_ClearText);
-    DoMethod(g_outputEditor, MUIM_TextEditor_InsertText, (ULONG)text.data, MUIV_TextEditor_InsertText_Top);
-    set(g_bottomRegister, MUIA_Group_ActivePage, 0UL);
-    aide_str_free(&text);
-    set_status("SDK-Pr\374fung in Ausgabe");
+    CheckContext ctx;
+    ctx.toolchainRoot    = prefs_toolchain_root();
+    ctx.sdkRoot          = prefs_sdk_root();
+    ctx.makeProgram      = prefs_make_program();
+    ctx.amivcsProgram    = prefs_amivcs_program();
+    ctx.amivcsGuiProgram = prefs_amivcs_gui_program();
+    ctx.sdks             = &g_sdkRegistry;
+    ctx.projectSdks      = g_projectFile[0] ? &g_project.sdks.selected : NULL;
+    set_status("Pr\374fe Installation...");
+    checkwindow_show(&ctx);
+    set_status("Installation gepr\374ft");
 }
 
 /* The project's own SDKs that are installed but incomplete, as short
@@ -1675,7 +1664,7 @@ static void open_project_at(const char *path)
         if (incomplete_project_sdks(&list) > 0) {
             MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
                         "Dieses Projekt benutzt SDKs, denen Teile fehlen:\n\n%s\n"
-                        "Was genau fehlt: Projekt -> SDKs pr\374fen...",
+                        "Was genau fehlt: Projekt -> Installation pr\374fen...",
                         list.data);
         }
         aide_str_free(&list);
@@ -3262,7 +3251,7 @@ static struct NewMenu MenuData[] = {
     { NM_ITEM,  "Datei aus Projekt entfernen...", 0, 0, 0, (APTR)ID_REMOVE_FILE },
     { NM_ITEM,  "Projekteinstellungen...", "I", 0, 0, (APTR)ID_PROJECT_SETTINGS },
     { NM_ITEM,  "Einstellungen...", 0, 0, 0, (APTR)ID_PREFS },
-    { NM_ITEM,  "SDKs pr\374fen...", 0, 0, 0, (APTR)ID_CHECK_SDKS },
+    { NM_ITEM,  "Installation pr\374fen...", 0, 0, 0, (APTR)ID_CHECK_SDKS },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
     { NM_ITEM,  "Im Projekt suchen...", "F", 0, 0, (APTR)ID_FIND_IN_PROJECT },
     { NM_ITEM,  NM_BARLABEL, 0, 0, 0, (APTR)0 },
@@ -3675,6 +3664,7 @@ int mainwindow_run(void)
     disasmwindow_init(g_app);
     settingswindow_init(g_app, &g_sdkRegistry);
     prefswindow_init(g_app);
+    checkwindow_init(g_app);
     {
         VcsHost host;
         memset(&host, 0, sizeof(host));
@@ -3981,7 +3971,7 @@ int mainwindow_run(void)
                     vcspanel_tool_changed();
                     set_status("Einstellungen \374bernommen");
                 } else if (prefsResult == 0) {
-                    if (!helpwindow_handle_id(id))
+                    if (!helpwindow_handle_id(id) && !checkwindow_handle_id(id))
                         disasmwindow_handle_id(id);
                 }
                 /* prefsResult == 1 (Cancel): nothing to do. */
@@ -4014,6 +4004,7 @@ int mainwindow_run(void)
     disasmwindow_free();
     settingswindow_free();
     prefswindow_free();
+    checkwindow_free();
     clear_issues();
     free(g_issues);
     aide_search_matchlist_free(&g_searchMatches);

@@ -83,7 +83,7 @@ CORE_SOURCES := $(addprefix $(ROOT)/core/,$(AIDE_CORE_SOURCES))
 CORE_OBJECTS := $(addprefix $(OBJDIR)/core_,$(addsuffix .o,$(basename $(notdir $(AIDE_CORE_SOURCES)))))
 
 AMIGA_SOURCES := $(AMIGA_SRC)/app/main.c $(AMIGA_SRC)/app/mainwindow.c \
-                  $(AMIGA_SRC)/app/prefswindow.c \
+                  $(AMIGA_SRC)/app/prefswindow.c $(AMIGA_SRC)/app/checkwindow.c \
                   $(AMIGA_SRC)/mui/mui_stubs.c $(AMIGA_SRC)/mui/aide_regex_amiga.c \
                   $(AMIGA_SRC)/mui/aide_fs_amiga.c \
                   $(AMIGA_SRC)/index/symbolindex.c \
@@ -91,7 +91,7 @@ AMIGA_SOURCES := $(AMIGA_SRC)/app/main.c $(AMIGA_SRC)/app/mainwindow.c \
                   $(AMIGA_SRC)/disasm/disasmwindow.c \
                   $(AMIGA_SRC)/project/settingswindow.c \
                   $(AMIGA_SRC)/vcs/vcspanel.c
-AMIGA_OBJECTS := $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/mui_stubs.o \
+AMIGA_OBJECTS := $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/checkwindow.o $(OBJDIR)/mui_stubs.o \
                   $(OBJDIR)/aide_regex_amiga.o $(OBJDIR)/aide_fs_amiga.o \
                   $(OBJDIR)/symbolindex.o $(OBJDIR)/helpwindow.o $(OBJDIR)/disasmwindow.o \
                   $(OBJDIR)/settingswindow.o $(OBJDIR)/vcspanel.o
@@ -140,6 +140,9 @@ $(OBJDIR)/mainwindow.o: $(AMIGA_SRC)/app/mainwindow.c $(BUILDSTAMP) | $(OBJDIR) 
 	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
 
 $(OBJDIR)/prefswindow.o: $(AMIGA_SRC)/app/prefswindow.c | $(OBJDIR)
+	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
+
+$(OBJDIR)/checkwindow.o: $(AMIGA_SRC)/app/checkwindow.c | $(OBJDIR)
 	$(CC) $(APP_CFLAGS) -c "$<" -o "$@"
 
 $(OBJDIR)/vcspanel.o: $(AMIGA_SRC)/vcs/vcspanel.c | $(OBJDIR)
