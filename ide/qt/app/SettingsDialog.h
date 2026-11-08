@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QMap>
 
 class QLineEdit;
 class QSpinBox;
@@ -10,7 +11,8 @@ class QLabel;
 class QListWidget;
 
 // Global (cross-project) settings: toolchain root, make program, FS-UAE
-// binary/config, shared dir, editor font/tab width/theme, user-defined SDKs.
+// binary/config, shared dir, editor font/tab width/theme, built-in SDK locations,
+// user-defined SDKs.
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
@@ -46,4 +48,6 @@ private:
     QLabel *m_fontPreviewLabel;
     QSpinBox *m_editorTabWidthSpin;
     QListWidget *m_sdkList;
+    // built-in SDK id -> its base directory field (empty = default)
+    QMap<QString, QLineEdit *> m_sdkRootEdits;
 };

@@ -35,6 +35,11 @@ private slots:
     void registryResolvesNewerManifestSdk();
     void majorVersionJumpsAreReported();
     void checkFindsMissingPartsAndLookAlikes();
+    void setRootMovesEveryPath();
+    void setRootJoinsAmigaVolumes();
+    void setRootIgnoresEmptyAndUnknown();
+    void registryAppliesRootOverrides();
+    void setRootFindsPartsWithFewerDrawers();
 };
 
 namespace {
@@ -513,6 +518,108 @@ void TstSdkRegistry::checkFindsMissingPartsAndLookAlikes()
     aide_sdk_check(mui, &c);
     QVERIFY(c.items[0].present);
     aide_sdk_check_free(&c);
+    aide_sdk_list_free(&list);
+}
+
+void TstSdkRegistry::setRootMovesEveryPath()
+{
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins("/tc/sdk", &list);
+    QCOMPARE(aide_sdk_list_set_root(&list, "NDK-3.2", "  /home/me/NDK32/ "), 1);
+    const AideSdkDescriptor *d = aide_sdk_list_find(&list, "ndk-3.2");
+    QCOMPARE(QString::fromUtf8(d->rootDir), QStringLiteral("/home/me/NDK32"));
+    QCOMPARE(QString::fromUtf8(d->includeDirs.items[0]), QStringLiteral("/home/me/NDK32/Include_H"));
+    QCOMPARE(QString::fromUtf8(d->asmIncludeDirs.items[0]), QStringLiteral("/home/me/NDK32/Include_I"));
+    QCOMPARE(QString::fromUtf8(d->libDirs.items[0]), QStringLiteral("/home/me/NDK32/lib"));
+    QCOMPARE(QString::fromUtf8(d->autodocDirs.items[1]), QStringLiteral("/home/me/NDK32/MuManual/Autodocs"));
+    QCOMPARE(QString::fromUtf8(d->sfdDirs.items[0]), QStringLiteral("/home/me/NDK32/SFD"));
+    // the others stay where they were
+    QCOMPARE(QString::fromUtf8(aide_sdk_list_find(&list, "mui-3.8")->rootDir), QStringLiteral("/tc/sdk/MUI_3.8"));
+
+    // a file, too (Roadshow's bsdsocket.doc)
+    QCOMPARE(aide_sdk_list_set_root(&list, "roadshow", "/opt/rs"), 1);
+    QCOMPARE(QString::fromUtf8(aide_sdk_list_find(&list, "roadshow")->autodocFiles.items[0]),
+             QStringLiteral("/opt/rs/doc/bsdsocket.doc"));
+    aide_sdk_list_free(&list);
+}
+
+void TstSdkRegistry::setRootJoinsAmigaVolumes()
+{
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins("SDK:", &list);
+    QCOMPARE(QString::fromUtf8(aide_sdk_list_find(&list, "ndk-3.2")->includeDirs.items[0]),
+             QStringLiteral("SDK:NDK_3.2/Include_H"));
+
+    // a drawer: plain '/' join
+    QCOMPARE(aide_sdk_list_set_root(&list, "ndk-3.2", "Work:NDK32"), 1);
+    QCOMPARE(QString::fromUtf8(aide_sdk_list_find(&list, "ndk-3.2")->includeDirs.items[0]),
+             QStringLiteral("Work:NDK32/Include_H"));
+    // moved again: from the new place, not from the built-in one
+    QCOMPARE(aide_sdk_list_set_root(&list, "ndk-3.2", "NDK:"), 1);
+    const AideSdkDescriptor *d = aide_sdk_list_find(&list, "ndk-3.2");
+    QCOMPARE(QString::fromUtf8(d->rootDir), QStringLiteral("NDK:"));
+    // a volume or assign: no '/' after the colon
+    QCOMPARE(QString::fromUtf8(d->includeDirs.items[0]), QStringLiteral("NDK:Include_H"));
+    QCOMPARE(QString::fromUtf8(d->autodocDirs.items[1]), QStringLiteral("NDK:MuManual/Autodocs"));
+    aide_sdk_list_free(&list);
+}
+
+void TstSdkRegistry::setRootIgnoresEmptyAndUnknown()
+{
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins("/tc/sdk", &list);
+    QCOMPARE(aide_sdk_list_set_root(&list, "ndk-3.2", ""), 0);
+    QCOMPARE(aide_sdk_list_set_root(&list, "ndk-3.2", "   "), 0);
+    QCOMPARE(aide_sdk_list_set_root(&list, "ndk-3.2", nullptr), 0);
+    QCOMPARE(aide_sdk_list_set_root(&list, "no-such-sdk", "/x"), 0);
+    QCOMPARE(QString::fromUtf8(aide_sdk_list_find(&list, "ndk-3.2")->includeDirs.items[0]),
+             QStringLiteral("/tc/sdk/NDK_3.2/Include_H"));
+    aide_sdk_list_free(&list);
+}
+
+void TstSdkRegistry::registryAppliesRootOverrides()
+{
+    SdkRegistry &reg = SdkRegistry::instance();
+    reg.reload(QStringLiteral("/tc"), { { QStringLiteral("ndk-3.2"), QStringLiteral("/sdks/NDK32") } });
+    QCOMPARE(reg.find(QStringLiteral("ndk-3.2"))->includeDirs,
+             QStringList{ QStringLiteral("/sdks/NDK32/Include_H") });
+    QCOMPARE(reg.find(QStringLiteral("mui-3.8"))->rootDir, QStringLiteral("/tc/sdk/MUI_3.8"));
+    // the defaults stay available for the settings dialog
+    bool found = false;
+    for (const SdkDescriptor &d : reg.defaultBuiltinSdks()) {
+        if (d.id == QStringLiteral("ndk-3.2")) {
+            QCOMPARE(d.rootDir, QStringLiteral("/tc/sdk/NDK_3.2"));
+            found = true;
+        }
+    }
+    QVERIFY(found);
+    QCOMPARE(reg.defaultBuiltinSdks().size(), 9);
+    reg.reload(QStringLiteral("/tc"));
+    QCOMPARE(reg.find(QStringLiteral("ndk-3.2"))->rootDir, QStringLiteral("/tc/sdk/NDK_3.2"));
+}
+
+void TstSdkRegistry::setRootFindsPartsWithFewerDrawers()
+{
+    // MUI's Developer drawer copied on its own, as on a real Amiga:
+    // <dir>/C/Include instead of <dir>/Developer/C/Include.
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QVERIFY(QDir(tmp.path()).mkpath(QStringLiteral("C/Include")));
+    QVERIFY(QDir(tmp.path()).mkpath(QStringLiteral("Autodocs")));
+    const QByteArray root = tmp.path().toUtf8();
+
+    AideSdkList list;
+    aide_sdk_list_init(&list);
+    aide_sdk_append_builtins("/tc/sdk", &list);
+    QCOMPARE(aide_sdk_list_set_root(&list, "mui-3.8", root.constData()), 1);
+    const AideSdkDescriptor *d = aide_sdk_list_find(&list, "mui-3.8");
+    QCOMPARE(QString::fromUtf8(d->includeDirs.items[0]), tmp.path() + QStringLiteral("/C/Include"));
+    QCOMPARE(QString::fromUtf8(d->autodocDirs.items[0]), tmp.path() + QStringLiteral("/Autodocs"));
+    // not there in any form: the full path, for aide_sdk_check() to report
+    QCOMPARE(QString::fromUtf8(d->libDirs.items[0]), tmp.path() + QStringLiteral("/Developer/C/DLib"));
     aide_sdk_list_free(&list);
 }
 

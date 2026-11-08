@@ -1,5 +1,5 @@
 @database AmigaIDE.guide
-@$VER: AmigaIDE.guide 0.5 (08.11.2026)
+@$VER: AmigaIDE.guide 0.6 (08.11.2026)
 @author "AmiDevIDE"
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
@@ -100,7 +100,7 @@ Programm (etwa tinygrep aus demselben Paket) sie braucht.
 
 @{u}Werkzeuge@{uu}
 
-  GNU make     z.B. gnu_make_amiga von Darren Coles, im Pfad
+  GNU make     in C: oder im Pfad, siehe unten
   vbcc         vc, vbccm68k, vasmm68k_mot, vlink unter vbcc:bin/
   vbcc-Target  m68k-amigaos unter vbcc:targets/
   NDK 3.2      unter SDK:NDK_3.2/
@@ -115,7 +115,11 @@ Alles davon gibt es auf Aminet:
   dev/mui/MCC_TextEditor-15.56.lha  TextEditor
   dev/c/vbcc_bin_amigaos68k.lha     vbcc, vasm, vlink
   dev/misc/NDK3.2.lha               NDK 3.2
-  dev/c/make-4.4.1.lha              GNU make
+  dev/c/make-4.4.1.lha              GNU make 4.4.1, oder:
+  dev/c/make_bin.lha                GNU make 3.76.1
+
+Von make braucht man nur die Datei make aus dem Archiv, nach C:
+kopiert. Fehlt make, nennt AmigaIDE beim Build diese Pakete.
   dev/basic/ace-basic.lha           ACE BASIC
 
 Das vbcc-Target m68k-amigaos gibt es unter
@@ -156,7 +160,9 @@ unterscheidet (etwa SDK:NDK3.2 statt SDK:NDK_3.2), wird es mit
 @{u}Andere Pfade@{uu}
 
 Liegen Compiler oder SDKs woanders oder heißt make anders, lässt sich
-das unter @{" Einstellungen " link Einstellungen} ändern.
+das unter @{" Einstellungen " link Einstellungen} ändern. Heißt nur ein
+einzelnes SDK anders oder liegt es anderswo (etwa Work:NDK32), trägt
+man dort auf der Seite "SDK-Pfade" seinen Ordner ein.
 
 @{u}Erster Start@{uu}
 
@@ -232,11 +238,15 @@ relativ zum Verzeichnis der .aproj.
 
 @{u}Projekt > Neu...  (Amiga-N)@{uu}
 
-  1. Verzeichnis für das Projekt wählen.
+  1. Verzeichnis für das Projekt wählen. Ein neuer Ordner geht auch:
+     seinen Pfad (etwa RAM:MeinSpiel) ins Schubladenfeld tippen und
+     OK; AmigaIDE legt ihn an. Oder im Requester über das Menü
+     (rechte Maustaste) eine neue Schublade anlegen.
   2. Es öffnen sich die @{" Projekteinstellungen " link Projekteinstellungen}.
      Name und Binary müssen ausgefüllt sein.
   3. OK legt <Name>.aproj im gewählten Verzeichnis an und speichert
-     sie sofort. Abbrechen legt gar nichts an.
+     sie sofort. Abbrechen legt gar nichts an; ein eben neu angelegter,
+     noch leerer Ordner wird wieder entfernt.
 
 Ungespeicherte Änderungen an der offenen Datei gehen dabei ohne
 Nachfrage verloren; vorher "Speichern" wählen.
@@ -438,6 +448,26 @@ Make-Programm, SDK-Root und Toolchain-Root dürfen nicht leer sein.
 Gespeichert wird in ENVARC:AmigaIDE/ (make, sdkroot, vbccroot, amivcs,
 amivcs-gui), die Werte gelten also auch nach einem Neustart.
 
+@{u}Seite SDK-Pfade@{uu}
+
+Für jedes mitgelieferte SDK (NDK 3.2, MUI 3.8, MCC, ...) lässt sich
+ein eigener Ordner eintragen, wenn es nicht unter SDK-Root mit dem
+üblichen Namen liegt. Beispiel: Das NDK liegt in Work:NDK32, das auch
+der Compiler über seine Konfiguration benutzt. Dann bei "NDK 3.2"
+Work:NDK32 eintragen oder über "Wählen..." aussuchen. Include_H,
+Include_I, lib, Autodocs usw. werden darunter gesucht. Build,
+Symbolindex und Autodoc-Hilfe benutzen dann diesen Ordner.
+
+Fehlt darunter ein Unterverzeichnis, sucht AmigaIDE es auch ohne die
+vorderen Ebenen: Ist Work:MUI der Inhalt des Developer-Ordners von
+MUI, wird statt Work:MUI/Developer/C/Include eben Work:MUI/C/Include
+genommen.
+
+Ein leeres Feld heißt "Standard" (die Hilfeblase am Feld zeigt ihn).
+Nichts davon ist Pflicht. Gespeichert wird je SDK in
+ENVARC:AmigaIDE/sdkroot-<id>, z. B. sdkroot-ndk-3.2. Ob alles gefunden
+wird, zeigt Projekt > SDKs prüfen...
+
 @endnode
 @node Editor "Editor"
 
@@ -613,7 +643,7 @@ zeigt das Ergebnis an. Ohne amivcs fehlt nur dieser Teil.
 @{u}Einrichten@{uu}
 
   amivcs ab Version 0.10 installieren (für Konflikte, Merge abbrechen
-  und Diff die nächste Version) (Archiv AmiVCS). Liegt es nicht
+  und Diff ab 0.11) (Archiv AmiVCS). Liegt es nicht
   in C:, den Pfad unter Projekt > Einstellungen > AmiVCS-Programm
   eintragen. Name und E-Mail für die Commits, Remote-URL und
   Benutzer verwaltet AmiVCS selbst (AmiVCSConfig, Menü Versionen >

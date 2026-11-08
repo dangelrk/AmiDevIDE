@@ -141,6 +141,20 @@ void aide_sdk_list_major_upgrades(const AideSdkList *registry, const AideStrList
  * it's given. */
 void aide_sdk_append_builtins(const char *sdk_root, AideSdkList *out);
 
+/* Moves the SDK with this id (case-insensitively) to the base directory
+ * `root`: its rootDir becomes root, and every include/lib/autodoc/SFD
+ * path below the old rootDir moves along, keeping its part below it
+ * ("SDK:NDK_3.2/Include_H" -> "Work:NDK32/Include_H"). A part that is
+ * not there is looked for with its leading drawers dropped, so pointing
+ * MUI at the contents of its Developer drawer finds C/Include for
+ * Developer/C/Include (the only place this reads the disk). This is how a
+ * user puts a built-in SDK into a directory of their own naming -- an
+ * optional setting per SDK, kept by the frontend (QSettings, ENVARC:),
+ * never in an .aproj. Leading/trailing blanks and a trailing '/' are
+ * dropped. Returns 1 if it moved an SDK; 0, changing nothing, for an
+ * empty root or an unknown id -- so an empty setting means "default". */
+int aide_sdk_list_set_root(AideSdkList *l, const char *id, const char *root);
+
 /* Serializes every descriptor in *l to a JSON array (used for sdks.json,
  * which only ever holds user-defined SDKs on the Qt side). */
 char *aide_sdk_list_to_json_array(const AideSdkList *l);

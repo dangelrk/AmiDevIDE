@@ -779,6 +779,100 @@ void aide_sdk_append_builtins(const char *sdk_root, AideSdkList *out)
     aide_str_free(&path);
 }
 
+/* ---- a built-in SDK in a directory of the user's choice ---- */
+
+/* `path` moved from below `oldRoot` to below `newRoot`, or NULL if it is
+ * not below oldRoot. Joined with aide_str_append_path(), so "Dev:" +
+ * "/Include_H" gives "Dev:Include_H", not "Dev:/Include_H" (which
+ * AmigaDOS reads as the parent of Dev:).
+ *
+ * If the moved path does not exist, the same path with its leading
+ * drawers dropped is tried, one at a time, and the first that exists is
+ * taken: a user who points MUI at the contents of its Developer drawer
+ * ("Dev:SDK/MUI" holding C/Include) gets "Dev:SDK/MUI/C/Include" for
+ * "Developer/C/Include". The last part always stays. Nothing found: the
+ * full moved path, which aide_sdk_check() then reports as missing. */
+static char *rebased(const char *path, const char *oldRoot, const char *newRoot)
+{
+    size_t n = strlen(oldRoot);
+    const char *rest;
+    AideStr s;
+
+    if (strncmp(path, oldRoot, n) != 0 || (path[n] != '\0' && path[n] != '/'))
+        return NULL;
+    aide_str_init(&s);
+    aide_str_append(&s, newRoot);
+    if (path[n] != '/')
+        return s.data; /* the root itself */
+    aide_str_append_path(&s, path + n);
+
+    rest = path + n + 1;
+    if (!aide_fs_exists(s.data)) {
+        const char *shorter = strchr(rest, '/');
+        while (shorter) {
+            AideStr t;
+            aide_str_init(&t);
+            aide_str_append(&t, newRoot);
+            aide_str_append_path(&t, shorter);
+            if (aide_fs_exists(t.data)) {
+                aide_str_free(&s);
+                return t.data;
+            }
+            aide_str_free(&t);
+            shorter = strchr(shorter + 1, '/');
+        }
+    }
+    return s.data; /* ownership moves to the caller */
+}
+
+static void rebase_list(AideStrList *l, const char *oldRoot, const char *newRoot)
+{
+    size_t i;
+    for (i = 0; i < l->count; ++i) {
+        char *moved = rebased(l->items[i], oldRoot, newRoot);
+        if (moved) {
+            free(l->items[i]);
+            l->items[i] = moved;
+        }
+    }
+}
+
+int aide_sdk_list_set_root(AideSdkList *l, const char *id, const char *root)
+{
+    AideSdkDescriptor *d = NULL;
+    char *newRoot, *oldRoot;
+    size_t i, len;
+
+    for (i = 0; i < l->count; ++i) {
+        if (aide_str_ieq(l->items[i].id, id)) {
+            d = &l->items[i];
+            break;
+        }
+    }
+    if (!d || !d->rootDir || !root)
+        return 0;
+
+    newRoot = aide_str_trim_dup(root);
+    len = strlen(newRoot);
+    while (len > 1 && newRoot[len - 1] == '/') /* "/" alone stays */
+        newRoot[--len] = '\0';
+    if (!len) {
+        free(newRoot);
+        return 0;
+    }
+
+    oldRoot = d->rootDir;
+    rebase_list(&d->includeDirs, oldRoot, newRoot);
+    rebase_list(&d->asmIncludeDirs, oldRoot, newRoot);
+    rebase_list(&d->libDirs, oldRoot, newRoot);
+    rebase_list(&d->autodocDirs, oldRoot, newRoot);
+    rebase_list(&d->autodocFiles, oldRoot, newRoot);
+    rebase_list(&d->sfdDirs, oldRoot, newRoot);
+    d->rootDir = newRoot;
+    free(oldRoot);
+    return 1;
+}
+
 /* ---- aide_sdk_check() ---- */
 
 void aide_sdk_check_init(AideSdkCheck *c)

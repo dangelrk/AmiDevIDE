@@ -18,7 +18,9 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 namespace {
@@ -43,7 +45,15 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     resize(560, 560);
 
     AppSettings &settings = AppSettings::instance();
-    auto *layout = new QVBoxLayout(this);
+    auto *outerLayout = new QVBoxLayout(this);
+    auto *tabs = new QTabWidget(this);
+    outerLayout->addWidget(tabs);
+    auto *generalPage = new QWidget(tabs);
+    auto *layout = new QVBoxLayout(generalPage);
+    tabs->addTab(generalPage, tr("General"));
+    auto *sdkPage = new QWidget(tabs);
+    auto *sdkPageLayout = new QVBoxLayout(sdkPage);
+    tabs->addTab(sdkPage, tr("SDKs"));
 
     auto *toolchainGroup = new QGroupBox(tr("Toolchain"), this);
     auto *toolchainForm = new QFormLayout(toolchainGroup);
@@ -113,8 +123,52 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     editorForm->addRow(tr("Tab width:"), m_editorTabWidthSpin);
 
     layout->addWidget(editorGroup);
+    layout->addStretch();
 
-    auto *sdkGroup = new QGroupBox(tr("User-defined SDKs"), this);
+    // Where each built-in SDK lives. Optional: an empty field keeps the
+    // default under <toolchain>/sdk, so nobody has to fill this in. A
+    // directory named differently ("NDK32" instead of "NDK_3.2") is chosen
+    // here once and then used for the build, the index and the help.
+    auto *locationGroup = new QGroupBox(tr("SDK locations"), sdkPage);
+    auto *locationLayout = new QVBoxLayout(locationGroup);
+    auto *locationHint = new QLabel(tr("Base directory of each SDK. Leave empty to use the default "
+                                       "shown in grey; the include, lib and autodoc directories "
+                                       "below it keep their usual names."),
+                                    locationGroup);
+    locationHint->setWordWrap(true);
+    locationLayout->addWidget(locationHint);
+    auto *locationScroll = new QScrollArea(locationGroup);
+    locationScroll->setWidgetResizable(true);
+    locationScroll->setFrameShape(QFrame::NoFrame);
+    auto *locationRows = new QWidget(locationScroll);
+    auto *locationForm = new QFormLayout(locationRows);
+    const QMap<QString, QString> overrides = settings.sdkRootOverrides();
+    for (const SdkDescriptor &d : SdkRegistry::instance().defaultBuiltinSdks()) {
+        auto *row = new QWidget(locationRows);
+        auto *rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        auto *edit = new QLineEdit(overrides.value(d.id), row);
+        edit->setPlaceholderText(d.rootDir);
+        edit->setClearButtonEnabled(true);
+        edit->setToolTip(tr("Default: %1").arg(d.rootDir));
+        rowLayout->addWidget(edit);
+        auto *button = new QPushButton(tr("Browse..."), row);
+        connect(button, &QPushButton::clicked, this, [this, edit, d]() {
+            const QString start = edit->text().trimmed().isEmpty() ? d.rootDir : edit->text().trimmed();
+            const QString dir = QFileDialog::getExistingDirectory(this, tr("Select %1 Directory").arg(d.displayName),
+                                                                  start);
+            if (!dir.isEmpty())
+                edit->setText(dir);
+        });
+        rowLayout->addWidget(button);
+        locationForm->addRow(d.displayName + QLatin1Char(':'), row);
+        m_sdkRootEdits.insert(d.id, edit);
+    }
+    locationScroll->setWidget(locationRows);
+    locationLayout->addWidget(locationScroll);
+    sdkPageLayout->addWidget(locationGroup, 2);
+
+    auto *sdkGroup = new QGroupBox(tr("User-defined SDKs"), sdkPage);
     auto *sdkLayout = new QHBoxLayout(sdkGroup);
     m_sdkList = new QListWidget(sdkGroup);
     sdkLayout->addWidget(m_sdkList);
@@ -130,14 +184,14 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     sdkButtonsLayout->addWidget(removeButton);
     sdkButtonsLayout->addStretch();
     sdkLayout->addLayout(sdkButtonsLayout);
-    layout->addWidget(sdkGroup);
+    sdkPageLayout->addWidget(sdkGroup, 1);
 
     reloadSdkList();
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &SettingsDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    layout->addWidget(buttons);
+    outerLayout->addWidget(buttons);
 }
 
 void SettingsDialog::updateFontPreview()
@@ -277,6 +331,8 @@ void SettingsDialog::accept()
     settings.setEditorFontFamily(m_editorFontFamilyCombo->currentFont().family());
     settings.setEditorFontPointSize(m_editorFontSizeSpin->value());
     settings.setEditorTabWidth(m_editorTabWidthSpin->value());
+    for (auto it = m_sdkRootEdits.cbegin(); it != m_sdkRootEdits.cend(); ++it)
+        settings.setSdkRootOverride(it.key(), it.value()->text());
 
     QDialog::accept();
 }

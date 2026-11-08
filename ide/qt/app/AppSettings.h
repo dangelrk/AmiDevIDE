@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMap>
 #include <QString>
 #include <QStringList>
 
@@ -46,6 +47,14 @@ public:
      * next to amivcs, then <toolchain>/bin, then PATH, else "". */
     QString amivcsGuiProgram() const;
     void setAmivcsGuiProgram(const QString &path);
+
+    /* Where a built-in SDK lives, if not in its default place under
+     * <toolchain>/sdk ("NDK_3.2", ...): SDK id -> base directory, stored
+     * under "sdkRoots/<id>". Optional -- no entry means the default.
+     * Applied through aide_sdk_list_set_root() by SdkRegistry::reload(). */
+    QMap<QString, QString> sdkRootOverrides() const;
+    /* An empty path removes the entry, i.e. back to the default. */
+    void setSdkRootOverride(const QString &id, const QString &path);
 
     QString fsUaeBinary() const;
     void setFsUaeBinary(const QString &path);

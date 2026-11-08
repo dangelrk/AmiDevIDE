@@ -54,6 +54,15 @@ with an `AmiDevSDK.json` (paths relative to its directory), found under
 the registry does not know is reported on project load and at build start,
 kept in the project, and skipped when the Makefile is generated.
 
+**A built-in SDK can live in a directory of the user's choosing**
+("Work:NDK32" instead of "SDK:NDK_3.2"). `aide_sdk_list_set_root()` moves
+its rootDir and every path below it, dropping leading drawers of a part
+that is not there (MUI's Developer drawer copied on its own). Optional per
+SDK, kept by the frontend only: QSettings `sdkRoots/<id>` (Qt,
+`SdkRegistry::reload(root, overrides)`), `ENVARC:AmigaIDE/sdkroot-<id>`
+(MUI, `prefs_apply_sdk_roots()`). Apply it right after
+`aide_sdk_append_builtins()`, before the manifests. Never in an .aproj.
+
 **Adding a file to `ide/core/src/` means editing `ide/core/sources.mk`,
 and only that.** CMake and both Amiga Makefiles read it. This used to be
 three separate lists and they had drifted: the native Amiga Makefile was

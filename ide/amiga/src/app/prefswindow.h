@@ -15,6 +15,8 @@
 
 #include <libraries/mui.h>
 
+#include "aide/aide_sdk.h"
+
 /* Loads the persisted values from ENVARC: (or defaults) with no Object*
  * needed -- call this FIRST, before aide_toolchain_init()/
  * aide_sdk_append_builtins() and before g_app itself exists.
@@ -25,6 +27,12 @@ void prefswindow_load(void);
 void prefswindow_init(Object *app);
 void prefswindow_free(void);
 void prefswindow_show(void);
+
+/* Moves every built-in SDK the user gave an own drawer (page
+ * "SDK-Pfade", ENVARC:AmigaIDE/sdkroot-<id>) there, with
+ * aide_sdk_list_set_root(). Call right after aide_sdk_append_builtins()
+ * -- and before aide_sdk_append_from_manifests(), so only built-ins move. */
+void prefs_apply_sdk_roots(AideSdkList *registry);
 
 /* Returns 0 if `id` doesn't belong to this window; 1 if it was closed
  * via Cancel; 2 if it was closed via OK -- the caller should then

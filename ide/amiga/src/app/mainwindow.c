@@ -52,6 +52,8 @@
 #include <libraries/gadtools.h>
 #include <libraries/iffparse.h> /* MAKE_ID() */
 #include <libraries/reqtools.h>
+#include <libraries/asl.h>
+#include <inline/asl_protos.h> /* AslBase is local to ask_new_project_dir() */
 #include <utility/tagitem.h>
 #include <dos/dos.h>
 #include <dos/dosextens.h>
@@ -187,6 +189,10 @@ static int g_projectDirty;  /* project data (sources/headers/settings) changed s
  * where settingswindow_handle_id() is polled in the main loop. */
 static int g_newProjectAwaitingSave;
 static char g_newProjectDir[AIDE_MAX_PATH];
+/* g_newProjectDir was made by ask_new_project_dir() just now: Cancel in
+ * the settings removes it again (only if still empty -- DeleteFile()
+ * refuses a drawer with anything in it). */
+static int g_newProjectDirCreated;
 #define AIDE_WINDOW_TITLE_BASE "AmigaIDE [Build " __DATE__ " " __TIME__ "]"
 
 static AideToolchainConfig g_toolchain;
@@ -315,6 +321,98 @@ static int ask_directory(const char *title, char *out, size_t outsz)
 
     rtFreeRequest(filereq);
     return ok ? 1 : 0;
+}
+
+/* A new project's directory: an existing drawer, or a new one. The
+ * system's ASL requester, drawers only, in save mode: it hands back a
+ * drawer typed into its field even if that does not exist yet (created
+ * here), and offers its own context menu with "new drawer". reqtools
+ * cannot do this -- in drawer mode it answers a missing drawer with
+ * "Falsche Schublade!", in save mode it reports an empty name as Cancel.
+ *
+ * *created tells whether the drawer is new, made by the requester or
+ * here, so Cancel in the project settings can remove it again: it is
+ * empty and dated after the requester opened. Returns 1 with `out` set,
+ * 0 if cancelled or failed (and said so). */
+static int ask_new_project_dir(char *out, size_t outsz, int *created)
+{
+    struct Library *AslBase;
+    struct FileRequester *fr;
+    struct TagItem tags[6];
+    struct Window *win = NULL;
+    struct DateStamp before;
+    BOOL ok = FALSE;
+    BPTR lock;
+
+    *created = 0;
+    out[0] = '\0';
+    AslBase = OpenLibrary((CONST_STRPTR)"asl.library", 38);
+    if (!AslBase) {
+        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK", "asl.library fehlt.");
+        return 0;
+    }
+    get(g_window, MUIA_Window_Window, &win);
+
+    tags[0].ti_Tag = ASLFR_TitleText;    tags[0].ti_Data = (ULONG)"Neues Projekt: Ordner";
+    tags[1].ti_Tag = ASLFR_DrawersOnly;  tags[1].ti_Data = TRUE;
+    tags[2].ti_Tag = ASLFR_DoSaveMode;   tags[2].ti_Data = TRUE;
+    tags[3].ti_Tag = ASLFR_Window;       tags[3].ti_Data = (ULONG)win;
+    tags[4].ti_Tag = ASLFR_SleepWindow;  tags[4].ti_Data = win ? TRUE : FALSE;
+    tags[5].ti_Tag = TAG_DONE;           tags[5].ti_Data = 0;
+
+    DateStamp(&before);
+    fr = (struct FileRequester *)AllocAslRequest(ASL_FileRequest, tags);
+    if (fr) {
+        ok = AslRequest(fr, NULL);
+        if (ok && fr->fr_Drawer) {
+            strncpy(out, (char *)fr->fr_Drawer, outsz - 1);
+            out[outsz - 1] = '\0';
+        }
+        FreeAslRequest(fr);
+    }
+    CloseLibrary(AslBase);
+    if (!ok)
+        return 0;
+    if (!out[0]) {
+        /* empty drawer = the current directory, by its full name */
+        BPTR cur = Lock((STRPTR)"", ACCESS_READ);
+        if (!cur || !NameFromLock(cur, (STRPTR)out, (LONG)outsz)) out[0] = '\0';
+        if (cur) UnLock(cur);
+        if (!out[0])
+            return 0;
+    }
+
+    lock = Lock((STRPTR)out, ACCESS_READ);
+    if (lock) {
+        struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+        int isDir = 0;
+        if (fib && Examine(lock, fib)) {
+            isDir = fib->fib_DirEntryType > 0;
+            /* new = dated after the requester opened (CompareDates() <= 0:
+             * the first date is not the earlier one) and still empty */
+            if (isDir && CompareDates(&fib->fib_Date, &before) <= 0)
+                *created = !ExNext(lock, fib);
+        }
+        if (fib) FreeDosObject(DOS_FIB, fib);
+        UnLock(lock);
+        if (!isDir) {
+            MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                        "%s\nist eine Datei, kein Ordner.", (ULONG)out);
+            *created = 0;
+            return 0;
+        }
+        return 1;
+    }
+
+    lock = CreateDir((STRPTR)out);
+    if (!lock) {
+        MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                    "Ordner\n%s\nlie\337 sich nicht anlegen.", (ULONG)out);
+        return 0;
+    }
+    UnLock(lock);
+    *created = 1;
+    return 1;
 }
 
 static void set_status(const char *text)
@@ -1486,9 +1584,11 @@ static void finish_new_project_save(void)
 static void do_new_project(void)
 {
     char dir[AIDE_MAX_PATH];
+    int created;
 
-    if (!ask_directory("Neues Projekt: Verzeichnis w\344hlen", dir, sizeof(dir)))
+    if (!ask_new_project_dir(dir, sizeof(dir), &created))
         return;
+    g_newProjectDirCreated = created;
 
     set_status("Neues Projekt...");
 
@@ -2460,7 +2560,7 @@ static int write_make_script(void)
 static int make_is_available(void)
 {
     BPTR nilIn, nilOut;
-    struct TagItem tags[4];
+    struct TagItem tags[5];
     AideStr cmd;
     LONG rc;
 
@@ -2478,7 +2578,8 @@ static int make_is_available(void)
     tags[0].ti_Tag = SYS_Input;  tags[0].ti_Data = (ULONG)nilIn;
     tags[1].ti_Tag = SYS_Output; tags[1].ti_Data = (ULONG)nilOut;
     tags[2].ti_Tag = SYS_Asynch; tags[2].ti_Data = FALSE;
-    tags[3].ti_Tag = TAG_DONE;   tags[3].ti_Data = 0;
+    tags[3].ti_Tag = NP_WindowPtr; tags[3].ti_Data = (ULONG)-1; /* see launch_build_script() */
+    tags[4].ti_Tag = TAG_DONE;   tags[4].ti_Data = 0;
 
     rc = SystemTagList((CONST_STRPTR)cmd.data, tags);
     aide_str_free(&cmd);
@@ -2509,7 +2610,7 @@ static int make_is_available(void)
 static int launch_build_script(void)
 {
     BPTR nilIn, logOut, cwd;
-    struct TagItem tags[5];
+    struct TagItem tags[6];
     LONG rc;
 
     nilIn = Open((CONST_STRPTR)"NIL:", MODE_OLDFILE);
@@ -2528,7 +2629,16 @@ static int launch_build_script(void)
     tags[1].ti_Tag = SYS_Output;    tags[1].ti_Data = (ULONG)logOut;
     tags[2].ti_Tag = SYS_Asynch;    tags[2].ti_Data = TRUE;
     tags[3].ti_Tag = NP_CurrentDir; tags[3].ti_Data = (ULONG)cwd;
-    tags[4].ti_Tag = TAG_DONE;      tags[4].ti_Data = 0;
+    /* No "please insert volume" requesters from the build: both Amiga
+     * ports of GNU make look for a default include drawer at startup
+     * (make 3.76.1 from dev/c/make_bin.lha for "mkinclude:", make 4.4.1
+     * from dev/c/make-4.4.1.lha for "include:"), which put up a
+     * requester on every single build where that assign is missing.
+     * With pr_WindowPtr -1 such a lookup just fails, as it should; a
+     * missing SDK volume then shows up as a compiler error in the log
+     * instead of a requester. */
+    tags[4].ti_Tag = NP_WindowPtr;  tags[4].ti_Data = (ULONG)-1;
+    tags[5].ti_Tag = TAG_DONE;      tags[5].ti_Data = 0;
 
     rc = SystemTagList((CONST_STRPTR)"Execute T:aide-build.script", tags);
     if (rc == -1) {
@@ -2748,8 +2858,11 @@ static void do_build(void)
     if (!make_is_available()) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
                     "\"%s\" wurde nicht gefunden.\n\n"
-                    "AmigaIDE braucht GNU Make im Pfad, z.B. gnu_make_amiga:\n"
-                    "https://github.com/dmcoles/gnu_make_amiga",
+                    "AmigaIDE braucht GNU make im Pfad (z.B. C:make).\n"
+                    "Aminet: dev/c/make_bin.lha (GNU make 3.76.1)\n"
+                    "oder dev/c/make-4.4.1.lha (GNU make 4.4.1);\n"
+                    "die Datei make daraus nach C: kopieren.\n"
+                    "Ein anderer Name/Pfad: Projekt > Einstellungen.",
                     prefs_make_program());
         return;
     }
@@ -2898,8 +3011,11 @@ static void do_clean(void)
     if (!make_is_available()) {
         MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
                     "\"%s\" wurde nicht gefunden.\n\n"
-                    "AmigaIDE braucht GNU Make im Pfad, z.B. gnu_make_amiga:\n"
-                    "https://github.com/dmcoles/gnu_make_amiga",
+                    "AmigaIDE braucht GNU make im Pfad (z.B. C:make).\n"
+                    "Aminet: dev/c/make_bin.lha (GNU make 3.76.1)\n"
+                    "oder dev/c/make-4.4.1.lha (GNU make 4.4.1);\n"
+                    "die Datei make daraus nach C: kopieren.\n"
+                    "Ein anderer Name/Pfad: Projekt > Einstellungen.",
                     prefs_make_program());
         return;
     }
@@ -3356,6 +3472,7 @@ int mainwindow_run(void)
      * derives it from the toolchain root (SdkRegistry.cpp appends
      * "/sdk" there instead). */
     aide_sdk_append_builtins(prefs_sdk_root(), &g_sdkRegistry);
+    prefs_apply_sdk_roots(&g_sdkRegistry);
     aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
 
     /* A real tree (subfolders as actual expandable nodes), not a flat
@@ -3842,8 +3959,11 @@ int mainwindow_run(void)
                  * so there's nothing further to undo here. */
                 if (g_newProjectAwaitingSave) {
                     g_newProjectAwaitingSave = 0;
+                    if (g_newProjectDirCreated)
+                        DeleteFile((STRPTR)g_newProjectDir);
                     set_status("Abgebrochen");
                 }
+                g_newProjectDirCreated = 0;
             } else if (settingsResult == 0) {
                 int prefsResult = prefswindow_handle_id(id);
                 if (prefsResult == 2) {
@@ -3855,6 +3975,7 @@ int mainwindow_run(void)
                     aide_toolchain_init(&g_toolchain, prefs_toolchain_root());
                     aide_sdk_list_free(&g_sdkRegistry);
                     aide_sdk_append_builtins(prefs_sdk_root(), &g_sdkRegistry);
+                    prefs_apply_sdk_roots(&g_sdkRegistry);
                     aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
                     invalidate_make_availability();
                     vcspanel_tool_changed();
@@ -3880,8 +4001,13 @@ int mainwindow_run(void)
          * signal arriving during such a burst isn't lost either way --
          * only Wait() itself clears signal bits, so it's still pending
          * next time this actually calls Wait(). */
-        if (waitMask) got = Wait(waitMask | SIGBREAKF_CTRL_C | g_timerSig | vcspanel_signal_mask());
-        else          got = 0;
+        /* After handling an ID, ask MUI once more before sleeping: what
+         * the handler did (a window opened after a requester, as in
+         * "Neu...") may only show once MUI gets control again. Waiting
+         * right away left the project settings unseen on a real A1200
+         * until the next input event, e.g. a menu click. */
+        if (waitMask && !id) got = Wait(waitMask | SIGBREAKF_CTRL_C | g_timerSig | vcspanel_signal_mask());
+        else                 got = 0;
     }
 
     helpwindow_free();

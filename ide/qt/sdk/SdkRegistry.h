@@ -3,6 +3,7 @@
 #include "SdkDescriptor.h"
 
 #include <QList>
+#include <QMap>
 #include <QString>
 
 // Built-in SDK descriptors for the shipped sdk/ tree (paths verified against
@@ -21,7 +22,14 @@ public:
     static SdkRegistry &instance();
 
     // toolchainRoot: the amiga/ tree root, i.e. AppSettings::toolchainRoot().
-    void reload(const QString &toolchainRoot);
+    // rootOverrides: SDK id -> base directory the user chose for that
+    // built-in (AppSettings::sdkRootOverrides()); every other SDK stays where
+    // it is by default.
+    void reload(const QString &toolchainRoot, const QMap<QString, QString> &rootOverrides = {});
+
+    // The built-ins where they are without any override -- for showing the
+    // default next to a user's own directory.
+    QList<SdkDescriptor> defaultBuiltinSdks() const;
 
     QList<SdkDescriptor> allSdks() const { return m_sdks; }
     QList<SdkDescriptor> builtinSdks() const;
@@ -55,7 +63,8 @@ private:
 
     // Built-ins, then every AmiDevSDK.json under <toolchainRoot>/sdk that
     // does not reuse a built-in's id.
-    QList<SdkDescriptor> builtinAndManifestDescriptors(const QString &toolchainRoot) const;
+    QList<SdkDescriptor> builtinAndManifestDescriptors(const QString &toolchainRoot,
+                                                       const QMap<QString, QString> &rootOverrides) const;
     QString userSdksJsonPath() const;
     // A C copy of m_sdks, same order, for the rules in aide_sdk.c. The
     // caller frees it with aide_sdk_list_free().

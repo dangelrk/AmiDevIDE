@@ -225,6 +225,30 @@ void AppSettings::setFsUaeConfig(const QString &path)
     s.setValue(QStringLiteral("run/fsUaeConfig"), path);
 }
 
+QMap<QString, QString> AppSettings::sdkRootOverrides() const
+{
+    QSettings s;
+    QMap<QString, QString> result;
+    s.beginGroup(QStringLiteral("sdkRoots"));
+    for (const QString &id : s.childKeys()) {
+        const QString path = s.value(id).toString().trimmed();
+        if (!path.isEmpty())
+            result.insert(id, path);
+    }
+    s.endGroup();
+    return result;
+}
+
+void AppSettings::setSdkRootOverride(const QString &id, const QString &path)
+{
+    QSettings s;
+    const QString key = QStringLiteral("sdkRoots/") + id;
+    if (path.trimmed().isEmpty())
+        s.remove(key);
+    else
+        s.setValue(key, path.trimmed());
+}
+
 QString AppSettings::sharedDir() const
 {
     QSettings s;

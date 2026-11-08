@@ -90,7 +90,8 @@ MainWindow::MainWindow(QWidget *parent)
     // load the SDK registry from a directory that no longer exists.
     m_settingsMigrations = AppSettings::instance().migrateStaleSettings();
 
-    SdkRegistry::instance().reload(AppSettings::instance().toolchainRoot());
+    SdkRegistry::instance().reload(AppSettings::instance().toolchainRoot(),
+                                    AppSettings::instance().sdkRootOverrides());
 
     resize(1280, 860);
 
@@ -1065,7 +1066,8 @@ void MainWindow::openGlobalSettings()
 {
     SettingsDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
-        SdkRegistry::instance().reload(AppSettings::instance().toolchainRoot());
+        SdkRegistry::instance().reload(AppSettings::instance().toolchainRoot(),
+                                    AppSettings::instance().sdkRootOverrides());
         m_editorTabs->applyEditorSettingsToAllTabs();
     }
 }

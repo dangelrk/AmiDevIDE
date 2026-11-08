@@ -80,7 +80,14 @@ def main():
     shutil.rmtree(dist_top, ignore_errors=True)
     os.makedirs(os.path.join(dist, "AmigaIDE"))
     shutil.copy2(prog, os.path.join(dist, "AmigaIDE", "AmigaIDE"))
-    shutil.copy2(guide, os.path.join(dist, "AmigaIDE", "AmigaIDE.guide"))
+    # the copy in the archive carries the build date in its $VER line
+    gdata = open(guide, "rb").read()
+    gdata = re.sub(rb"^@\$VER: AmigaIDE\.guide \S+ \([^)]*\)",
+                   f"@$VER: AmigaIDE.guide {version} ({args.date})".encode(), gdata,
+                   count=1, flags=re.M)
+    with open(os.path.join(dist, "AmigaIDE", "AmigaIDE.guide"), "wb") as f:
+        f.write(gdata)
+    shutil.copystat(guide, os.path.join(dist, "AmigaIDE", "AmigaIDE.guide"))
     for f in ("Install-AmiDevIDE", "Install-AmiDevIDE.shell", "Uninstall-AmiDevIDE", "ReadMe"):
         s = open(os.path.join(INST, f), encoding="latin-1").read()
         s = (s.replace("@VERSION@", version).replace("@DATE@", args.date)
@@ -124,6 +131,13 @@ def main():
     shutil.copy2(readme, os.path.join(aminet, PROJECT + ".readme"))
     for p in (lha, readme, os.path.join(aminet, PROJECT + ".lha"), os.path.join(aminet, PROJECT + ".readme")):
         print(f"{os.path.relpath(p, ROOT)}  {os.path.getsize(p)} Bytes")
+
+    # finished archives also go to a drop folder, if it exists
+    drop = os.environ.get("AMIGA_DROP", os.path.expanduser("~/Dev/Amiga"))
+    if os.path.isdir(drop):
+        for p in (lha, readme):
+            shutil.copy2(p, drop)
+        print(f"kopiert nach {drop}/")
 
 
 if __name__ == "__main__":

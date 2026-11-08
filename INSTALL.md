@@ -480,7 +480,7 @@ python3 emulator/acd_emu.py --serial
 | MUI | `muimaster.library` ≥ v19 (MUI 3.8) |
 | Libraries | `reqtools.library` ≥ v38, `regex.library` ≥ v5 (Ranieri) in `LIBS:` |
 | MCCs (in `MUI:Libs/mui/`) | NList (`NList`, `NListview`, `NListtree`), `TextEditor` |
-| make | GNU make für Amiga von Darren Coles (`gnu_make_amiga`, 4.4.1) |
+| make | GNU make für Amiga, getestet: 4.4.1 (Darren Coles, Aminet `dev/c/make-4.4.1.lha`) und 3.76.1 (Digulla/Ruppert, Aminet `dev/c/make_bin.lha`). Beide suchen beim Start ein Include-Verzeichnis (`include:` bzw. `mkinclude:`); die IDE startet den Build mit `NP_WindowPtr -1`, sonst käme bei jedem Build „Datenträger einlegen“ |
 | Speicher / Stack | ungeprüft; ACE-Upstream setzt `stack 65000` in seiner User-Startup |
 
 ### 8.2 Was wohin
@@ -496,7 +496,7 @@ python3 emulator/acd_emu.py --serial
 | MCCs Developer + Runtime | siehe §1 (GitHub `amiga-mui`) | Header nach `SDK:MCC/Developer/C/include/mui/`, Klassen nach `MUI:Libs/mui/` |
 | regex.library 5.1 (POSIX, Alfonso Ranieri) | `https://aminet.net/util/libs/regex_ranieri.lha` (Einsprünge passen zu `ide/amiga/src/mui/aide_regex_amiga.c`) | `Libs/regex.library` nach `LIBS:`; Header nur für eigene Programme nach `SDK:regex/include/`. **Verwechslungsgefahr:** `util/libs/Regex.lha` enthält eine *andere* `regex.library` (GNU, 1.0 von 1989, 9288 Bytes, `Version` meldet `1.-1`) mit anderen Einsprüngen; mit ihr stürzte die IDE beim ersten Indizieren einer C-Datei ab (Guru `8100000F`). Seit 0.5 lehnt die IDE Versionen unter 5 beim Start mit einer Meldung ab, der Installer warnt |
 | reqtools | `https://aminet.net/util/libs/ReqToolsDev.lha` (Header), `https://aminet.net/util/libs/ReqToolsUsr.lha` (Library) | Header nach `SDK:reqtools/include/`, Library nach `LIBS:` |
-| GNU make | `https://github.com/dmcoles/gnu_make_amiga/releases/download/4.4.1-26022026/make441-26022026.lha` oder `https://aminet.net/dev/c/make-4.4.1.lha` | `make` nach `C:` oder in einen Pfad im `PATH` |
+| GNU make | `https://aminet.net/dev/c/make-4.4.1.lha` (4.4.1, auch `https://github.com/dmcoles/gnu_make_amiga/releases`) oder `https://aminet.net/dev/c/make_bin.lha` (3.76.1); beide ohne ixemul | `make` nach `C:` oder in einen Pfad im `PATH` |
 | ACE BASIC 3.0.1 (Original, **ungepatcht**) | `https://aminet.net/dev/basic/ace-basic.lha` | z. B. `Work:ACE`, mit den Assigns `ACE:`, `ACElib:`, `ACEinclude:`, `ACEbmaps:` (§8.3) |
 
 Erwartetes Layout der Assigns (aus `ide/amiga/Makefile.amiga`,

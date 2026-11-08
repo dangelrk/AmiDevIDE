@@ -20,7 +20,8 @@ SdkRegistry &SdkRegistry::instance()
     return registry;
 }
 
-QList<SdkDescriptor> SdkRegistry::builtinAndManifestDescriptors(const QString &toolchainRoot) const
+QList<SdkDescriptor> SdkRegistry::builtinAndManifestDescriptors(const QString &toolchainRoot,
+                                                                const QMap<QString, QString> &rootOverrides) const
 {
     AideSdkList list;
     aide_sdk_list_init(&list);
@@ -32,6 +33,9 @@ QList<SdkDescriptor> SdkRegistry::builtinAndManifestDescriptors(const QString &t
     const QByteArray sdkRootUtf8 = sdkRoot.toUtf8();
     aide_sdk_append_builtins(sdkRootUtf8.constData(), &list);
     const size_t builtinCount = list.count;
+    // Before the manifests, so only a built-in can be moved this way.
+    for (auto it = rootOverrides.cbegin(); it != rootOverrides.cend(); ++it)
+        aide_sdk_list_set_root(&list, it.key().toUtf8().constData(), it.value().toUtf8().constData());
     aide_sdk_append_from_manifests(sdkRootUtf8.constData(), &list);
 
     QList<SdkDescriptor> result;
@@ -94,11 +98,21 @@ void SdkRegistry::saveUserSdks() const
     free(json);
 }
 
-void SdkRegistry::reload(const QString &toolchainRoot)
+void SdkRegistry::reload(const QString &toolchainRoot, const QMap<QString, QString> &rootOverrides)
 {
     m_toolchainRoot = toolchainRoot;
-    m_sdks = builtinAndManifestDescriptors(toolchainRoot);
+    m_sdks = builtinAndManifestDescriptors(toolchainRoot, rootOverrides);
     loadUserSdks();
+}
+
+QList<SdkDescriptor> SdkRegistry::defaultBuiltinSdks() const
+{
+    QList<SdkDescriptor> list;
+    for (const SdkDescriptor &d : builtinAndManifestDescriptors(m_toolchainRoot, {})) {
+        if (!d.userDefined)
+            list << d;
+    }
+    return list;
 }
 
 QList<SdkDescriptor> SdkRegistry::builtinSdks() const

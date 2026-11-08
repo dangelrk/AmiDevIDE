@@ -45,7 +45,8 @@ Requirements
 To build programs:
 - vbcc with vasm and vlink (dev/c/vbcc_bin_amigaos68k.lha) and the
   vbcc target m68k-amigaos (http://sun.hasenbraten.de/vbcc/)
-- NDK 3.2 (dev/misc/NDK3.2.lha), GNU make (dev/c/make-4.4.1.lha)
+- NDK 3.2 (dev/misc/NDK3.2.lha), GNU make in C: (dev/c/make-4.4.1.lha
+  or dev/c/make_bin.lha, both tested)
 - for BASIC projects ACE BASIC (dev/basic/ace-basic.lha)
 Optional:
 - AmiVCS 0.6 or newer for version control (dev/misc/AmiVCS.lha)
