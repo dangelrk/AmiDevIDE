@@ -80,7 +80,7 @@ APP_LIBS = -lamiga
 include $(ROOT)/core/sources.mk
 CORE_OBJECTS = $(addprefix $(OBJDIR)/core_,$(addsuffix .o,$(basename $(notdir $(AIDE_CORE_SOURCES)))))
 
-AMIGA_OBJECTS = $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/checkwindow.o $(OBJDIR)/mui_stubs.o \
+AMIGA_OBJECTS = $(OBJDIR)/main.o $(OBJDIR)/mainwindow.o $(OBJDIR)/prefswindow.o $(OBJDIR)/checkwindow.o $(OBJDIR)/splash.o $(OBJDIR)/mui_stubs.o \
     $(OBJDIR)/aide_regex_amiga.o $(OBJDIR)/aide_fs_amiga.o \
     $(OBJDIR)/symbolindex.o $(OBJDIR)/helpwindow.o $(OBJDIR)/disasmwindow.o \
     $(OBJDIR)/settingswindow.o $(OBJDIR)/vcspanel.o
@@ -121,6 +121,9 @@ $(OBJDIR)/prefswindow.o: $(AMIGA_SRC)/app/prefswindow.c
 
 $(OBJDIR)/checkwindow.o: $(AMIGA_SRC)/app/checkwindow.c
 	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/checkwindow.c -o $(OBJDIR)/checkwindow.o
+
+$(OBJDIR)/splash.o: $(AMIGA_SRC)/app/splash.c
+	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/app/splash.c -o $(OBJDIR)/splash.o
 
 $(OBJDIR)/vcspanel.o: $(AMIGA_SRC)/vcs/vcspanel.c
 	$(CC) $(APP_CFLAGS) -c $(AMIGA_SRC)/vcs/vcspanel.c -o $(OBJDIR)/vcspanel.o

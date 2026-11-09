@@ -87,6 +87,7 @@ typedef ULONG IPTR;
 #include "project/settingswindow.h"
 #include "app/prefswindow.h"
 #include "app/checkwindow.h"
+#include "app/splash.h"
 
 /* Build stamp, generated into $(OBJDIR) by amiga/Makefile.amiga-cross --
 ** see the comment there for why it is a header and not a -D define. */
@@ -3434,6 +3435,7 @@ int mainwindow_run(void)
      * no live output). */
     build_timer_open();
 
+    splash_status("Lade Einstellungen ...", 45);
     /* Loads make-program/SDK-root/toolchain-root from ENVARC: (or
      * defaults) -- must happen before aide_toolchain_init()/
      * aide_sdk_append_builtins() below, which read them via
@@ -3453,6 +3455,7 @@ int mainwindow_run(void)
     g_projectRoot[0] = '\0';
     g_currentFile[0] = '\0';
 
+    splash_status("Suche SDKs ...", 50);
     aide_toolchain_init(&g_toolchain, prefs_toolchain_root());
     aide_sdk_list_init(&g_sdkRegistry);
     /* SDKs live under their own "SDK:" assign, not under "vbcc:sdk/" --
@@ -3464,6 +3467,7 @@ int mainwindow_run(void)
     prefs_apply_sdk_roots(&g_sdkRegistry);
     aide_sdk_append_from_manifests(prefs_sdk_root(), &g_sdkRegistry);
 
+    splash_status("Baue Oberfl\344che auf ...", 60);
     /* A real tree (subfolders as actual expandable nodes), not a flat
      * "  path" string list -- per user feedback. NListtree.mcc, not
      * NList.mcc/NListObject; wired to its view via MUIA_NListview_NList
@@ -3660,6 +3664,7 @@ int mainwindow_run(void)
      * across program runs -- see ensure_help_index_current(): the first
      * build per SDK is the only slow one. */
     AIDE_REMEMBER_WINDOW(g_window);
+    splash_status("Richte Fenster ein ...", 85);
     helpwindow_init(g_app, "PROGDIR:cache", ensure_help_index_current);
     disasmwindow_init(g_app);
     settingswindow_init(g_app, &g_sdkRegistry);
@@ -3722,7 +3727,9 @@ int mainwindow_run(void)
             g_app, 2, MUIM_Application_ReturnID, ID_EDITOR_DIRTY);
 
     refresh_tree();
+    splash_status("\326ffne Hauptfenster ...", 100);
     set(g_window, MUIA_Window_Open, TRUE);
+    splash_close();
 
     while (running) {
         LONG id = DoMethod(g_app, MUIM_Application_Input, &waitMask);
