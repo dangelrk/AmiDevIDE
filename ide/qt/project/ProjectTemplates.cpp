@@ -44,7 +44,7 @@ bool writeResource(const QString &resource, const QString &absTarget)
 
 } // namespace
 
-QStringList ProjectTemplates::apply(Project *project)
+QStringList apply(Project *project)
 {
     QStringList created;
 

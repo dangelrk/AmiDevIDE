@@ -82,7 +82,9 @@ def load_lock() -> dict:
 
 
 def save_lock(lock: dict) -> None:
-    SOURCES_LOCK.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
+    # newline="\n": checked-in file, keep LF on Windows too
+    SOURCES_LOCK.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n",
+                            encoding="utf-8", newline="\n")
 
 
 def get_text(url: str) -> str:
@@ -336,7 +338,7 @@ pacman -S mingw-w64-x86_64-p7zip   # MSYS2</code></pre>
 """
     ensure_dirs(DOCS)
     out = DOCS / "SOURCES.html"
-    out.write_text(doc)
+    out.write_text(doc, encoding="utf-8", newline="\n")   # checked in: LF on Windows too
     return out
 
 

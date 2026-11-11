@@ -30,7 +30,8 @@ cmake --build build --target acd-doctor        # check it
 The first target goes from an empty checkout to a working m68k compiler: it
 downloads the upstream sources, builds vbcc, vasm and vlink, installs the SDKs
 and generates the configuration. It needs a C compiler, GNU make and Python
-3.11+; on Windows that means MSYS2 with `mingw-w64-x86_64-gcc`.
+3.11+; on Windows the MinGW, CMake and Ninja that come with the Qt online
+installer, plus Python from python.org and 7-Zip (see INSTALL.md).
 
 Then:
 

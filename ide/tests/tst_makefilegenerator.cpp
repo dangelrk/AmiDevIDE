@@ -43,6 +43,9 @@ void TstMakefileGenerator::initTestCase()
 QString TstMakefileGenerator::normalize(QString text, const QString &projectRoot) const
 {
     text.replace(projectRoot, QStringLiteral("<PROJECT_ROOT>"));
+    // The host's executable suffix (".exe" on Windows) is the only other
+    // host-dependent line; the golden files carry the empty one.
+    text.replace(QStringLiteral("E    ?= .exe\n"), QStringLiteral("E    ?= \n"));
     return text;
 }
 

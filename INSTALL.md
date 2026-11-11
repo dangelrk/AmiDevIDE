@@ -18,7 +18,7 @@ selbst beschafft werden. Diese Anleitung sagt für jedes Teil: *was*, *woher*,
 |---|---|
 | macOS | vollständig verifiziert, inkl. Bootstrap aus leerem Baum |
 | Linux | baut alles aus dem Quelltext, **nicht end-to-end getestet** |
-| Windows (MSYS2) | baut alles aus dem Quelltext, **nicht end-to-end getestet** |
+| Windows (Qt/MinGW) | Qt-IDE und Tests verifiziert; Toolchain-Bootstrap **noch nicht getestet** |
 | AmigaOS 3.x nativ | nur die Compile-Regeln sind (auf dem Host) geprüft; Link, `makedir`/`delete` und die Assigns brauchen einen echten Amiga |
 
 Auf Linux und Windows ist `acd-doctor` (siehe unten) das Werkzeug, um
@@ -172,16 +172,36 @@ Python muss ≥ 3.11 sein (`python3 --version`). FS-UAE wird unter
 `/usr/bin/fs-uae`, `/usr/local/bin/fs-uae`, `/snap/bin/fs-uae` oder im `PATH`
 gesucht.
 
-### Windows (nicht end-to-end getestet)
+### Windows (Qt-IDE getestet, Toolchain noch nicht)
 
-Alles läuft in **MSYS2** (`https://www.msys2.org/`), Shell „MINGW64“:
+Gebaut wird nativ mit dem Qt Online Installer und dessen MinGW; MSYS2 wird
+nicht gebraucht. Unter Windows 11 mit Qt 6.12.0 und MinGW 15.1 baut die
+Qt-IDE, und alle 20 Test-Suites laufen durch. Der Toolchain-Bootstrap
+(`acd-toolchain`) ist unter Windows noch nicht durchgelaufen.
+
+Voraussetzungen:
+
+- **Qt** über den Qt Online Installer, mit „Qt 6.12 → MinGW 15.1.0 64-bit“
+  sowie unter „Build Tools“ „MinGW 15.1.0 64-bit“, „CMake“ und „Ninja“
+- **Python 3.11+** von python.org (getestet: 3.13). Ist `python` nicht im
+  `PATH` oder landet es beim Microsoft-Store-Platzhalter, den Pfad mit
+  `-DPython3_EXECUTABLE=...` angeben.
+- **7-Zip** (`7z.exe`) als LHA-Entpacker, im `PATH`
+- **Git for Windows**; gebaut wird in der Git-Bash
 
 ```sh
-pacman -S --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake make git \
-          mingw-w64-x86_64-python mingw-w64-x86_64-p7zip
-# Qt 6 für MinGW (ungeprüft):
-pacman -S mingw-w64-x86_64-qt6-base
+export PATH="/c/Qt/Tools/mingw1510_64/bin:/c/Qt/6.12.0/mingw_64/bin:/c/Qt/Tools/CMake_64/bin:/c/Qt/Tools/Ninja:/c/Program Files/Python313:/c/Program Files/7-Zip:$PATH"
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH=C:/Qt/6.12.0/mingw_64 \
+      -DACD_MAKE=C:/Qt/Tools/mingw1510_64/bin/mingw32-make.exe
+cmake --build build
+cd build && ctest
 ```
+
+`ACD_MAKE` muss gesetzt werden, weil MinGWs make `mingw32-make` heißt. Für
+die Qt-IDE wird unter Windows statt `<regex.h>`, das es dort nicht gibt,
+`ide/core/platform/aide_regex_std.cpp` (`std::regex` mit POSIX-ERE)
+übersetzt.
 
 vasm/vlink werden auf Windows mit `Makefile.Cygwin` gebaut (siehe
 `bootstrap/acd_build_tools.py`). FS-UAE wird unter

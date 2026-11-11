@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+/* msvcrt's <string.h> declares its own strset() */
+#define strset aide_sdk_strset
+#endif
+
 static void strset(char **field, const char *value)
 {
     free(*field);

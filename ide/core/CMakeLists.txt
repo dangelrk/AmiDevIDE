@@ -11,6 +11,12 @@ acd_read_make_list("${CMAKE_CURRENT_SOURCE_DIR}/sources.mk"
                    AIDE_CORE_SOURCES AIDE_CORE_SOURCES)
 acd_read_make_list("${CMAKE_CURRENT_SOURCE_DIR}/sources.mk"
                    AIDE_CORE_SOURCES_POSIX AIDE_CORE_PLATFORM_SOURCES)
+# Windows has no POSIX <regex.h>: same aide_regex.h on top of std::regex
+if(WIN32)
+    list(FILTER AIDE_CORE_PLATFORM_SOURCES EXCLUDE REGEX "aide_regex_posix\\.c$")
+    list(APPEND AIDE_CORE_PLATFORM_SOURCES
+         ${CMAKE_CURRENT_SOURCE_DIR}/platform/aide_regex_std.cpp)
+endif()
 
 add_library(aide_core STATIC ${AIDE_CORE_SOURCES} ${AIDE_CORE_PLATFORM_SOURCES})
 target_include_directories(aide_core PUBLIC

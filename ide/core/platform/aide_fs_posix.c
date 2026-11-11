@@ -17,6 +17,20 @@
 #define PATH_MAX 4096
 #endif
 
+#ifdef _WIN32
+/* MinGW: no realpath(), and mkdir() takes no mode */
+#include <direct.h>
+static char *aide_win_realpath(const char *path, char *buf)
+{
+    struct stat st;
+    if (stat(path, &st) != 0)        /* realpath() fails for missing paths too */
+        return NULL;
+    return _fullpath(buf, path, PATH_MAX);
+}
+#define realpath(path, buf) aide_win_realpath((path), (buf))
+#define mkdir(path, mode)   _mkdir(path)
+#endif
+
 int aide_fs_exists(const char *path)
 {
     struct stat st;
