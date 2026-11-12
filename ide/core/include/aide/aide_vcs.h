@@ -176,7 +176,7 @@ int  aide_vcs_present(const char *projectRoot);
 
 /* Lines the IDE wants in .amivcsignore for this project: build/, the
  * target directory, the program and its .info if outside it, and
- * *.aproj.user. `existingText` is the current file (NULL if none);
+ * *.aproj.user, *.auser. `existingText` is the current file (NULL if none);
  * only the missing lines are returned. */
 void aide_vcs_ignore_missing(const AideProject *p, const char *existingText, AideStrList *out);
 /* Appends lines to <projectRoot>/.amivcsignore. Returns 1 on success. */

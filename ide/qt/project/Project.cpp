@@ -71,7 +71,7 @@ bool Project::save(const QString &path)
     const QByteArray rawUtf8 = m_rawJsonText.toUtf8();
     // The .aproj without the editor state (open files change with every
     // session and would keep a versioned project modified); that goes into
-    // <project>.aproj.user, see aide_project_save_user().
+    // <project>.auser, see aide_project_save_user().
     char *json = aide_project_to_file_json(&a, m_rawJsonText.isEmpty() ? nullptr : rawUtf8.constData());
 
     QFile file(target);

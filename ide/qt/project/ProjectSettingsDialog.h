@@ -19,10 +19,15 @@ class QButtonGroup;
 class ProjectSettingsDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit ProjectSettingsDialog(const Project &project, QWidget *parent = nullptr);
+    // longNames: the project's ".amivcsproject" switch (aide_project.h);
+    // without it, the dialog keeps the name within classic FFS (24 + ".aproj").
+    explicit ProjectSettingsDialog(const Project &project, bool longNames = false,
+                                   QWidget *parent = nullptr);
 
     // Applies all UI state onto a copy of the original project and returns it.
     Project resultProject() const;
+    // The "Allow long file names" box, to be written back by the caller.
+    bool longNames() const;
 
 private slots:
     void accept() override;
@@ -53,6 +58,8 @@ private:
     QComboBox *m_outputKindCombo = nullptr;
 
     // General
+    bool m_longNamesInitial = false;
+    QCheckBox *m_longNamesCheck = nullptr;
     QLineEdit *m_nameEdit;
     QLineEdit *m_binaryEdit;
     QLineEdit *m_targetDirEdit;

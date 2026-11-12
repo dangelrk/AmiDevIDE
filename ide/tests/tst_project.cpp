@@ -1,4 +1,5 @@
 #include "project/Project.h"
+#include "aide/aide_project.h"
 
 #include <QFile>
 #include <QTemporaryDir>
@@ -22,6 +23,8 @@ private slots:
     void languageAndOutputKindRoundTrip();
     void legacyProjectStaysC();
     void editorStateInUserFile();
+    void legacyUserFile();
+    void amigaNames();
     void loadsUnderGermanLocale();
 };
 
@@ -219,7 +222,7 @@ void TstProject::loadsUnderGermanLocale()
 }
 
 QTEST_APPLESS_MAIN(TstProject)
-// The editor state (open files, active file) lives in <project>.aproj.user,
+// The editor state (open files, active file) lives in <project>.auser,
 // not in the .aproj: it changes every session and would keep a versioned
 // project "modified" (AmiVCS refuses switch/merge/pull then).
 void TstProject::editorStateInUserFile()
@@ -238,7 +241,9 @@ void TstProject::editorStateInUserFile()
     const QByteArray text = aproj.readAll();
     QVERIFY(!text.contains("\"editor\""));
     QVERIFY(!text.contains("openFiles"));
-    QVERIFY(QFile::exists(path + QStringLiteral(".user")));
+    // as long as "<name>.aproj": fits wherever the project file fits (FFS: 30)
+    QVERIFY(QFile::exists(dir.filePath(QStringLiteral("demo.auser"))));
+    QVERIFY(!QFile::exists(path + QStringLiteral(".user")));
 
     Project q;
     QVERIFY(q.load(path));
@@ -251,6 +256,51 @@ void TstProject::editorStateInUserFile()
     QFile again(path);
     QVERIFY(again.open(QFile::ReadOnly));
     QCOMPARE(again.readAll(), text);
+}
+
+// An older "<name>.aproj.user" is still read (and left for older IDEs).
+void TstProject::legacyUserFile()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("alt.aproj"));
+    Project p = Project::createMinimalC(QStringLiteral("alt"));
+    QVERIFY(p.save(path));
+    QFile::remove(dir.filePath(QStringLiteral("alt.auser")));
+    QFile legacy(path + QStringLiteral(".user"));
+    QVERIFY(legacy.open(QFile::WriteOnly));
+    legacy.write("{ \"editor\": { \"openFiles\": [\"src/alt.c\"], \"activeFile\": \"src/alt.c\" } }");
+    legacy.close();
+    Project q;
+    QVERIFY(q.load(path));
+    QCOMPARE(q.editor.activeFile, QStringLiteral("src/alt.c"));
+    QVERIFY(q.save(path));
+    QVERIFY(QFile::exists(dir.filePath(QStringLiteral("alt.auser"))));
+    QVERIFY(QFile::exists(path + QStringLiteral(".user")));
+}
+
+// The project's long-name switch (.amivcsproject) and the name check.
+void TstProject::amigaNames()
+{
+    QVERIFY(aide_names_fit("abcdefghijklmnopqrstuvwxyz_1.c", 30));
+    QVERIFY(!aide_names_fit("abcdefghijklmnopqrstuvwxyz_12.c", 30));
+    QVERIFY(aide_names_fit("src/abcdefghijklmnopqrstuvwxyz_1.c", 30));
+    QVERIFY(!aide_names_fit("ein_ordner_mit_mehr_als_dreissig_z/a.c", 30));
+    QVERIFY(aide_names_fit("\xc3\xa4\xc3\xb6\xc3\xbc", 3));   // characters, not bytes
+    QTemporaryDir dir;
+    const QByteArray root = dir.path().toUtf8();
+    QVERIFY(!aide_project_long_names(root.constData()));
+    QFile f(dir.filePath(QStringLiteral(".amivcsproject")));
+    QVERIFY(f.open(QFile::WriteOnly));
+    f.write("# Projekt\nlongnames=0\nanderes=x\n");
+    f.close();
+    QVERIFY(aide_project_set_long_names(root.constData(), 1));
+    QVERIFY(aide_project_long_names(root.constData()));
+    QVERIFY(f.open(QFile::ReadOnly));
+    QCOMPARE(f.readAll(), QByteArray("# Projekt\nlongnames=1\nanderes=x\n"));
+    f.close();
+    QVERIFY(aide_project_set_long_names(root.constData(), 0));
+    QVERIFY(!aide_project_long_names(root.constData()));
 }
 
 #include "tst_project.moc"

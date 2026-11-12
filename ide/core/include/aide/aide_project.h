@@ -155,14 +155,37 @@ int aide_project_from_json(AideProject *p, const char *json_text);
 /* The same without the editor section: what goes into the .aproj file.
  * The editor state (open files, active file) changes with every session
  * and would keep a versioned project "modified"; it lives in
- * <project>.aproj.user next to it (aide_project_save_user()). A
+ * <project>.auser next to it (aide_project_save_user()). A
  * passthrough "editor" key is dropped too. */
 char *aide_project_to_file_json(const AideProject *p, const char *raw_json_passthrough);
 
-/* <aproj_path>.user, the per-user side file */
+/* ---- Amiga file names ----
+ * Classic FFS/OFS keep 30 characters per name and truncate a longer one
+ * silently. Unless the project allows long names, the IDE keeps every
+ * NEW name within that: files and folders 30, the project name 24 (so
+ * "<name>.aproj" fits). The switch is the project's ".amivcsproject"
+ * (versioned with AmiVCS, line "longnames=1") -- the same file amivcs
+ * checks on commit, so IDE and version control agree. */
+#define AIDE_AMIGA_NAME_MAX         30
+#define AIDE_AMIGA_PROJECT_NAME_MAX 24
+#define AIDE_PROJECT_SETTINGS_FILE  ".amivcsproject"
+/* 1 if root's .amivcsproject says longnames=1 (on/yes/true) */
+int aide_project_long_names(const char *root);
+/* sets longnames=1/0 there, keeping every other line; returns 1 */
+int aide_project_set_long_names(const char *root, int on);
+/* 1 if every '/'-separated part of rel has at most max characters
+ * (UTF-8: characters, not bytes) */
+int aide_names_fit(const char *rel, int max);
+
+/* The per-user side file: "<project>.auser" for "<project>.aproj" --
+ * exactly as long, so it fits wherever the project file fits. (Classic
+ * FFS keeps 30 characters and truncates silently: the old
+ * "<project>.aproj.user" became the project file itself for a
+ * 24-character project name.) */
 void aide_project_user_path(const char *aproj_path, char *out, size_t outsz);
-/* writes / reads only the editor section of <aproj_path>.user; load
- * returns 0 (and changes nothing) if there is none */
+/* writes / reads only the editor section of the side file; load returns
+ * 0 (and changes nothing) if there is none. Load falls back to an older
+ * "<project>.aproj.user", which is left in place for older IDE versions. */
 int aide_project_save_user(const AideProject *p, const char *aproj_path);
 int aide_project_load_user(AideProject *p, const char *aproj_path);
 

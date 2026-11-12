@@ -4,6 +4,7 @@
 #include "app/AppSettings.h"
 
 #include <QCheckBox>
+#include "aide/aide_project.h"
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -38,9 +39,10 @@ QString joinLines(const QStringList &list)
 }
 }
 
-ProjectSettingsDialog::ProjectSettingsDialog(const Project &project, QWidget *parent)
+ProjectSettingsDialog::ProjectSettingsDialog(const Project &project, bool longNames, QWidget *parent)
     : QDialog(parent)
     , m_project(project)
+    , m_longNamesInitial(longNames)
 {
     setWindowTitle(tr("Project Settings"));
     resize(640, 560);
@@ -98,6 +100,14 @@ QWidget *ProjectSettingsDialog::createGeneralTab()
 
     m_binaryEdit = new QLineEdit(m_project.output.binary, page);
     form->addRow(tr("Binary:"), m_binaryEdit);
+
+    m_longNamesCheck = new QCheckBox(tr("Allow long file names"), page);
+    m_longNamesCheck->setChecked(m_longNamesInitial);
+    m_longNamesCheck->setToolTip(tr("Classic Amiga FFS/OFS keeps 30 characters per name and silently "
+                                    "cuts longer ones. Without this box new names stay within that "
+                                    "(project name 24, files and folders 30). Stored in .amivcsproject, "
+                                    "which AmiVCS checks on commit too."));
+    form->addRow(QString(), m_longNamesCheck);
 
     m_targetDirEdit = new QLineEdit(m_project.output.targetDir, page);
     form->addRow(tr("Target dir:"), m_targetDirEdit);
@@ -468,7 +478,30 @@ void ProjectSettingsDialog::accept()
         QMessageBox::warning(this, tr("Project Settings"), tr("Name and Binary name must not be empty."));
         return;
     }
+    if (!m_longNamesCheck->isChecked()) {
+        const QByteArray name = m_nameEdit->text().trimmed().toUtf8();
+        const QByteArray binary = m_binaryEdit->text().trimmed().toUtf8();
+        if (!aide_names_fit(name.constData(), AIDE_AMIGA_PROJECT_NAME_MAX)) {
+            QMessageBox::warning(this, tr("Project Settings"),
+                                 tr("The name may have at most %1 characters, so that \"<name>.aproj\" "
+                                    "fits the 30 characters of classic Amiga FFS -- or allow long "
+                                    "file names for this project.").arg(AIDE_AMIGA_PROJECT_NAME_MAX));
+            return;
+        }
+        if (!aide_names_fit(binary.constData(), AIDE_AMIGA_NAME_MAX)) {
+            QMessageBox::warning(this, tr("Project Settings"),
+                                 tr("The binary name may have at most %1 characters (classic Amiga "
+                                    "FFS) -- or allow long file names for this project.")
+                                     .arg(AIDE_AMIGA_NAME_MAX));
+            return;
+        }
+    }
     QDialog::accept();
+}
+
+bool ProjectSettingsDialog::longNames() const
+{
+    return m_longNamesCheck && m_longNamesCheck->isChecked();
 }
 
 Project ProjectSettingsDialog::resultProject() const

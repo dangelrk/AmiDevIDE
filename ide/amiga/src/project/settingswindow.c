@@ -33,6 +33,7 @@ static Object *g_window;
 static Object *g_nameStr, *g_binaryStr, *g_targetDirStr, *g_objDirStr;
 static Object *g_languageCycle, *g_outputKindCycle;
 static Object *g_typeCycle, *g_stackStr, *g_iconModeCycle, *g_iconPathStr;
+static Object *g_longNamesCheck;
 
 /* Compiler */
 static Object *g_cpuCycle, *g_fpuCycle, *g_optCycle;
@@ -485,6 +486,7 @@ void settingswindow_init(Object *app, const AideSdkList *registry)
     g_stackStr = StringObject, StringFrame, MUIA_String_MaxLen, 16, MUIA_String_Accept, (ULONG)"0123456789", End;
     g_iconModeCycle = Cycle(g_iconModeLabels);
     g_iconPathStr = StringObject, StringFrame, MUIA_String_MaxLen, 128, End;
+    g_longNamesCheck = CheckMark(FALSE);
 
     generalPage = VGroup,
         Child, ColGroup(2),
@@ -498,6 +500,9 @@ void settingswindow_init(Object *app, const AideSdkList *registry)
             Child, Label("Ausgabe:"),           Child, g_outputKindCycle,
             Child, Label("Name:"),              Child, g_nameStr,
             Child, Label("Binary:"),            Child, g_binaryStr,
+            /* klassisches FFS: 30 Zeichen, laengere Namen werden still
+            ** gekuerzt -- ohne Haken bleiben neue Namen darunter */
+            Child, Label("Lange Namen:"),       Child, HGroup, Child, g_longNamesCheck, Child, HSpace(0), End,
             Child, Label("Zielverzeichnis:"),   Child, g_targetDirStr,
             Child, Label("Obj-Verzeichnis:"),   Child, g_objDirStr,
             Child, Label("Typ:"),               Child, g_typeCycle,
@@ -667,6 +672,23 @@ int settingswindow_handle_id(long id)
                         "Name und Binary-Name d\374rfen nicht leer sein.");
             return 3; /* handled, window still open */
         }
+        if (!get_check(g_longNamesCheck)) {
+            if (!aide_names_fit(g_editing.name, AIDE_AMIGA_PROJECT_NAME_MAX)) {
+                MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                            "Der Name darf h\366chstens %ld Zeichen haben, damit\n"
+                            "\"<Name>.aproj\" in die 30 Zeichen von FFS passt --\n"
+                            "oder \"Lange Namen\" ankreuzen.",
+                            (long)AIDE_AMIGA_PROJECT_NAME_MAX);
+                return 3;
+            }
+            if (!aide_names_fit(g_editing.output.binary, AIDE_AMIGA_NAME_MAX)) {
+                MUI_Request(g_app, g_window, 0, "AmigaIDE", "_OK",
+                            "Der Binary-Name darf h\366chstens %ld Zeichen haben\n"
+                            "(FFS) -- oder \"Lange Namen\" ankreuzen.",
+                            (long)AIDE_AMIGA_NAME_MAX);
+                return 3;
+            }
+        }
         set(g_window, MUIA_Window_Open, FALSE);
         return 2;
     case ID_SETTINGS_CANCEL:
@@ -712,6 +734,16 @@ int settingswindow_handle_id(long id)
     default:
         return 0;
     }
+}
+
+void settingswindow_set_long_names(int on)
+{
+    set_check(g_longNamesCheck, on);
+}
+
+int settingswindow_long_names(void)
+{
+    return get_check(g_longNamesCheck);
 }
 
 void settingswindow_take_result(AideProject *outProject)

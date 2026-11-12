@@ -542,6 +542,7 @@ void aide_vcs_ignore_missing(const AideProject *p, const char *existingText, Aid
         aide_str_free(&s);
     }
     want(out, existing, "*.aproj.user");
+    want(out, existing, "*.auser");
 }
 
 int aide_vcs_ignore_append(const char *projectRoot, const AideStrList *lines)

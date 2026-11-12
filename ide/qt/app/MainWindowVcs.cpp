@@ -460,7 +460,7 @@ void MainWindow::vcsReloadAfterTouch()
     if (!m_project) return;
     const QString path = m_project->filePath();
     if (QFile::exists(path)) {
-        openProjectAt(path);   // reopens the files of .aproj.user
+        openProjectAt(path);   // reopens the files of .auser
     } else {
         m_editorTabs->closeAllTabsWithPrompt();
         m_project.reset();

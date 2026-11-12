@@ -197,7 +197,7 @@ void TstVcs::ignoreLines()
     aide_vcs_ignore_missing(&p, "# AMIVCS\nbin/\n#?.o\n", &out);
     QStringList got;
     for (size_t i = 0; i < out.count; i++) got << QString::fromUtf8(out.items[i]);
-    QCOMPARE(got, (QStringList{ "build/", "*.aproj.user" }));   // bin/ is already there
+    QCOMPARE(got, (QStringList{ "build/", "*.aproj.user", "*.auser" }));   // bin/ is already there
     aide_strlist_free(&out);
 
     QTemporaryDir dir;
@@ -211,6 +211,7 @@ void TstVcs::ignoreLines()
     QVERIFY(text.contains("build/\n"));
     QVERIFY(text.contains("bin/\n"));
     QVERIFY(text.contains("*.aproj.user\n"));
+    QVERIFY(text.contains("*.auser\n"));
     AideStrList again;
     aide_strlist_init(&again);
     aide_vcs_ignore_missing(&p, text.constData(), &again);

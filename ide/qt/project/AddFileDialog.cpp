@@ -1,4 +1,5 @@
 #include "AddFileDialog.h"
+#include "aide/aide_project.h"
 
 #include <QDialogButtonBox>
 #include <QDir>
@@ -118,6 +119,16 @@ void AddFileDialog::accept()
 
     const QString location = m_locationEdit->text().trimmed();
     m_resultRelativePath = location.isEmpty() ? name : location + QLatin1Char('/') + name;
+
+    // classic Amiga FFS keeps 30 characters per name (aide_project.h)
+    if (!aide_project_long_names(m_projectRoot.toUtf8().constData())
+        && !aide_names_fit(m_resultRelativePath.toUtf8().constData(), AIDE_AMIGA_NAME_MAX)) {
+        QMessageBox::warning(this, tr("Add New File"),
+                             tr("A file or folder name may have at most %1 characters here: classic "
+                                "Amiga FFS keeps no more and would cut it silently. Long names can be "
+                                "allowed in the project settings.").arg(AIDE_AMIGA_NAME_MAX));
+        return;
+    }
 
     QDialog::accept();
 }

@@ -1609,6 +1609,7 @@ static void do_new_project(void)
     /* Save happens only once this closes via OK -- see
      * finish_new_project_save() and its dispatch in the main loop's
      * default case; Cancel just drops g_newProjectAwaitingSave. */
+    settingswindow_set_long_names(aide_project_long_names(g_newProjectDir));
     settingswindow_show(&g_project);
     set_status("Projekteinstellungen: Name/Binary festlegen, dann OK");
 }
@@ -1864,6 +1865,17 @@ static void do_add_new_file(int kind)
             set_status("Abgebrochen");
             return;
         }
+    }
+
+    /* classic FFS keeps 30 characters and cuts longer names silently */
+    if (!aide_project_long_names(g_projectRoot) && !aide_names_fit(relPath, AIDE_AMIGA_NAME_MAX)) {
+        MUI_Request(g_app, g_window, 0, "Neue Datei", "_OK",
+                    "Ein Datei- oder Ordnername darf hier h\366chstens %ld Zeichen\n"
+                    "haben -- FFS speichert nicht mehr und k\374rzt still.\n"
+                    "Lange Namen lassen sich in den Projekteinstellungen erlauben.",
+                    (long)AIDE_AMIGA_NAME_MAX);
+        set_status("Abgebrochen");
+        return;
     }
 
     join_path_into(absPath, sizeof(absPath), g_projectRoot, relPath);
@@ -3825,6 +3837,7 @@ int mainwindow_run(void)
             do_remove_file_from_project();
             break;
         case ID_PROJECT_SETTINGS:
+            settingswindow_set_long_names(g_projectRoot[0] ? aide_project_long_names(g_projectRoot) : 0);
             settingswindow_show(&g_project);
             break;
         case ID_VCS_GUI:
@@ -3937,6 +3950,11 @@ int mainwindow_run(void)
                 break;
             settingsResult = settingswindow_handle_id(id);
             if (settingsResult == 2) {
+                /* the long-name switch lives in the project folder's
+                 * .amivcsproject (aide_project.h), not in the .aproj */
+                const char *root = g_newProjectAwaitingSave ? g_newProjectDir : g_projectRoot;
+                if (root[0] && settingswindow_long_names() != aide_project_long_names(root))
+                    aide_project_set_long_names(root, settingswindow_long_names());
                 settingswindow_take_result(&g_project);
                 if (g_newProjectAwaitingSave) {
                     g_newProjectAwaitingSave = 0;

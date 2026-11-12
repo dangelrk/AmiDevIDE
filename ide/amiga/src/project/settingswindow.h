@@ -44,4 +44,11 @@ int settingswindow_handle_id(long id);
  * project. */
 void settingswindow_take_result(AideProject *outProject);
 
+/* The project's long-name switch (aide_project_long_names()): set before
+ * settingswindow_show(), read after OK and written back by the caller.
+ * Without it, OK keeps the name within classic FFS (24 + ".aproj") and
+ * the binary within 30 characters. */
+void settingswindow_set_long_names(int on);
+int  settingswindow_long_names(void);
+
 #endif /* AIDE_MUI_SETTINGSWINDOW_H */

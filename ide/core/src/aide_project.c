@@ -1,4 +1,5 @@
 #include "aide/aide_project.h"
+#include "aide/aide_fs.h"
 
 #include "parson.h"
 
@@ -242,7 +243,7 @@ static char *to_json(const AideProject *p, const char *raw_json_passthrough, int
                 const char *key = json_object_get_name(rawObj, i);
                 JSON_Value *copy;
                 if (!with_editor && strcmp(key, "editor") == 0)
-                    continue;   /* lives in <project>.aproj.user now */
+                    continue;   /* lives in <project>.auser now */
                 copy = json_value_deep_copy(json_object_get_value_at(rawObj, i));
                 json_object_set_value(obj, key, copy);
             }
@@ -373,8 +374,105 @@ char *aide_project_to_file_json(const AideProject *p, const char *raw_json_passt
 
 void aide_project_user_path(const char *aproj_path, char *out, size_t outsz)
 {
+    size_t n;
     if (!outsz) return;
+    n = strlen(aproj_path);
+    if (n >= 6 && aide_str_ieq(aproj_path + n - 6, ".aproj"))
+        snprintf(out, outsz, "%.*s.auser", (int)(n - 6), aproj_path);
+    else
+        snprintf(out, outsz, "%s.auser", aproj_path);
+}
+
+int aide_names_fit(const char *rel, int max)
+{
+    int chars = 0;
+    const unsigned char *p = (const unsigned char *)rel;
+    for (; *p; p++) {
+        if (*p == '/' || *p == '\\') { chars = 0; continue; }
+        if ((*p & 0xC0) != 0x80 && ++chars > max) return 0;
+    }
+    return 1;
+}
+
+static int is_on(const char *v, size_t n)
+{
+    return (n == 1 && v[0] == '1') || (n == 2 && strncmp(v, "on", 2) == 0)
+        || (n == 3 && strncmp(v, "yes", 3) == 0) || (n == 4 && strncmp(v, "true", 4) == 0);
+}
+
+int aide_project_long_names(const char *root)
+{
+    char *path = aide_fs_join(root, AIDE_PROJECT_SETTINGS_FILE);
+    char *data = NULL;
+    size_t size = 0;
+    int on = 0;
+    const char *line;
+    if (path && aide_fs_read_file(path, &data, &size) && data) {
+        for (line = data; line && *line; ) {
+            const char *end = strchr(line, '\n');
+            size_t len = end ? (size_t)(end - line) : strlen(line);
+            while (len && (line[len - 1] == '\r' || line[len - 1] == ' ')) len--;
+            if (len > 10 && strncmp(line, "longnames=", 10) == 0)
+                on = is_on(line + 10, len - 10);
+            line = end ? end + 1 : NULL;
+        }
+    }
+    free(data);
+    free(path);
+    return on;
+}
+
+int aide_project_set_long_names(const char *root, int on)
+{
+    char *path = aide_fs_join(root, AIDE_PROJECT_SETTINGS_FILE);
+    char *data = NULL;
+    size_t size = 0;
+    AideStr out;
+    const char *line;
+    int done = 0, ok = 0;
+    FILE *f;
+    if (!path) return 0;
+    aide_str_init(&out);
+    if (aide_fs_read_file(path, &data, &size) && data) {
+        for (line = data; line && *line; ) {
+            const char *end = strchr(line, '\n');
+            size_t len = end ? (size_t)(end - line) : strlen(line);
+            if (len >= 10 && strncmp(line, "longnames=", 10) == 0) {
+                if (!done) aide_str_append(&out, on ? "longnames=1\n" : "longnames=0\n");
+                done = 1;
+            } else {
+                aide_str_appendf(&out, "%.*s\n", (int)len, line);
+            }
+            line = end ? end + 1 : NULL;
+        }
+    }
+    if (!done) aide_str_append(&out, on ? "longnames=1\n" : "longnames=0\n");
+    f = fopen(path, "wb");
+    if (f) {
+        ok = fwrite(out.data, 1, out.len, f) == out.len;
+        if (fclose(f) != 0) ok = 0;
+    }
+    aide_str_free(&out);
+    free(data);
+    free(path);
+    return ok;
+}
+
+/* The name before: "<project>.aproj.user". Only read, and on the Amiga
+ * only where it cannot be the project file itself under a truncated name
+ * (classic FFS keeps 30 characters). */
+static int legacy_user_path(const char *aproj_path, char *out, size_t outsz)
+{
+    const char *base = aproj_path, *p;
+    for (p = aproj_path; *p; p++)
+        if (*p == '/' || *p == ':') base = p + 1;
+#if defined(AMIGA) || defined(__AMIGA__) || defined(__amigaos__) || defined(__VBCC__)
+    if (strlen(base) + 5 > 30) return 0;
+#else
+    (void)base;
+#endif
     snprintf(out, outsz, "%s.user", aproj_path);
+    return 1;
 }
 
 int aide_project_save_user(const AideProject *p, const char *aproj_path)
@@ -417,6 +515,8 @@ int aide_project_load_user(AideProject *p, const char *aproj_path)
 
     aide_project_user_path(aproj_path, path, sizeof(path));
     f = fopen(path, "rb");
+    if (!f && legacy_user_path(aproj_path, path, sizeof(path)))
+        f = fopen(path, "rb");
     if (!f)
         return 0;
     fseek(f, 0, SEEK_END);

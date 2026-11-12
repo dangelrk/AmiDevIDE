@@ -5,6 +5,7 @@
 #include "editor/CompletionModel.h"
 #include "project/ProjectTreeDock.h"
 #include "project/ProjectSettingsDialog.h"
+#include "aide/aide_project.h"
 #include "project/ProjectTemplates.h"
 #include "project/AddFileDialog.h"
 #include "panes/SymbolsDock.h"
@@ -926,10 +927,15 @@ void MainWindow::newProject()
     // same reasoning.
     Project project;
 
-    ProjectSettingsDialog dialog(project, this);
+    const QByteArray dirUtf8 = dir.toUtf8();
+    const bool longNamesBefore = aide_project_long_names(dirUtf8.constData()) != 0;
+    ProjectSettingsDialog dialog(project, longNamesBefore, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
     project = dialog.resultProject();
+    // .amivcsproject only when long names are wanted (or it exists already)
+    if (dialog.longNames() != longNamesBefore)
+        aide_project_set_long_names(dirUtf8.constData(), dialog.longNames() ? 1 : 0);
 
     // "vc" is vbcc's own C runtime support library (___stack, __math_init,
     // ___main, ___v0printf, ...), needed by virtually any vbcc-linked Amiga
@@ -1051,9 +1057,13 @@ void MainWindow::openProjectSettings()
         return;
     }
 
-    ProjectSettingsDialog dialog(*m_project, this);
+    const QByteArray rootUtf8 = QFileInfo(m_project->filePath()).absolutePath().toUtf8();
+    const bool longNamesBefore = aide_project_long_names(rootUtf8.constData()) != 0;
+    ProjectSettingsDialog dialog(*m_project, longNamesBefore, this);
     if (dialog.exec() == QDialog::Accepted) {
         const QString path = m_project->filePath();
+        if (dialog.longNames() != longNamesBefore)
+            aide_project_set_long_names(rootUtf8.constData(), dialog.longNames() ? 1 : 0);
         *m_project = dialog.resultProject();
         m_project->save(path);
         m_projectTree->setProject(m_project.get());
