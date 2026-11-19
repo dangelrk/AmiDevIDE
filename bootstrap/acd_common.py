@@ -127,8 +127,12 @@ def have(tool: str) -> bool:
 
 
 def make_program() -> str:
-    """GNU make.  On the BSDs and macOS `gmake` may be the real one."""
-    for cand in ("gmake", "make"):
+    """GNU make.  On the BSDs and macOS `gmake` may be the real one;
+    Windows (Qt/MinGW) ships it as `mingw32-make`.  $ACD_MAKE wins."""
+    env = os.environ.get("ACD_MAKE")
+    if env and have(env):
+        return env
+    for cand in ("gmake", "make", "mingw32-make"):
         if have(cand):
             return cand
     fail("no make found", "install GNU make (macOS: Xcode CLT, Linux: build-essential)")
@@ -144,6 +148,21 @@ def cc_program() -> str:
 def ensure_dirs(*paths: Path) -> None:
     for p in paths:
         p.mkdir(parents=True, exist_ok=True)
+
+
+def rmtree(path: Path) -> None:
+    """shutil.rmtree that also removes read-only files.  Windows refuses to
+    delete them, and git marks everything under .git/objects read-only."""
+    import stat
+
+    def _retry(func, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_retry)
+    else:
+        shutil.rmtree(path, onerror=_retry)
 
 
 def rel(p: Path) -> str:

@@ -9,7 +9,7 @@ ACE BASIC ist **nicht** Teil dieses Repositorys. Hier liegen nur unsere
 | Basis | Tag **`3.0.1`** — Archiv `https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz` |
 | SHA-256 | `8a38419e35c31cf7474385384940166c4e97f2fda36c46501e5d7d40900a556f` (steht auch in `bootstrap/sources.lock.json`) |
 | Lizenz | GPL (ACE), die Patches stehen unter derselben Lizenz |
-| Patches | `patches/0001-*.patch` … `patches/0013-*.patch`, Format `git format-patch` |
+| Patches | `patches/0001-*.patch` … `patches/0014-*.patch`, Format `git format-patch` |
 
 Das Original wird nicht verändert und nicht geforkt. Der Bootstrap lädt das
 Archiv, prüft die Prüfsumme und spielt die Patches ein.
@@ -31,6 +31,7 @@ Archiv, prüft die Prüfsumme und spielt die Patches ein.
 | 0011 | Versionsstempel (Version, Build-Nummer, Datum) in allen Binaries; Version 3.1.0 |
 | 0012 | `yap -V` antwortet vor der Argumentprüfung |
 | 0013 | Fix: Build-Nummer und Datum werden ohne Anführungszeichen übergeben und im Quelltext zu Strings gemacht, damit `amiga-check` durchläuft |
+| 0014 | Host-Build mit gcc (Windows/MinGW): `-Wformat-overflow` bleibt Warnung statt Fehler; clang unverändert |
 
 Details stehen in den Commit-Texten der Patches selbst und in
 `docs/upstream-findings.md` des gepatchten Baums.

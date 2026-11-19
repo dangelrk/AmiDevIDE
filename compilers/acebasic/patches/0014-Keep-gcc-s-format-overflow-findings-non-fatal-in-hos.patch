@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ronny=20Kr=C3=BCger?=
+ <197308427+dangelrk@users.noreply.github.com>
+Date: Thu, 19 Nov 2026 07:23:20 +0100
+Subject: [PATCH] Keep gcc's format-overflow findings non-fatal in host builds
+
+gcc treats -Wformat-overflow as part of -Werror=format, so the host
+build on Windows (MinGW gcc 15) stopped in gadget.c on fixed-size
+sprintf buffers.  Those findings predate the port and are not the
+%ld class -Werror=format is there for.  Under gcc they are now plain
+warnings; clang builds are unchanged.
+---
+ src/make/Makefile-host | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/make/Makefile-host b/src/make/Makefile-host
+index 75b10a6..27088a4 100644
+--- a/src/make/Makefile-host
++++ b/src/make/Makefile-host
+@@ -74,6 +74,13 @@ CFLAGS ?= -O2
+ CFLAGS += -std=gnu89 -DACE_HOST -Wformat -Werror=format \
+           -Wno-deprecated-non-prototype
+ 
++# gcc (not clang) counts -Wformat-overflow as part of -Werror=format.  Its
++# findings (fixed-size sprintf buffers in gadget.c) predate the port and are
++# not the %ld class guarded above, so gcc reports them as warnings only.
++ifeq ($(findstring clang,$(shell $(CC) --version 2>/dev/null)),)
++  CFLAGS += -Wno-error=format-overflow
++endif
++
+ # WARN=1 turns on -Wall.  Off by default: these are 1990s K&R sources and the
+ # ~150 unused-variable/dangling-else findings are pre-existing noise that would
+ # bury anything new.

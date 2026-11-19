@@ -18,7 +18,7 @@ selbst beschafft werden. Diese Anleitung sagt für jedes Teil: *was*, *woher*,
 |---|---|
 | macOS | vollständig verifiziert, inkl. Bootstrap aus leerem Baum |
 | Linux | baut alles aus dem Quelltext, **nicht end-to-end getestet** |
-| Windows (Qt/MinGW) | Qt-IDE und Tests verifiziert; Toolchain-Bootstrap **noch nicht getestet** |
+| Windows (Qt/MinGW) | Qt-IDE, Tests und Toolchain-Bootstrap (offline aus `var/downloads/`) verifiziert; `acd-doctor` sauber |
 | AmigaOS 3.x nativ | nur die Compile-Regeln sind (auf dem Host) geprüft; Link, `makedir`/`delete` und die Assigns brauchen einen echten Amiga |
 
 Auf Linux und Windows ist `acd-doctor` (siehe unten) das Werkzeug, um
@@ -172,12 +172,14 @@ Python muss ≥ 3.11 sein (`python3 --version`). FS-UAE wird unter
 `/usr/bin/fs-uae`, `/usr/local/bin/fs-uae`, `/snap/bin/fs-uae` oder im `PATH`
 gesucht.
 
-### Windows (Qt-IDE getestet, Toolchain noch nicht)
+### Windows (Qt-IDE und Toolchain getestet)
 
 Gebaut wird nativ mit dem Qt Online Installer und dessen MinGW; MSYS2 wird
 nicht gebraucht. Unter Windows 11 mit Qt 6.12.0 und MinGW 15.1 baut die
-Qt-IDE, und alle 20 Test-Suites laufen durch. Der Toolchain-Bootstrap
-(`acd-toolchain`) ist unter Windows noch nicht durchgelaufen.
+Qt-IDE, und alle 20 Test-Suites laufen durch. Auch `acd-toolchain` läuft
+durch (getestet offline mit `-DACD_OFFLINE=ON` und den Archiven in
+`var/downloads/`); `acd-doctor` übersetzt und linkt damit eine
+AmigaOS-Executable.
 
 Voraussetzungen:
 
@@ -203,8 +205,11 @@ die Qt-IDE wird unter Windows statt `<regex.h>`, das es dort nicht gibt,
 `ide/core/platform/aide_regex_std.cpp` (`std::regex` mit POSIX-ERE)
 übersetzt.
 
-vasm/vlink werden auf Windows mit `Makefile.Cygwin` gebaut (siehe
-`bootstrap/acd_build_tools.py`). FS-UAE wird unter
+vasm wird auf Windows mit `Makefile.Cygwin` (und leerem `TARGET`, damit die
+Binaries ihre normalen Namen behalten) gebaut, vlink mit `-include io.h`
+(siehe `bootstrap/acd_build_tools.py`). Weil vc unter Windows `vc.cfg` statt
+`vc.config` sucht, legt `acd-config` dort beide an. ACE BASIC braucht unter
+gcc Patch 0014 (`-Wformat-overflow` nur als Warnung). FS-UAE wird unter
 `C:\Program Files\FS-UAE\Windows\x86-64\fs-uae.exe` (bzw. den anderen in
 `emulator/acd_emu.py` gelisteten Pfaden) oder im `PATH` gesucht. Nach dem
 Bauen der IDE muss `windeployqt` von Hand laufen (siehe `ide/cmake/Deploy.cmake`).

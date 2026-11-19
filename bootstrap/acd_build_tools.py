@@ -70,7 +70,7 @@ def _run_dtgen(src: Path, target: str, cc_line: str, make: str) -> None:
     ensure_dirs(objdir, src / "bin")
 
     dtgen = src / "bin" / f"dtgen{EXEEXT}"
-    run([make, f"bin/dtgen{EXEEXT}", f"NCC={cc_line}", "NLDFLAGS=-lm"],
+    run([make, "bin/dtgen", f"NCC={cc_line}", "NLDFLAGS=-lm"],
         cwd=src, quiet=True)
     if not dtgen.is_file():
         fail("vbcc: dtgen did not build")
@@ -116,7 +116,12 @@ def build_vbcc(force: bool) -> None:
     _run_dtgen(src, "m68k", cflags, make)
 
     info("building vbcc for TARGET=m68k")
-    run([make, "TARGET=m68k", f"CC={cflags}", f"NCC={cflags}", "LDFLAGS=-lm"], cwd=src)
+    # dtgen and dt.{h,c} were made above.  -o keeps make from redoing them: on
+    # Windows the rule names bin/dtgen but gcc writes bin/dtgen.exe, so make
+    # would think dtgen missing and rerun it interactively (it spins on EOF).
+    run([make, "TARGET=m68k", f"CC={cflags}", f"NCC={cflags}", "LDFLAGS=-lm",
+         "-o", "bin/dtgen", "-o", "objects/m68k/dt.h", "-o", "objects/m68k/dt.c"],
+        cwd=src)
 
     produced = {
         "vc": src / "bin" / f"vc{EXEEXT}",
@@ -139,13 +144,15 @@ def build_vasm(force: bool) -> None:
     make = make_program()
     cc = cc_program()
 
-    makefile = "Makefile"
+    makefile, extra = "Makefile", []
     if host_platform() == "windows":
-        makefile = "Makefile.Cygwin"   # MSYS2/MinGW gcc
+        # MSYS2/MinGW gcc.  Its TARGET=_win32 would suffix the binaries and
+        # want an obj_win32/ the tarball lacks; empty it to get the plain names.
+        makefile, extra = "Makefile.Cygwin", ["TARGET="]
 
     ensure_dirs(src / "objects")
     info("building vasm for CPU=m68k SYNTAX=mot")
-    run([make, "-f", makefile, "CPU=m68k", "SYNTAX=mot", f"CC={cc}"], cwd=src)
+    run([make, "-f", makefile, *extra, "CPU=m68k", "SYNTAX=mot", f"CC={cc}"], cwd=src)
 
     binary = src / f"vasmm68k_mot{EXEEXT}"
     if not binary.is_file():
@@ -155,7 +162,7 @@ def build_vasm(force: bool) -> None:
     # vobjdump ships alongside and the IDE's memory map uses it.
     objdump = src / f"vobjdump{EXEEXT}"
     if not objdump.is_file():
-        run([make, "-f", makefile, f"CC={cc}", f"vobjdump{EXEEXT}"], cwd=src, check=False)
+        run([make, "-f", makefile, *extra, f"CC={cc}", f"vobjdump{EXEEXT}"], cwd=src, check=False)
     if objdump.is_file():
         ok(f"installed {rel(_install(objdump))}")
     else:
@@ -170,8 +177,12 @@ def build_vlink(force: bool) -> None:
     cc = cc_program()
 
     makefile = "Makefile"
-    if host_platform() == "windows" and (src / "Makefile.Cygwin").exists():
-        makefile = "Makefile.Cygwin"
+    if host_platform() == "windows":
+        if (src / "Makefile.Cygwin").exists():
+            makefile = "Makefile.Cygwin"
+        # dir.c's Windows branch calls chmod() without <io.h>; gcc >= 14
+        # rejects the implicit declaration, so pull the header in from here.
+        cc = f"{cc} -include io.h"
 
     # The Makefile writes into objects/ but does not create it.
     ensure_dirs(src / "objects")

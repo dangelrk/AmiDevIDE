@@ -66,6 +66,10 @@ def gen_vc_configs() -> None:
     # picks up when no +profile is given.  Keep that convenience, generated.
     shutil.copy2(TOOLCHAIN_CONFIG / "aos68k", TOOLCHAIN_CONFIG / "vc.config")
     ok(f"{rel(TOOLCHAIN_CONFIG / 'vc.config')} (copy of aos68k)")
+    # vc built for Windows looks for vc.cfg instead (frontend/vc.c).
+    if host_platform() == "windows":
+        shutil.copy2(TOOLCHAIN_CONFIG / "aos68k", TOOLCHAIN_CONFIG / "vc.cfg")
+        ok(f"{rel(TOOLCHAIN_CONFIG / 'vc.cfg')} (copy of aos68k, Windows name)")
 
 
 def gen_setenv() -> None:

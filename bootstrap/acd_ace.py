@@ -21,13 +21,12 @@ the series to a new upstream release.
 import argparse
 import hashlib
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 from acd_common import (
     ACEBASIC_PATCHES as PATCH_DIR, DOWNLOADS, SOURCES_LOCK, SRC,
-    ensure_dirs, fail, have, info, ok, rel, run, step, warn,
+    ensure_dirs, fail, have, info, ok, rel, rmtree, run, step, warn,
 )
 from acd_extract import extract
 
@@ -116,7 +115,7 @@ def main() -> int:
         info("patch series or upstream changed -- rebuilding the tree")
 
     if DEST.exists():
-        shutil.rmtree(DEST)
+        rmtree(DEST)
     ensure_dirs(DEST.parent)
 
     info(f"unpacking {archive.name}")
