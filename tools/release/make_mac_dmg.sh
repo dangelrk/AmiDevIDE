@@ -42,7 +42,20 @@ APP=$(find "$BUILD" -name amigaide.app -type d -path '*/ide/qt/*' | head -1)
 rm -rf "$STAGE"
 mkdir -p "$STAGE" "$OUTDIR"
 cp -R "$APP" "$STAGE/AmigaIDE.app"
-macdeployqt "$STAGE/AmigaIDE.app" -always-overwrite 2>&1 | grep -v "QtPdf\|QtSvg\|using QList" || true
+# the build links with a run-path into Homebrew (/opt/homebrew/lib); the Qt
+# plugins load their frameworks through @rpath, so it must point into the
+# bundle instead -- otherwise the IDE only starts where Homebrew Qt is
+# installed (macdeployqt: "Cannot resolve rpath")
+EXE="$STAGE/AmigaIDE.app/Contents/MacOS/AmigaIDE"
+for rp in $(otool -l "$EXE" | awk '/LC_RPATH/{f=1} f&&/ path /{print $2; f=0}'); do
+    case $rp in
+        /opt/homebrew/*|/usr/local/*) install_name_tool -delete_rpath "$rp" "$EXE" ;;
+    esac
+done
+macdeployqt "$STAGE/AmigaIDE.app" -always-overwrite 2>&1 | grep -v "QtPdf\|QtSvg\|using QList\|Cannot resolve rpath" || true
+# after macdeployqt, which drops run-paths it rewrote: the plugins need it
+otool -l "$EXE" | grep -q 'path @executable_path/../Frameworks' ||
+    install_name_tool -add_rpath @executable_path/../Frameworks "$EXE"
 rm -f "$STAGE/AmigaIDE.app/Contents/PlugIns/imageformats/libqsvg.dylib" \
       "$STAGE/AmigaIDE.app/Contents/PlugIns/imageformats/libqpdf.dylib" \
       "$STAGE/AmigaIDE.app/Contents/PlugIns/iconengines/libqsvgicon.dylib"
@@ -58,7 +71,11 @@ for lib in "$STAGE/AmigaIDE.app/Contents/Frameworks/"*.dylib; do
     esac
 done
 # nothing may point to Homebrew any more (it would not start on a Mac
-# without it)
+# without it) -- neither a library nor a run-path
+if otool -l "$EXE" | grep -A2 LC_RPATH | grep -q '/opt/homebrew\|/usr/local'; then
+    echo "AmigaIDE still has a run-path into Homebrew" >&2
+    exit 1
+fi
 if find "$STAGE/AmigaIDE.app" -type f \( -perm -u+x -o -name '*.dylib' \) -print0 |
      xargs -0 otool -L 2>/dev/null | grep -q '/opt/homebrew\|/usr/local/opt'; then
     echo "bundle still refers to Homebrew:" >&2
