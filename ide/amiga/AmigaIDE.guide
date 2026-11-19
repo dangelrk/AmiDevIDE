@@ -4,7 +4,7 @@
 @(c) "GPL-3.0"
 @node Main "AmigaIDE - Anleitung"
 
-                         @{b}AmigaIDE 0.5@{ub}
+                         @{b}AmigaIDE 0.6@{ub}
         Entwicklungsumgebung für vbcc, vasm, vlink und ACE BASIC
 
 Experimentelle Software: entwickelt mit Hilfe von Claude (KI-Assistent
@@ -858,6 +858,22 @@ Besonderheiten gegenüber der Qt-Version auf dem PC:
 @node Geschichte "Versionsgeschichte"
 
 @{b}Versionsgeschichte@{ub}
+
+0.6 (19.11.2026)
+  - Versionsverwaltung: Konflikte nach einem Merge anzeigen und
+    übernehmen (unsere/ihre), Merge abbrechen, Diff der Auswahl
+    (braucht AmiVCS 0.11).
+  - Jedes SDK kann in einem eigenen Ordner liegen (Reiter
+    SDK-Pfade); neuer Projektordner per Dateiauswahl; klare Meldung,
+    wenn make fehlt.
+  - Projekt > Installation prüfen: eigenes Fenster mit Ordnern,
+    Werkzeugen, make, Libraries und SDKs.
+  - Startfenster mit Version und Fortschritt.
+  - Klassisches FFS (30 Zeichen): Editor-Daten heißen jetzt
+    <name>.auser; <name>.aproj.user konnte bei langen
+    Projektnamen die Projektdatei selbst sein. Ohne "Lange Namen"
+    höchstens 24 Zeichen für den Projektnamen und 30 für neue
+    Dateien.
 
 0.5 (08.11.2026)
   - Versionsverwaltung für AmiVCS 0.10: Clone und erster Push fragen

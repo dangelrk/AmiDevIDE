@@ -101,6 +101,9 @@ acd_script_target(acd-tools acd_build_tools.py
 acd_script_target(acd-sdk acd_install_sdk.py
     COMMENT "Installing the SDKs")
 
+acd_script_target(acd-sqlite acd_sqlite.py
+    COMMENT "Building SQLite 3 for vbcc from the Aminet port")
+
 acd_script_target(acd-seed acd_seed_from_legacy.py
     COMMENT "Seeding SDKs and emulator images from a previous installation")
 
@@ -132,7 +135,8 @@ add_dependencies(acd-tools  acd-fetch)
 add_dependencies(acd-sdk    acd-fetch)
 add_dependencies(acd-ace-src acd-fetch)
 add_dependencies(acd-ace    acd-tools acd-ace-src)
-add_dependencies(acd-config acd-sdk acd-ace)
+add_dependencies(acd-sqlite acd-tools acd-sdk)
+add_dependencies(acd-config acd-sdk acd-ace acd-sqlite)
 
 add_custom_target(acd-toolchain
     COMMENT "Toolchain ready -- run acd-doctor to check it")

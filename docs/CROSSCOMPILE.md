@@ -34,7 +34,8 @@ Ein Cross-Compiler für AmigaOS/m68k auf Basis von **vbcc** (Compiler),
 - `sdk/Roadshow` — TCP/IP-Stack-Header (`bsdsocket`, `netinclude`); Archiv von Hand (§5 in INSTALL.md)
 - `sdk/AmiSSL-v5` — TLS/SSL (Aminet `AmiSSL-v5-SDK`, vom Bootstrap installiert)
 - `sdk/PosixLib` — aus dem Aminet, vom Bootstrap installiert
-- `sdk/SQLite3` — vorerst über `acd-seed` (vbcc-Build geplant)
+- `sdk/SQLite3` — vom Bootstrap (`acd-sqlite`) mit vbcc aus dem Aminet-Port gebaut;
+  linken mit `-lsqlite3 -lmieee -lamiga`
 - `bin/` — die Compiler-Binaries (`vc`, `vbccm68k`, `vasmm68k_mot`, `vlink`,
   `vobjdump`, `vprof`, `dtgen`, `ace`, `yap`, `bas`). **Alle aus dem
   Quelltext gebaut**, für die Plattform, auf der du bootstrappst — es gibt

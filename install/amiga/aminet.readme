@@ -19,7 +19,8 @@ vbcc, vasm and vlink:
   - disassembler for hunk files, memory map after a build
   - Workbench icons for built programs
   - version control with AmiVCS (commit, branches, merge, history
-    graph, push/pull/clone), if AmiVCS 0.6 or newer is installed
+    graph, push/pull/clone, conflicts and diff), if AmiVCS 0.6 or
+    newer is installed (conflicts and diff: AmiVCS 0.11)
 
 The same project files (.aproj) open in the Qt version of the IDE on
 macOS, Linux and Windows (AmiDevIDE, cross-development with the same
@@ -49,7 +50,8 @@ To build programs:
   or dev/c/make_bin.lha, both tested)
 - for BASIC projects ACE BASIC (dev/basic/ace-basic.lha)
 Optional:
-- AmiVCS 0.6 or newer for version control (dev/misc/AmiVCS.lha)
+- AmiVCS 0.6 or newer for version control, 0.11 for conflicts and
+  diff (dev/misc/AmiVCS.lha)
 
 Status
 ------
@@ -63,6 +65,11 @@ deutsch.
 
 History
 -------
+0.6  version control: show and resolve merge conflicts, abort a merge,
+     diff (needs AmiVCS 0.11); every SDK in a folder of your choice; new
+     project folder via file requester; "check installation" window;
+     startup splash; FFS: editor data now in <name>.auser, names limited
+     to 30 characters unless "long names" is set
 0.5  version control for AmiVCS 0.10: clone and a first push ask for
      the repository URL, login when needed (hidden password, optionally
      remembered), settings via AmiVCSConfig; opens amivcs-gui on the

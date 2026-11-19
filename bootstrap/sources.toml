@@ -161,7 +161,7 @@ filename    = "sqlite-3.34.0.a-amiga.lha"
 version     = "3.34.0.a"
 patterns    = ["sqlite-3.34.0.a-amiga.lha"]
 homepage    = "https://aminet.net/package/biz/dbase/sqlite-3.34.0.a-amiga"
-notes       = "22 MB. Source for a planned vbcc build of sdk/SQLite3/; the bundled libsqlite3.a is built with gcc 3.4.0 and is not installed."
+notes       = "22 MB. acd_sqlite.py builds sdk/SQLite3/ from it with vbcc (needs tclsh); the bundled libsqlite3.a is built with gcc 3.4.0 and is not installed."
 
 [[source]]
 id          = "roadshow_sdk"

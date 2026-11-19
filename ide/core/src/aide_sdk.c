@@ -765,7 +765,7 @@ void aide_sdk_append_builtins(const char *sdk_root, AideSdkList *out)
         AideStr s;
         aide_str_init(&s); aide_str_append(&s, d->rootDir); aide_str_append(&s, "/include");
         aide_strlist_push(&d->includeDirs, s.data); aide_str_free(&s);
-        aide_str_init(&s); aide_str_append(&s, d->rootDir); aide_str_append(&s, "/lib"); /* GCC .a */
+        aide_str_init(&s); aide_str_append(&s, d->rootDir); aide_str_append(&s, "/lib"); /* sqlite3.lib, built by acd_sqlite.py */
         aide_strlist_push(&d->libDirs, s.data); aide_str_free(&s);
     }
 

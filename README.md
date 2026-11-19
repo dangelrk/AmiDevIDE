@@ -80,6 +80,7 @@ supply yourself (see `emulator/images/README.md`).
 | `acd-sdk` | unpack NDK 3.2 and MUI 3.8 |
 | `acd-ace-src` | unpack upstream ACE BASIC and apply `compilers/acebasic/patches/` |
 | `acd-ace` | build and install ACE BASIC |
+| `acd-sqlite` | build SQLite 3 for vbcc from the Aminet port (needs `tclsh`) |
 | `acd-config` | generate the vc configs, `setenv.*`, the FS-UAE machine |
 | `acd-seed` | copy the SDKs and ROMs that have no download from an existing tree |
 | `acd-doctor` | check the installation and compile a test program |

@@ -49,7 +49,12 @@ REQUIRED_SDKS = {
 
 SEEDED_SDKS = {
     "Roadshow": "netinclude",
-    "SQLite3": "include",
+}
+
+#: Built by acd_sqlite.py; optional because it needs tclsh on the host.
+#: The path is the vbcc library -- a seeded SQLite3 has only gcc's .a.
+BUILT_SDKS = {
+    "SQLite3": "lib/sqlite3.lib",
 }
 
 CONFIGS = ["aos68k", "aos68km", "aos68kr", "vc.config"]
@@ -141,6 +146,15 @@ def check_sdks(r: Report) -> None:
             ok(f"{name:14s} {rel(TOOLCHAIN_SDK / name)}")
         else:
             r.soft(f"{name:14s} not installed -- run acd_seed_from_legacy.py")
+    for name, marker in BUILT_SDKS.items():
+        p = TOOLCHAIN_SDK / name / marker
+        if p.exists():
+            ok(f"{name:14s} {rel(TOOLCHAIN_SDK / name)}")
+        elif (TOOLCHAIN_SDK / name).exists():
+            r.soft(f"{name:14s} has no vbcc library (seeded gcc build?) "
+                   "-- run acd_sqlite.py")
+        else:
+            r.soft(f"{name:14s} not built -- run acd_sqlite.py (needs tclsh)")
 
     for retired in ("NDK_3.9", "MUI_5.0"):
         if (TOOLCHAIN_SDK / retired).exists():

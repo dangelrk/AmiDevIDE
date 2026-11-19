@@ -43,7 +43,7 @@ herauszufinden, ob etwas fehlt.
 | regex.library (Ranieri) | 5.1 | `https://aminet.net/util/libs/regex_ranieri.lha` | automatisch, entpackt (`SASCinclude` → `include`, `fd`, `Docs`) | `toolchain/sdk/regex/` |
 | AmiSSL v5 SDK | 5.27 | `https://aminet.net/util/libs/AmiSSL-v5-SDK.lha` | automatisch, entpackt (`Developer/` ohne Beispiele und OS4-Libs) | `toolchain/sdk/AmiSSL-v5/` |
 | vbcc PosixLib | 3.0 | `https://aminet.net/dev/c/vbcc_PosixLib.lha` | automatisch, entpackt (`include`, `AmigaOS3/posix.lib`) | `toolchain/sdk/PosixLib/` |
-| SQLite 3 (Amiga) | 3.34.0.a | `https://aminet.net/biz/dbase/sqlite-3.34.0.a-amiga.lha` | automatisch geladen, **noch nicht installiert**: die beiliegende `libsqlite3.a` ist mit gcc gebaut; ein vbcc-Build aus diesen Quellen ist geplant | (`toolchain/sdk/SQLite3/`) |
+| SQLite 3 (Amiga) | 3.34.0.a | `https://aminet.net/biz/dbase/sqlite-3.34.0.a-amiga.lha` | automatisch geladen und von `acd-sqlite` mit vbcc gebaut (die beiliegende `libsqlite3.a` ist mit gcc gebaut und wird nicht verwendet); braucht `tclsh` | `toolchain/sdk/SQLite3/` (`include/sqlite3.h`, `lib/sqlite3.lib`) |
 | Roadshow SDK | 1.8 | `https://www.amigafuture.de/app.php/dlext/details?df_id=3658` (Download-Formular) | **manuell** nach `var/downloads/` legen, dann automatisch entpackt; fehlt es, nur eine Warnung (§5) | `toolchain/sdk/Roadshow/` |
 | Kickstart-ROM, Workbench-HDF | – | **nur du selbst** (z. B. Amiga Forever) | **manuell** (§7) | `var/emu/...` |
 | FS-UAE | – | `https://fs-uae.net/download/` | manuell, optional | Systeminstallation |
@@ -114,7 +114,7 @@ AmiDevIDE/
     │   ├── ACE/          lib bmaps include icons submods quickref.txt
     │   ├── MCC/          Developer/{C/include/mui,Autodocs/MCC}   (NList + TextEditor)
     │   ├── reqtools/     include fd doc
-    │   └── Roadshow/ SQLite3/ PosixLib/   (Roadshow: Archiv von Hand; SQLite3: acd-seed, §5)
+    │   └── Roadshow/ SQLite3/ PosixLib/   (Roadshow: Archiv von Hand, §5; SQLite3: acd-sqlite)
     ├── fs-uae/development.fs-uae
     ├── project-template/ Makefile*
     ├── shared/           wird in FS-UAE als SHARED: gemountet
@@ -142,13 +142,14 @@ Gemeinsam für alle Hosts (aus `CMakeLists.txt` und `bootstrap/` abgeleitet):
 | LHA-Entpacker: `lha`, `lhasa`, `7z`, `7zz` **oder** `pip3 install lhafile` | – | `.lha`-Archive |
 | `curl` oder `wget` | – | Fallback, falls Pythons TLS keine CA-Liste hat |
 | `git` | – | Clone; **Pflicht** für das Einspielen der ACE-Patches (`git am`) |
+| `tclsh` (Tcl 8.5+) | – | optional: erzeugt die SQLite-Amalgamation für `acd-sqlite`; fehlt es, wird SQLite3 mit einer Warnung übersprungen |
 | C++20-Compiler + Qt 6 (Widgets, Concurrent, Test) | Qt 6.11.1 verifiziert | nur für die Qt-IDE und die Tests |
 | FS-UAE | – | optional, zum Testen im Emulator |
 
 ### macOS (verifiziert)
 
 ```sh
-xcode-select --install                 # clang, make, git
+xcode-select --install                 # clang, make, git (tclsh ist bei macOS dabei)
 brew install cmake python@3.12 lhasa   # oder: pip3 install lhafile
 pip3 install certifi                   # optional: TLS-CA für python.org-Pythons
 ```
@@ -162,14 +163,14 @@ FS-UAE: `https://fs-uae.net/download/` → `FS-UAE.app` nach `/Applications`.
 Debian/Ubuntu (Paketnamen ungeprüft):
 
 ```sh
-sudo apt install build-essential cmake python3 git lhasa curl \
+sudo apt install build-essential cmake python3 git lhasa curl tcl \
                  qt6-base-dev libgl1-mesa-dev fs-uae
 ```
 
 Fedora (Paketnamen ungeprüft):
 
 ```sh
-sudo dnf install gcc gcc-c++ make cmake python3 git lhasa curl qt6-qtbase-devel fs-uae
+sudo dnf install gcc gcc-c++ make cmake python3 git lhasa curl tcl qt6-qtbase-devel fs-uae
 ```
 
 Python muss ≥ 3.11 sein (`python3 --version`). FS-UAE wird unter
@@ -255,9 +256,9 @@ IDE und die Tools `ace`, `yap`, `bas` fehlen dann (`acd-doctor` meldet das).
 `bootstrap/acd_install_sdk.py` installiert NDK 3.2, MUI 3.8, MCC (NList und
 TextEditor) und reqtools — alles, was die MUI-IDE (`amigaide-m68k`) zum
 Übersetzen braucht — sowie regex (Ranieri 5.1), das AmiSSL-v5-SDK und
-PosixLib aus dem Aminet. SQLite3 wird geladen, aber noch nicht installiert
-(die Lib im Archiv ist mit gcc gebaut; ein vbcc-Build ist geplant) und kommt
-bis dahin über `acd-seed`.
+PosixLib aus dem Aminet. SQLite3 baut `acd-sqlite` mit vbcc aus dem
+Aminet-Archiv (die Lib im Archiv ist mit gcc gebaut und für vbcc unbrauchbar).
+Gelinkt wird mit `-lsqlite3 -lmieee -lamiga`.
 
 Das **Roadshow-SDK** gibt es nur bei Amiga Future hinter einem
 Download-Formular (`https://www.amigafuture.de/app.php/dlext/details?df_id=3658`).
@@ -393,8 +394,9 @@ Das führt der Reihe nach aus:
 2. `acd-tools` — baut vbcc (inkl. automatisch beantwortetem `dtgen`), vasm, vlink → `toolchain/bin/`
 3. `acd-sdk` — entpackt vbcc-Target, NDK 3.2, MUI 3.8, MCC, reqtools → `toolchain/targets/`, `toolchain/sdk/`
 4. `acd-ace-src` — ACE 3.0.1 prüfen, nach `var/src/acebasic/` entpacken, Patches anwenden
-5. `acd-ace` — `make -f Makefile-host` und `install` in `var/src/acebasic/src/make` → `toolchain/bin/{ace,yap,bas}`, `toolchain/config/ace68k`, `toolchain/sdk/ACE/`
-6. `acd-config` — erzeugt `toolchain/config/aos68k*`, `setenv.sh/.ps1`, `fs-uae/development.fs-uae`, `project-template/`
+5. `acd-sqlite` — erzeugt aus `sqlite-3.34.0.a-amiga.lha` die Amalgamation (Host-cc + `tclsh`), patcht `os_amiga.c` für vbcc und baut `toolchain/sdk/SQLite3/{include/sqlite3.h,lib/sqlite3.lib}` (68000, Large Data); ohne `tclsh` nur eine Warnung
+6. `acd-ace` — `make -f Makefile-host` und `install` in `var/src/acebasic/src/make` → `toolchain/bin/{ace,yap,bas}`, `toolchain/config/ace68k`, `toolchain/sdk/ACE/`
+7. `acd-config` — erzeugt `toolchain/config/aos68k*`, `setenv.sh/.ps1`, `fs-uae/development.fs-uae`, `project-template/`
 
 Die Einzelschritte gibt es auch direkt:
 
@@ -402,6 +404,7 @@ Die Einzelschritte gibt es auch direkt:
 python3 bootstrap/acd_fetch.py [--offline]
 python3 bootstrap/acd_build_tools.py [--force] [--only vbcc,vasm,vlink]
 python3 bootstrap/acd_install_sdk.py [--force]
+python3 bootstrap/acd_sqlite.py [--force]
 python3 bootstrap/acd_ace.py [--force]
 (cd var/src/acebasic/src/make && make -f Makefile-host && make -f Makefile-host install VBCC="$PWD/../../../../toolchain")
 python3 bootstrap/acd_gen_config.py [--kickstart PFAD] [--workbench PFAD]

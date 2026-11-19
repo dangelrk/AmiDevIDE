@@ -7,9 +7,9 @@ normalises their directory names to what the IDE's SDK registry expects.
 Roadshow is installed too when its archive was put into var/downloads/ by hand
 (its site has no direct link); otherwise acd_seed_from_legacy.py can supply it.
 
-SQLite3 is deliberately not installed from its archive: the libsqlite3.a in
-there is built with gcc 3.4.0 for libnix, not for vbcc.  A vbcc build from the
-same source archive is planned; until then SQLite3 stays a seeded SDK.
+SQLite3 is not installed from its archive: the libsqlite3.a in there is built
+with gcc 3.4.0 for libnix, not for vbcc.  acd_sqlite.py builds it with vbcc
+from the same archive instead.
 
     acd_install_sdk.py [--force]
 """
@@ -106,7 +106,7 @@ SDKS = {
 }
 
 #: SDKs with no download; acd_seed_from_legacy.py provides them.
-SEEDED = ["Roadshow", "SQLite3"]
+SEEDED = ["Roadshow"]
 
 
 def _find_archive(source_id: str, patterns: list[str]) -> Path | None:

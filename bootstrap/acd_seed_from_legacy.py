@@ -36,7 +36,6 @@ SEED_SDKS = [
     ("reqtools", "reqtools.library headers and FD"),
     ("Roadshow", "TCP/IP stack headers (bsdsocket, netinclude)"),
     ("AmiSSL-v5", "TLS/SSL headers and AmigaOS3 link libraries"),
-    ("SQLite3", "SQLite3 headers and library"),
     ("PosixLib", "POSIX compatibility headers"),
 ]
 
