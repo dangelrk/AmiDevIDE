@@ -159,6 +159,23 @@ static void pending_free(Pending *p)
 static void start_next(void);
 
 /* queue or start a job; writes are refused while anything else runs */
+/* The hint above the lists has 0 to 3 lines. MUI measures a Text object's
+ * height when the window is laid out, so a longer text set later was cut
+ * off or slid under the next object (more so with a bigger font): change
+ * it inside InitChange/ExitChange of its group, which lays it out anew. */
+static void set_info(const char *text)
+{
+    static char last[200] = "\1";
+    Object *parent = NULL;
+    if (strncmp(last, text, sizeof(last) - 1) == 0) return;   /* no needless relayout */
+    strncpy(last, text, sizeof(last) - 1);
+    last[sizeof(last) - 1] = '\0';
+    get(g_info, MUIA_Parent, &parent);
+    if (parent) DoMethod(parent, MUIM_Group_InitChange);
+    set(g_info, MUIA_Text_Contents, text);
+    if (parent) DoMethod(parent, MUIM_Group_ExitChange);
+}
+
 static int run_job(AideVcsOp op, const AideStrList *items, const char *message, int flag, const char *workDir)
 {
     Pending p;
@@ -190,7 +207,7 @@ static int run_job(AideVcsOp op, const AideStrList *items, const char *message, 
         pending_free(&p);
         if (op == AIDE_VCS_VERSION) {
             g_available = 0;
-            set(g_info, MUIA_Text_Contents,
+            set_info(
                 "amivcs wurde nicht gefunden.\nDie Versionsverwaltung braucht AmiVCS\n"
                 "(Programm unter Einstellungen eintragen).");
         } else {
@@ -482,15 +499,15 @@ static void check_ignore(void)
 static void update_view(void)
 {
     if (!g_available)
-        set(g_info, MUIA_Text_Contents,
+        set_info(
             g_checked ? "amivcs wurde nicht gefunden oder ist zu alt\n(AmiVCS ab 0.6, Programm unter Einstellungen)."
                       : "Pr\374fe amivcs...");
     else if (!g_root[0])
-        set(g_info, MUIA_Text_Contents, "Kein Projekt ge\366ffnet.");
+        set_info("Kein Projekt ge\366ffnet.");
     else if (!g_repo)
-        set(g_info, MUIA_Text_Contents, "Dieses Projekt steht noch nicht\nunter Versionsverwaltung.");
+        set_info("Dieses Projekt steht noch nicht\nunter Versionsverwaltung.");
     else
-        set(g_info, MUIA_Text_Contents, "");
+        set_info("");
     if (!g_repo || !g_available) {
         DoMethod(g_unstaged, MUIM_NList_Clear);
         DoMethod(g_staged, MUIM_NList_Clear);
