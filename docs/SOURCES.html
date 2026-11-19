@@ -44,7 +44,7 @@ tbody tr:last-child td{border-bottom:none}
 <p class="lede">Diese Archive braucht AmiDevIDE, um die Toolchain zu bauen.
 Normalerweise holt sie <code>bootstrap/acd_fetch.py</code> automatisch &mdash; diese
 Seite ist der manuelle Weg, falls der Rechner offline ist oder ein Server klemmt.</p>
-<p class="meta">Generiert am 27.09.2026 aus <code>bootstrap/sources.toml</code>. Nicht von Hand bearbeiten.</p>
+<p class="meta">Generiert am 19.11.2026 aus <code>bootstrap/sources.toml</code>. Nicht von Hand bearbeiten.</p>
 
 <h2>So geht der manuelle Weg</h2>
 <ol>
@@ -133,6 +133,41 @@ hineinkopieren.</p>
         <td>2.9</td>
         <td><a href="https://aminet.net/util/libs/ReqToolsDev.lha">ReqToolsDev.lha</a><br>
             <span class="muted">Archive root is ReqTools/; include/, fd/ and doc/ are installed as sdk/reqtools/.</span></td>
+      </tr>
+      <tr>
+        <td><strong>regex.library (Ranieri)</strong><br>
+            <span class="muted">POSIX 1003.2 regex.library 5.1 by Alfonso Ranieri: includes, FD, docs.</span></td>
+        <td>5.1</td>
+        <td><a href="https://aminet.net/util/libs/regex_ranieri.lha">regex_ranieri.lha</a><br>
+            <span class="muted">NOT util/libs/Regex.lha (an unrelated GNU regex.library 1.0). Archive root is regex/; SASCinclude/ is installed as sdk/regex/include/, fd/ and Docs/ as they are.</span></td>
+      </tr>
+      <tr>
+        <td><strong>AmiSSL v5 SDK</strong><br>
+            <span class="muted">AmiSSL v5 (OpenSSL 3.x) developer files: includes, AmigaOS3 link libraries, FD/SFD, autodocs.</span></td>
+        <td>5.27</td>
+        <td><a href="https://aminet.net/util/libs/AmiSSL-v5-SDK.lha">AmiSSL-v5-SDK.lha</a><br>
+            <span class="muted">Archive root is AmiSSL/; Developer/ (without examples and OS4 libs) is installed as sdk/AmiSSL-v5/. Aminet replaces the file in place on every 5.x update, so a new upload changes the checksum.</span></td>
+      </tr>
+      <tr>
+        <td><strong>vbcc PosixLib</strong><br>
+            <span class="muted">POSIX compatibility library for vbcc 3.0 (Frank Wille): includes and the AmigaOS3 posix.lib.</span></td>
+        <td>3.0</td>
+        <td><a href="https://aminet.net/dev/c/vbcc_PosixLib.lha">vbcc_PosixLib.lha</a><br>
+            <span class="muted">Archive root is PosixLib/; include/ and AmigaOS3/ are installed as sdk/PosixLib/.</span></td>
+      </tr>
+      <tr>
+        <td><strong>SQLite 3 (Amiga)</strong><br>
+            <span class="muted">SQLite 3.34.0 for Amiga (Steffen Gutmann): source tree with the native AmigaOS VFS (os_amiga.c).</span></td>
+        <td>3.34.0.a</td>
+        <td><a href="https://aminet.net/biz/dbase/sqlite-3.34.0.a-amiga.lha">sqlite-3.34.0.a-amiga.lha</a><br>
+            <span class="muted">22 MB. Source for a planned vbcc build of sdk/SQLite3/; the bundled libsqlite3.a is built with gcc 3.4.0 and is not installed.</span></td>
+      </tr>
+      <tr>
+        <td><strong>Roadshow SDK</strong><br>
+            <span class="muted">Roadshow TCP/IP stack SDK 1.8 (Olaf Barthel): include/, netinclude/, sfd/, docs.</span></td>
+        <td>1.8</td>
+        <td><a href="https://www.amigafuture.de/app.php/dlext/details?df_id=3658">Roadshow-SDK-1.8.lha</a><br>
+            <span class="muted">Amiga Future serves it through a download form, so it cannot be fetched automatically: download Roadshow-SDK-1.8.lha there and put it into var/downloads/. Without it, NDK 3.2&#x27;s SANA+RoadshowTCP-IP/netinclude is an alternative.</span></td>
       </tr>
       <tr>
         <td><strong>ACE BASIC</strong><br>

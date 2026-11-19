@@ -399,6 +399,19 @@ def main() -> int:
         entry = dict(lock.get(sid, {}))
 
         have_local = local_candidate(src)
+        # A manual source sits behind a login or a form: never fetched, and
+        # missing it is only a warning since nothing in the core build needs it.
+        if src["resolver"] == "manual":
+            if have_local:
+                info(f"{sid:20s} already present: {rel(have_local)}")
+                entry.setdefault("filename", have_local.name)
+                entry["sha256"] = entry.get("sha256") or sha256_of(have_local)
+                entry.setdefault("url", src.get("url", ""))
+                lock[sid] = entry
+            else:
+                warn(f"{sid:20s} not present -- download by hand: {src.get('url', '')}")
+            continue
+
         if have_local and not args.update:
             info(f"{sid:20s} already present: {rel(have_local)}")
             entry.setdefault("filename", have_local.name)

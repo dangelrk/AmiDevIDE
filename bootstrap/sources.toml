@@ -6,6 +6,8 @@
 #
 # resolver:
 #   static        url is fixed.  version is given, or read off version_page.
+#   manual        url is a page with a download form; never fetched, only
+#                 used if someone put the archive into var/downloads/.
 #   vbcc_tag      scrape the vbcc page for the highest vbccX_Ytag source archive
 #   vbcc_target   scrape the vbcc page for the newest dated target archive
 
@@ -112,6 +114,66 @@ version     = "2.9"
 patterns    = ["ReqToolsDev*.lha"]
 homepage    = "https://aminet.net/package/util/libs/ReqToolsDev"
 notes       = "Archive root is ReqTools/; include/, fd/ and doc/ are installed as sdk/reqtools/."
+
+[[source]]
+id          = "regex_ranieri"
+name        = "regex.library (Ranieri)"
+description = "POSIX 1003.2 regex.library 5.1 by Alfonso Ranieri: includes, FD, docs."
+resolver    = "static"
+url         = "https://aminet.net/util/libs/regex_ranieri.lha"
+filename    = "regex_ranieri.lha"
+version     = "5.1"
+patterns    = ["regex_ranieri*.lha"]
+homepage    = "https://aminet.net/package/util/libs/regex_ranieri"
+notes       = "NOT util/libs/Regex.lha (an unrelated GNU regex.library 1.0). Archive root is regex/; SASCinclude/ is installed as sdk/regex/include/, fd/ and Docs/ as they are."
+
+[[source]]
+id          = "amissl_sdk"
+name        = "AmiSSL v5 SDK"
+description = "AmiSSL v5 (OpenSSL 3.x) developer files: includes, AmigaOS3 link libraries, FD/SFD, autodocs."
+resolver    = "static"
+url         = "https://aminet.net/util/libs/AmiSSL-v5-SDK.lha"
+filename    = "AmiSSL-v5-SDK.lha"
+version     = "5.27"
+patterns    = ["AmiSSL-v5*-SDK.lha"]
+homepage    = "https://aminet.net/package/util/libs/AmiSSL-v5-SDK"
+notes       = "Archive root is AmiSSL/; Developer/ (without examples and OS4 libs) is installed as sdk/AmiSSL-v5/. Aminet replaces the file in place on every 5.x update, so a new upload changes the checksum."
+
+[[source]]
+id          = "posixlib"
+name        = "vbcc PosixLib"
+description = "POSIX compatibility library for vbcc 3.0 (Frank Wille): includes and the AmigaOS3 posix.lib."
+resolver    = "static"
+url         = "https://aminet.net/dev/c/vbcc_PosixLib.lha"
+filename    = "vbcc_PosixLib.lha"
+version     = "3.0"
+patterns    = ["vbcc_PosixLib*.lha"]
+homepage    = "https://aminet.net/package/dev/c/vbcc_PosixLib"
+notes       = "Archive root is PosixLib/; include/ and AmigaOS3/ are installed as sdk/PosixLib/."
+
+[[source]]
+id          = "sqlite3"
+name        = "SQLite 3 (Amiga)"
+description = "SQLite 3.34.0 for Amiga (Steffen Gutmann): source tree with the native AmigaOS VFS (os_amiga.c)."
+resolver    = "static"
+url         = "https://aminet.net/biz/dbase/sqlite-3.34.0.a-amiga.lha"
+filename    = "sqlite-3.34.0.a-amiga.lha"
+version     = "3.34.0.a"
+patterns    = ["sqlite-3.34.0.a-amiga.lha"]
+homepage    = "https://aminet.net/package/biz/dbase/sqlite-3.34.0.a-amiga"
+notes       = "22 MB. Source for a planned vbcc build of sdk/SQLite3/; the bundled libsqlite3.a is built with gcc 3.4.0 and is not installed."
+
+[[source]]
+id          = "roadshow_sdk"
+name        = "Roadshow SDK"
+description = "Roadshow TCP/IP stack SDK 1.8 (Olaf Barthel): include/, netinclude/, sfd/, docs."
+resolver    = "manual"
+url         = "https://www.amigafuture.de/app.php/dlext/details?df_id=3658"
+filename    = "Roadshow-SDK-1.8.lha"
+version     = "1.8"
+patterns    = ["Roadshow-SDK-*.lha"]
+homepage    = "https://roadshow.apc-tcp.de"
+notes       = "Amiga Future serves it through a download form, so it cannot be fetched automatically: download Roadshow-SDK-1.8.lha there and put it into var/downloads/. Without it, NDK 3.2's SANA+RoadshowTCP-IP/netinclude is an alternative."
 
 [[source]]
 id          = "acebasic"

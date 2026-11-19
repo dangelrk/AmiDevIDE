@@ -40,7 +40,11 @@ herauszufinden, ob etwas fehlt.
 | MCC NList | 0.128 | `https://github.com/amiga-mui/nlist/releases/download/0.128/MCC_NList-0.128.lha` | automatisch, entpackt (nur `Developer/C/include`, `Developer/Autodocs`) | `toolchain/sdk/MCC/` |
 | MCC TextEditor | 15.56 | `https://github.com/amiga-mui/texteditor/releases/download/15.56/MCC_TextEditor-15.56.lha` | automatisch, entpackt, mit NList zusammengeführt | `toolchain/sdk/MCC/` |
 | ReqTools Developer | 2.9 | `https://aminet.net/util/libs/ReqToolsDev.lha` | automatisch, entpackt (`include`, `fd`, `doc`) | `toolchain/sdk/reqtools/` |
-| regex, Roadshow, AmiSSL, SQLite3, PosixLib | – | keine feste Download-Adresse im Code | **manuell** (§5) | `toolchain/sdk/<Name>/` |
+| regex.library (Ranieri) | 5.1 | `https://aminet.net/util/libs/regex_ranieri.lha` | automatisch, entpackt (`SASCinclude` → `include`, `fd`, `Docs`) | `toolchain/sdk/regex/` |
+| AmiSSL v5 SDK | 5.27 | `https://aminet.net/util/libs/AmiSSL-v5-SDK.lha` | automatisch, entpackt (`Developer/` ohne Beispiele und OS4-Libs) | `toolchain/sdk/AmiSSL-v5/` |
+| vbcc PosixLib | 3.0 | `https://aminet.net/dev/c/vbcc_PosixLib.lha` | automatisch, entpackt (`include`, `AmigaOS3/posix.lib`) | `toolchain/sdk/PosixLib/` |
+| SQLite 3 (Amiga) | 3.34.0.a | `https://aminet.net/biz/dbase/sqlite-3.34.0.a-amiga.lha` | automatisch geladen, **noch nicht installiert**: die beiliegende `libsqlite3.a` ist mit gcc gebaut; ein vbcc-Build aus diesen Quellen ist geplant | (`toolchain/sdk/SQLite3/`) |
+| Roadshow SDK | 1.8 | `https://www.amigafuture.de/app.php/dlext/details?df_id=3658` (Download-Formular) | **manuell** nach `var/downloads/` legen, dann automatisch entpackt; fehlt es, nur eine Warnung (§5) | `toolchain/sdk/Roadshow/` |
 | Kickstart-ROM, Workbench-HDF | – | **nur du selbst** (z. B. Amiga Forever) | **manuell** (§7) | `var/emu/...` |
 | FS-UAE | – | `https://fs-uae.net/download/` | manuell, optional | Systeminstallation |
 | Qt 6 | 6.11.1 auf macOS verifiziert | `https://www.qt.io/download-qt-installer-oss` oder Paketmanager | manuell, nur für die IDE | beliebig, per `CMAKE_PREFIX_PATH` |
@@ -110,7 +114,7 @@ AmiDevIDE/
     │   ├── ACE/          lib bmaps include icons submods quickref.txt
     │   ├── MCC/          Developer/{C/include/mui,Autodocs/MCC}   (NList + TextEditor)
     │   ├── reqtools/     include fd doc
-    │   └── regex/ Roadshow/ AmiSSL-v5/ SQLite3/ PosixLib/   (manuell, §5)
+    │   └── Roadshow/ SQLite3/ PosixLib/   (Roadshow: Archiv von Hand; SQLite3: acd-seed, §5)
     ├── fs-uae/development.fs-uae
     ├── project-template/ Makefile*
     ├── shared/           wird in FS-UAE als SHARED: gemountet
@@ -250,18 +254,25 @@ IDE und die Tools `ace`, `yap`, `bas` fehlen dann (`acd-doctor` meldet das).
 
 `bootstrap/acd_install_sdk.py` installiert NDK 3.2, MUI 3.8, MCC (NList und
 TextEditor) und reqtools — alles, was die MUI-IDE (`amigaide-m68k`) zum
-Übersetzen braucht. Die folgenden SDKs brauchst du nur, wenn du sie nutzt.
+Übersetzen braucht — sowie regex (Ranieri 5.1), das AmiSSL-v5-SDK und
+PosixLib aus dem Aminet. SQLite3 wird geladen, aber noch nicht installiert
+(die Lib im Archiv ist mit gcc gebaut; ein vbcc-Build ist geplant) und kommt
+bis dahin über `acd-seed`.
+
+Das **Roadshow-SDK** gibt es nur bei Amiga Future hinter einem
+Download-Formular (`https://www.amigafuture.de/app.php/dlext/details?df_id=3658`).
+`Roadshow-SDK-1.8.lha` dort laden und unverändert nach `var/downloads/` legen;
+der Bootstrap entpackt es dann nach `toolchain/sdk/Roadshow/`. Ohne das Archiv
+gibt es nur eine Warnung; NDK 3.2 enthält unter `SANA+RoadshowTCP-IP/`
+ebenfalls `netinclude`.
+
+Die folgenden SDKs brauchst du nur, wenn du sie nutzt.
 Lege sie so ab, wie in der Spalte „Erwartetes Layout“ angegeben (geprüft wird
 der jeweils erste Pfad durch `acd-doctor`):
 
 | Verzeichnis unter `toolchain/sdk/` | Erwartetes Layout | Mögliche Quelle |
 |---|---|---|
 | `MCC/` (weitere Klassen) | `Developer/C/include/mui/*.h`, `Developer/Autodocs/MCC/*.doc` | BetterString, TheBar usw. installiert der Bootstrap nicht; ihre `Developer/`-Bäume von GitHub `amiga-mui` hineinkopieren |
-| `regex/` | `include/{clib,libraries,pragmas,proto}/…`, `fd/regex_lib.fd` | Aminet `util/libs/regex_ranieri` (Alfonso Ranieri, 5.1) -- **nicht** `util/libs/Regex`, siehe §8.2. Die MUI-IDE ruft `regex.library` über eigene Stubs auf und braucht die Header zum Übersetzen nicht |
-| `Roadshow/` | `include/`, `netinclude/`, `sfd/` | Roadshow-SDK (ungeprüft); NDK 3.2 enthält unter `SANA+RoadshowTCP-IP/` ebenfalls `netinclude` |
-| `AmiSSL-v5/` | `Developer/include/`, `Developer/lib/AmigaOS3/` | `https://github.com/jens-maus/amissl/releases/download/5.27/AmiSSL-5.27-SDK.lha` (Layout ungeprüft) |
-| `SQLite3/` | `include/`, `lib/` | Aminet `biz/dbase/sqlite3` (ungeprüft) |
-| `PosixLib/` | `include/` | Aminet `dev/c/vbcc_PosixLib` (ungeprüft) |
 
 Hast du eine ältere Toolchain im alten `~/Dev/amiga`-Layout, übernimmt
 `acd-seed` diese SDKs (und ROMs/HDFs) automatisch:

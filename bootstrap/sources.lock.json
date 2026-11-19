@@ -6,6 +6,13 @@
     "url": "https://github.com/mdbergmann/ACEBasic/archive/refs/tags/3.0.1.tar.gz",
     "version": "3.0.1"
   },
+  "amissl_sdk": {
+    "filename": "AmiSSL-v5-SDK.lha",
+    "resolved": "2026-11-19",
+    "sha256": "5003bef8c5930354d16b0ce7196d71b2811891c42fad38a9238c5ce4098ad42a",
+    "url": "https://aminet.net/util/libs/AmiSSL-v5-SDK.lha",
+    "version": "5.27"
+  },
   "mcc_nlist": {
     "filename": "MCC_NList-0.128.lha",
     "resolved": "2026-09-27",
@@ -34,12 +41,40 @@
     "url": "https://aminet.net/dev/misc/NDK3.2.lha",
     "version": ""
   },
+  "posixlib": {
+    "filename": "vbcc_PosixLib.lha",
+    "resolved": "2026-11-19",
+    "sha256": "24e9c54e35ea5cb84f8dc2e3493d78cbefcfe30a458bbda1065d6f12a1c3e87a",
+    "url": "https://aminet.net/dev/c/vbcc_PosixLib.lha",
+    "version": "3.0"
+  },
+  "regex_ranieri": {
+    "filename": "regex_ranieri.lha",
+    "resolved": "2026-11-19",
+    "sha256": "0964240bf9e4845cfa3679421f147f9bd8cd91358f45f4f915a79b68e395a016",
+    "url": "https://aminet.net/util/libs/regex_ranieri.lha",
+    "version": "5.1"
+  },
   "reqtools_dev": {
     "filename": "ReqToolsDev.lha",
     "resolved": "2026-09-27",
     "sha256": "c7fb73ef360ab3337c888ce749a2910dc2dabd72c4ad9d8ce4ffc1ea4bddc575",
     "url": "https://aminet.net/util/libs/ReqToolsDev.lha",
     "version": "2.9"
+  },
+  "roadshow_sdk": {
+    "filename": "Roadshow-SDK-1.8.lha",
+    "resolved": "2026-11-19",
+    "sha256": "cca67e5afcb8c6fb8954a804c22fb71ed4ab871fddc152e410237497dce73252",
+    "url": "https://www.amigafuture.de/app.php/dlext/details?df_id=3658",
+    "version": "1.8"
+  },
+  "sqlite3": {
+    "filename": "sqlite-3.34.0.a-amiga.lha",
+    "resolved": "2026-11-19",
+    "sha256": "08aadf29a423b43f905e927e3bdf89d7be2e2d7a26b69073c23aadfc0af3130c",
+    "url": "https://aminet.net/biz/dbase/sqlite-3.34.0.a-amiga.lha",
+    "version": "3.34.0.a"
   },
   "vasm": {
     "filename": "vasm.tar.gz",

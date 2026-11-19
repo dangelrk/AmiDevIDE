@@ -29,11 +29,12 @@ Ein Cross-Compiler für AmigaOS/m68k auf Basis von **vbcc** (Compiler),
 - `sdk/NDK_3.2` — Amiga NDK (Systemheader/-libs).
 - `sdk/MUI_3.8` — MUI GUI-Toolkit.
 - `sdk/MCC`, `sdk/reqtools` — MUI-Zusatzklassen (NList, TextEditor) und
-  reqtools; beide installiert der Bootstrap. `sdk/regex` kommt von Hand (§5
-  in INSTALL.md); die MUI-IDE ruft `regex.library` über eigene Stubs auf
-- `sdk/Roadshow` — TCP/IP-Stack-Header (`bsdsocket`, `netinclude`)
-- `sdk/AmiSSL-v5` — TLS/SSL
-- `sdk/SQLite3`, `sdk/PosixLib`
+  reqtools; beide installiert der Bootstrap, ebenso `sdk/regex` (Aminet
+  `regex_ranieri`); die MUI-IDE ruft `regex.library` über eigene Stubs auf
+- `sdk/Roadshow` — TCP/IP-Stack-Header (`bsdsocket`, `netinclude`); Archiv von Hand (§5 in INSTALL.md)
+- `sdk/AmiSSL-v5` — TLS/SSL (Aminet `AmiSSL-v5-SDK`, vom Bootstrap installiert)
+- `sdk/PosixLib` — aus dem Aminet, vom Bootstrap installiert
+- `sdk/SQLite3` — vorerst über `acd-seed` (vbcc-Build geplant)
 - `bin/` — die Compiler-Binaries (`vc`, `vbccm68k`, `vasmm68k_mot`, `vlink`,
   `vobjdump`, `vprof`, `dtgen`, `ace`, `yap`, `bas`). **Alle aus dem
   Quelltext gebaut**, für die Plattform, auf der du bootstrappst — es gibt

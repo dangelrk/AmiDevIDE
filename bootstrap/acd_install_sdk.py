@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Install the downloadable SDKs into toolchain/sdk/.
 
-NDK 3.2, MUI 3.8, MCC (NList and TextEditor) and reqtools have an
-authoritative download; this script unpacks those and normalises their
-directory names to what the IDE's SDK registry expects.  The rest -- regex,
-Roadshow, AmiSSL, SQLite3, PosixLib -- have no stable upstream URL and come
-from acd_seed_from_legacy.py.
+NDK 3.2, MUI 3.8, MCC (NList and TextEditor), reqtools, regex, AmiSSL v5 and
+PosixLib have an authoritative download; this script unpacks those and
+normalises their directory names to what the IDE's SDK registry expects.
+Roadshow is installed too when its archive was put into var/downloads/ by hand
+(its site has no direct link); otherwise acd_seed_from_legacy.py can supply it.
+
+SQLite3 is deliberately not installed from its archive: the libsqlite3.a in
+there is built with gcc 3.4.0 for libnix, not for vbcc.  A vbcc build from the
+same source archive is planned; until then SQLite3 stays a seeded SDK.
 
     acd_install_sdk.py [--force]
 """
@@ -27,6 +31,7 @@ from acd_extract import extract
 #: single folder some archives wrap everything in.  Several parts are merged
 #: into one tree.  "keep", if given, is what survives of each part; the MCC
 #: archives also carry binaries for six platforms, demos and catalogs.
+#: "rename" maps a kept directory to the name it gets in the installed tree.
 SDKS = {
     "ndk32": {
         "dir": "NDK_3.2",
@@ -61,10 +66,47 @@ SDKS = {
         "prune": [],
         "expect": ["include/libraries/reqtools.h", "fd/reqtools_lib.fd"],
     },
+    # Ranieri's POSIX regex.library; its SAS/C headers are the generic ones.
+    "regex": {
+        "dir": "regex",
+        "parts": [("regex_ranieri", ["regex_ranieri*.lha"], "regex")],
+        "keep": ["SASCinclude", "fd", "Docs"],
+        "rename": {"SASCinclude": "include"},
+        "prune": [],
+        "expect": ["include/libraries/regex.h", "include/proto/regex.h",
+                   "fd/regex_lib.fd"],
+    },
+    # Stays on v5 for now: the apps call InitAmiSSLMaster(AMISSL_CURRENT_VERSION)
+    # and would require AmiSSL v6 on the Amiga once built against its SDK.
+    "amissl": {
+        "dir": "AmiSSL-v5",
+        "parts": [("amissl_sdk", ["AmiSSL-v5*-SDK.lha"], "AmiSSL")],
+        "keep": ["Developer/include", "Developer/lib/AmigaOS3", "Developer/fd",
+                 "Developer/sfd", "Developer/Autodocs"],
+        "prune": [],
+        "expect": ["Developer/include/proto/amissl.h",
+                   "Developer/lib/AmigaOS3/libamisslstubs.a"],
+    },
+    "posixlib": {
+        "dir": "PosixLib",
+        "parts": [("posixlib", ["vbcc_PosixLib*.lha"], "PosixLib")],
+        "keep": ["include", "AmigaOS3"],
+        "prune": [],
+        "expect": ["include/unistd.h", "AmigaOS3/posix.lib"],
+    },
+    # Manual download (see sources.toml); skipped with a hint when absent.
+    "roadshow": {
+        "dir": "Roadshow",
+        "parts": [("roadshow_sdk", ["Roadshow-SDK-*.lha"], None)],
+        "keep": ["include", "netinclude", "sfd", "doc"],
+        "prune": [],
+        "optional": True,
+        "expect": ["netinclude/proto/bsdsocket.h", "sfd/bsdsocket_lib.sfd"],
+    },
 }
 
 #: SDKs with no download; acd_seed_from_legacy.py provides them.
-SEEDED = ["regex", "Roadshow", "AmiSSL-v5", "SQLite3", "PosixLib"]
+SEEDED = ["Roadshow", "SQLite3"]
 
 
 def _find_archive(source_id: str, patterns: list[str]) -> Path | None:
@@ -122,13 +164,18 @@ def install_sdk(key: str, spec: dict, force: bool) -> bool:
         part = _unpack_part(spec["dir"], source_id, patterns, strip,
                             spec.get("keep"), staging / source_id)
         if part is None:
+            shutil.rmtree(staging, ignore_errors=True)
+            if spec.get("optional"):
+                info(f"{spec['dir']:12s} skipped: no {source_id} archive in "
+                     f"{rel(DOWNLOADS)} (manual download, see docs/SOURCES.html)")
+                return True
             warn(f"{spec['dir']:12s} no {source_id} archive in {rel(DOWNLOADS)} "
                  "-- run acd_fetch.py")
-            shutil.rmtree(staging, ignore_errors=True)
             return False
         for sub in spec.get("keep") or ["."]:
             if (part / sub).is_dir():
-                shutil.copytree(part / sub, root / sub, dirs_exist_ok=True)
+                dest = root / spec.get("rename", {}).get(sub, sub)
+                shutil.copytree(part / sub, dest, dirs_exist_ok=True)
     icons = _drop_amiga_icons(root)
 
     for pruned in spec["prune"]:

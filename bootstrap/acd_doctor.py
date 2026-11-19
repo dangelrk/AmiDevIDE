@@ -42,14 +42,14 @@ REQUIRED_SDKS = {
     "MUI_3.8": "Developer/C/Include",
     "MCC": "Developer/C/include",
     "reqtools": "include",
+    "regex": "include",
+    "AmiSSL-v5": "Developer/include",
+    "PosixLib": "include",
 }
 
 SEEDED_SDKS = {
-    "regex": "include",
     "Roadshow": "netinclude",
-    "AmiSSL-v5": "Developer/include",
     "SQLite3": "include",
-    "PosixLib": "include",
 }
 
 CONFIGS = ["aos68k", "aos68km", "aos68kr", "vc.config"]

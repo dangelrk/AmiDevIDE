@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Take the SDKs and emulator images that have no download from an existing tree.
 
-MCC, regex, reqtools, Roadshow, AmiSSL, SQLite3 and PosixLib were collected by
-hand over the years and have no stable upstream URL, so they cannot be fetched.
-The same goes for Kickstart ROMs and Workbench images, which are licensed and
-must not be redistributed.  This script copies them out of a previous
+These SDKs used to be collected by hand.  All of them now come from
+acd_install_sdk.py (Roadshow only once its archive is in var/downloads/);
+seeding still works and only fills in what is not installed yet.
+Kickstart ROMs and Workbench images have no download at all: they are licensed
+and must not be redistributed.  This script copies them out of a previous
 ~/Dev/amiga installation (or wherever you point it) into the new tree.
 
 It only ever reads from the source and only writes into toolchain/ and var/.
